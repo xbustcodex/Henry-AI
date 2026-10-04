@@ -14,6 +14,28 @@
 
 // ── Error classifiers ──────────────────────────────────────────────────────
 
+/**
+ * Pull a short, human-readable reason out of whatever the transport rejected with.
+ *
+ * Main-process failures arrive wrapped through several layers - "Error invoking remote
+ * method 'ai:send': Error: opencode exited with code 2: Error: unknown flags: ..." - so
+ * pick the most specific line rather than the outermost wrapper.
+ */
+export function extractErrorDetail(error: unknown): string {
+  const raw =
+    error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+  if (!raw.trim()) return '';
+  const lines = raw
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const specific =
+    lines.find((l) =>
+      /unknown flags|exited with code|not found|unauthorized|forbidden|401|403|404|500/i.test(l),
+    ) ?? lines[lines.length - 1];
+  return specific.replace(/^Error:\s*/i, '').slice(0, 220).trim();
+}
+
 /** True if the error string looks like a network / connectivity problem. */
 export function isNetworkError(error: string): boolean {
   return /load failed|failed to fetch|networkerror|network request failed|couldn't reach|could not reach|connection error|network error|econnrefused|etimedout|socket hang|fetch error/i.test(error);
@@ -174,11 +196,18 @@ export function buildStreamError(
     ].join('\n');
   }
 
-  // Unknown / generic
+  // Unknown / generic.
+  //
+  // Keep the underlying reason. Discarding it is what made a CLI flag
+  // incompatibility ("unknown flags: --format, --dir") surface as a generic
+  // "Something went wrong" and cost hours of localisation.
+  const detail = extractErrorDetail(error);
   return [
     `**${label} returned an error.**`,
     ``,
-    `Something went wrong with the ${model} request.`,
+    detail
+      ? `Something went wrong with the ${model} request: ${detail}`
+      : `Something went wrong with the ${model} request.`,
     `→ Try again in a moment. If this keeps happening, check **Settings → AI Providers** or switch to a different model.`,
   ].join('\n');
 }

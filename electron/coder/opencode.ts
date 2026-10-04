@@ -324,10 +324,19 @@ export interface OpencodeRunOptions {
 }
 
 export function runOpencode(opts: OpencodeRunOptions): ChildProcess {
-  const args = ['run', '--format', 'json', '--dir', opts.cwd, opts.prompt];
+  // Flag names follow the installed CLI's own contract.
+  //
+  // `--format` and `--dir` are not flags of `omp`; it rejects them and exits 2 with
+  // "unknown flags: --format, --dir", so every OpenCode/Zen turn failed before a
+  // token was ever requested. The correct spellings are `--mode json` for
+  // machine-readable output and `--cwd` for the working directory. `-p` (`--print`)
+  // is the non-interactive form that makes `run`/`launch` process the prompt and exit
+  // rather than waiting on a TTY.
+  const args = ['run', '--mode', 'json', '--cwd', opts.cwd, '-p'];
   if (opts.model) args.push('--model', opts.model);
   if (opts.agent) args.push('--agent', opts.agent);
   if (opts.sessionId) args.push('--session', opts.sessionId);
+  args.push(opts.prompt);
 
   const child = spawn(opts.cliPath, args, {
     cwd: opts.cwd || CODER_WORKSPACE_DIR,
