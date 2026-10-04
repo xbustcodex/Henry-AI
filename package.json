@@ -171,8 +171,7 @@
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
-      "notarize": false,
-      "identity": "Christopher Cook (NFS22LSQRC)"
+      "notarize": false
     },
     "dmg": {
       "sign": false,
