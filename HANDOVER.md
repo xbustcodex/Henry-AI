@@ -460,6 +460,48 @@ which is why this took this long to localise.
 3. Chat → send `Say hello in one short sentence.`
 4. Assistant message reads `OpenCode Zen returned an error.`
 
+## 11h. Zen CLI flags FIXED at both call sites; failure moved from launch-time to upstream
+
+Two defects, found in sequence, both real.
+
+### Defect 1 — `electron/coder/opencode.ts` (fixed, `8ef971f`)
+`runOpencode` built `['run','--format','json','--dir',cwd,prompt]`. `omp` rejects
+`--format` and `--dir` outright.
+
+### Defect 2 — `electron/ipc/opencodeBridge.ts:194` (fixed, `3829139`) — the one that mattered
+```ts
+spawn(cli.path!, ['run','--format','json','--model',model,'--dir',CODER_WORKSPACE_DIR,prompt])
+```
+This is the route `ai:send` actually takes. Fixing only the first site left the live
+failure untouched and survived a full rebuild + install — the identical
+`unknown flags: --format, --dir` error came back. **Both sites now use `--mode json`,
+`--cwd <dir>` and `-p`.** Verified against the real `omp v18.3.2` binary: the old vector
+exits 2 with the flag error, the new one streams JSON events.
+
+### Where Zen stands now
+With flags fixed, the launch-time failure is gone and the CLI reaches the gateway, which
+now refuses it:
+
+```
+opencode produced no text for deepseek-v4-flash-free (exit 1). stderr: (empty)
+stdout tail: ...type=server_error)
+raw-http-request=...
+```
+
+So the remaining Zen problem is **upstream of Henry**: the Zen gateway returns
+`server_error` for this model with no credential. That is no longer a Henry bug — Henry
+now launches the CLI correctly and surfaces the gateway's own error rather than masking it
+as "Something went wrong".
+
+### Next step for Zen
+Establish whether unauthenticated free Zen access still exists at all, or whether the
+gateway now requires a key. The cheapest check is to run the CLI directly with the correct
+flags and no credential and read what the gateway says:
+`omp run --mode json --cwd <dir> -p --model <free-model> "hi"`.
+If free Zen requires a credential now, the "credential-optional" claim in
+`HANDOVER.md §5a` and in `electron/coder/opencode.ts` needs updating as a product decision,
+and the onboarding copy ("Free models need no key") becomes wrong.
+
 ## 12. Next recommended task, in priority order
 
 1. **Rebuild, package, install** from `9eb73af`; re-run the fresh-profile acceptance end
