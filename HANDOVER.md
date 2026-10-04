@@ -389,6 +389,41 @@ together, using runtime-reported capability only.
   OFF there. Cloud agent turns need the toggle or a stored `true`. Worth confirming this
   is acceptable product behaviour before release.
 
+## 11f. Zen normal Chat — rendering defect is GONE; Zen now surfaces a real error (HEAD 5d0f0f4)
+
+Live on the installed build, Zen selected through the **normal Settings UI**
+(`jev-1.13-free`, label `OpenCode Zen — jev-1.13-free`, 39 Zen options offered,
+`opencode-zen` row present with `hasKey:false` — correct, Zen's key is optional),
+agent mode OFF. Sending an ordinary prompt produced a **visible assistant message**:
+
+```
+🧠 Advisor | OpenCode Zen returned an error. | Something went wrong with the
+jev-1.13-free request. | → Try again in a moment. If this keeps happening,
+check Settings → AI Providers or switch to a different model.
+```
+
+**There was never a separate Zen rendering defect.** The historical Zen failure
+(`Thinking… / Responding…` then nothing) was the same agent/tool diversion documented in
+§11d. With that fixed, Zen routes to the OpenCode transport and returns a properly
+attributed error instead of vanishing.
+
+### What remains for Zen
+Not a rendering problem — an upstream one. `opencode-zen` with no credential returns an
+error for this model. Zen is documented as credential-OPTIONAL for *free* models, so either:
+
+- this particular model requires authentication, or
+- the OpenCode bridge is not authenticated/running in this install.
+
+Next step: try a model explicitly named `-free` (e.g. `hy3-free`, `deepseek-v4-flash-free`)
+and confirm whether an unauthenticated Zen turn succeeds. If free Zen models still error,
+that is a real defect in the OpenCode bridge auth path (`electron/coder/opencode.ts`,
+`buildCoderChildEnv`, the `OPENCODE_API_KEY` child-env injection) — a separate investigation
+from the routing fix now landed.
+
+### Also verified
+Ollama restart persistence: after a full quit and relaunch `llama3.2:3b` remained selected
+and produced a visible assistant reply with `hasToolSyntax:false`.
+
 ## 12. Next recommended task, in priority order
 
 1. **Rebuild, package, install** from `9eb73af`; re-run the fresh-profile acceptance end
