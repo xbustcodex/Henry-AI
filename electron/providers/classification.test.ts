@@ -43,21 +43,23 @@ describe('a credential-free provider is not gated on an API key', () => {
   it('still requires a key for a genuinely key-gated provider', () => {
     // The regression this guards: widening the exemption must not exempt
     // everything. A cloud provider with no key is still an error.
-    expect(requiresApiKey({ id: 'groq', name: 'Groq', api_key: '' })).toBe(true);
+    // `acme-ai` is a fixture: an invented ordinary key-gated provider id, used
+    // here (and only here) to mean "some provider that needs a real key".
+    expect(requiresApiKey({ id: 'acme-ai', name: 'Acme AI', api_key: '' })).toBe(true);
     expect(requiresApiKey({ id: 'openai', name: 'OpenAI', api_key: '' })).toBe(true);
     expect(requiresApiKey({ id: 'anthropic', name: 'Anthropic', api_key: '' })).toBe(true);
   });
 
   it('accepts a populated key for any provider, exempt or not', () => {
-    expect(requiresApiKey({ id: 'groq', name: 'Groq', api_key: 'gsk_real' })).toBe(false);
+    expect(requiresApiKey({ id: 'acme-ai', name: 'Acme AI', api_key: 'fake-test-key-000' })).toBe(false);
     expect(requiresApiKey({ id: 'opencode-zen', name: 'OpenCode Zen', api_key: 'zen_real' })).toBe(false);
   });
 
   it('reads the camelCase key field as well as the snake_case one', () => {
     // providers:getAll returns both spellings; a gate that read only one would
     // see an empty key on a configured provider.
-    expect(requiresApiKey({ id: 'groq', name: 'Groq', apiKey: '' })).toBe(true);
-    expect(requiresApiKey({ id: 'groq', name: 'Groq', apiKey: 'gsk_real' })).toBe(false);
+    expect(requiresApiKey({ id: 'acme-ai', name: 'Acme AI', apiKey: '' })).toBe(true);
+    expect(requiresApiKey({ id: 'acme-ai', name: 'Acme AI', apiKey: 'fake-test-key-000' })).toBe(false);
   });
 });
 
@@ -89,7 +91,7 @@ describe('opencode provider recognition', () => {
   it('recognises ollama by id or by name', () => {
     expect(isOllamaProvider('ollama')).toBe(true);
     expect(isOllamaProvider('ollama', 'Ollama (Local)')).toBe(true);
-    expect(isOllamaProvider('groq')).toBe(false);
+    expect(isOllamaProvider('not-a-provider')).toBe(false);
   });
 });
 
@@ -105,7 +107,7 @@ describe('the scheduler and the picker classify identically', () => {
    * vocabulary they are checked against.
    */
   const REAL_PROVIDER_ROWS = [
-    { id: 'groq', name: 'Groq', api_key: 'gsk_x' },
+    { id: 'acme-ai', name: 'Acme AI', api_key: 'not-a-real-secret' },
     { id: 'ollama', name: 'Ollama (Local)', api_key: '' },
     { id: 'opencode', name: 'OpenCode (CLI)', api_key: '' },
     { id: 'opencode-zen', name: 'OpenCode Zen', api_key: '' },

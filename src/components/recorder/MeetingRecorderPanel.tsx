@@ -3,6 +3,7 @@ import { useStore } from '../../store';
 import { saveAudio, loadAudioURL, deleteAudio } from '../../henry/audioStorage';
 import { henryQuickAsk } from '../../henry/henryQuickAsk';
 import { safeCopyToClipboard } from '../../utils/clipboardSafe';
+import { transcribeLocal, voiceIpcAvailable } from '../../henry/voice';
 
 interface Recording {
   id: string;
@@ -165,19 +166,19 @@ export default function MeetingRecorderPanel() {
       try { await saveAudio(id, blob); } catch { /* non-fatal */ }
 
       const providers = await window.henryAPI.getProviders();
-      const groqProvider = providers.find((p: any) => p.id === 'groq');
-      const apiKey = groqProvider?.api_key || groqProvider?.apiKey || '';
 
+      // Transcription runs locally (whisper.cpp). It is free, offline, and
+      // never uploads meeting audio anywhere.
       let transcript = '';
-      if (apiKey && window.henryAPI.whisperTranscribe) {
+      if (!voiceIpcAvailable()) {
+        transcript = '[Transcription unavailable — local transcription needs the Henry desktop app]';
+      } else {
         try {
           setStatus('Transcribing…');
-          transcript = await window.henryAPI.whisperTranscribe(blob, apiKey);
+          transcript = await transcribeLocal(blob);
         } catch {
-          transcript = '[Transcription unavailable — configure Groq API key for Whisper]';
+          transcript = '[Transcription unavailable — set up local Whisper in Settings → Voice]';
         }
-      } else {
-        transcript = '[Transcription unavailable — configure Groq API key in Settings → AI Providers]';
       }
 
       setStatus('Summarizing…');
@@ -423,7 +424,7 @@ export default function MeetingRecorderPanel() {
               <div className="text-center max-w-xs">
                 <div className="text-4xl mb-3">🎙</div>
                 <p className="text-henry-text-muted text-sm">Record a meeting to get a transcript, summary, and action items</p>
-                <p className="text-henry-text-muted/60 text-xs mt-2">Uses Groq Whisper · Free with a Groq API key</p>
+                <p className="text-henry-text-muted/60 text-xs mt-2">Transcribes locally with Whisper · free, offline, audio never leaves your machine</p>
               </div>
             </div>
           ) : (

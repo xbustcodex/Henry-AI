@@ -2,8 +2,8 @@
  * Henry Local Router — answers common queries from SQLite without touching AI.
  *
  * The cost-efficiency engine. When the user types something Henry can answer
- * from his own database, we skip Groq entirely. Saves tokens, saves money,
- * answers instantly, works offline.
+ * from his own database, we skip the AI call entirely. Saves tokens, saves
+ * money, answers instantly, works offline.
  *
  * Pattern → SQL/IPC → formatted markdown reply.
  *
@@ -65,7 +65,7 @@ const INTENTS: Handler[] = [
       /which (ai|model|provider|brain|engine|llm).*(are you|do you|using)/i,
       /what.*(are you|you) (using|running|on|powered by)/i,
       /what.*your (ai|model|brain|engine)/i,
-      /are you using (groq|gemini|openai|claude|ollama)/i,
+      /are you using (gemini|openai|claude|ollama|zen)/i,
     ),
     run: async () => {
       const settings = (() => {
@@ -75,14 +75,17 @@ const INTENTS: Handler[] = [
         try { return JSON.parse(localStorage.getItem('henry:providers') || '[]') as Array<{id:string;apiKey?:string;api_key?:string;enabled?:boolean}>; } catch { return []; }
       })();
 
-      const brain1Model = settings.companion_model || 'llama-3.3-70b-versatile';
-      const brain1Provider = settings.companion_provider || 'groq';
+      const brain1Model = settings.companion_model || 'not set';
+      const brain1Provider = settings.companion_provider || 'not set';
       const brain2Model = settings.worker_model || brain1Model;
       const brain2Provider = settings.worker_provider || brain1Provider;
       const coderModel = 'qwen-2.5-coder-32b';
 
-      const hasGroq = providers.some(p => p.id === 'groq' && (p.apiKey || p.api_key));
+      const hasOllama = providers.some(p => p.id === 'ollama' && p.enabled);
+      const hasOpenAi = providers.some(p => p.id === 'openai' && (p.apiKey || p.api_key));
+      const hasAnthropic = providers.some(p => p.id === 'anthropic' && (p.apiKey || p.api_key));
       const hasGoogle = providers.some(p => p.id === 'google' && (p.apiKey || p.api_key));
+      const hasZen = providers.some(p => p.id === 'opencode-zen');
       const hasCerebras = !!localStorage.getItem('henry:cerebras_api_key');
 
       const lines = [
@@ -90,16 +93,19 @@ const INTENTS: Handler[] = [
         ``,
         `**Brain 1 (every conversation):** ${brain1Model} via ${brain1Provider}`,
         `**Brain 2 (heavy tasks):** ${brain2Model} via ${brain2Provider}`,
-        `**Coder brain (auto for code):** ${coderModel} via Groq`,
+        `**Coder brain (auto for code):** ${coderModel} via ${brain1Provider}`,
         ``,
         `**Keys I have:**`,
-        `• Groq: ${hasGroq ? '✓ configured' : '✗ not set — go to Settings → AI Providers'}`,
+        `• OpenCode Zen: ${hasZen ? '✓ configured' : '✗ not set — free at opencode.ai'}`,
+        `• Ollama (local): ${hasOllama ? '✓ configured' : '✗ not set — free at ollama.com'}`,
+        `• OpenAI: ${hasOpenAi ? '✓ configured' : '✗ not set'}`,
+        `• Anthropic: ${hasAnthropic ? '✓ configured' : '✗ not set'}`,
         `• Google Gemini: ${hasGoogle ? '✓ configured' : '✗ not set — free at aistudio.google.com'}`,
         `• Cerebras fallback: ${hasCerebras ? '✓ configured' : '✗ not set (optional)'}`,
       ];
 
-      if (!hasGroq && !hasGoogle) {
-        lines.push(``, `You're running on Henry's shared free tier (50 requests/day). Add a Groq key in Settings → AI Providers for unlimited free responses.`);
+      if (!hasOllama && !hasZen && !hasOpenAi && !hasAnthropic && !hasGoogle) {
+        lines.push(``, `No AI provider is set up yet. Add one in Settings → AI Providers — OpenCode Zen and Ollama are both free.`);
       }
 
       return lines.join('\n');
@@ -482,7 +488,7 @@ The more you tell me, the more personal every response gets. I use your top fact
  * intent matches, otherwise { handled: false }.
  *
  * Call this BEFORE invoking the AI in ChatView. If handled, render the reply
- * directly as the assistant message and skip the Groq round-trip.
+ * directly as the assistant message and skip the AI round-trip.
  */
 export async function routeLocally(query: string): Promise<LocalRouteResult> {
   const q = (query || '').trim();

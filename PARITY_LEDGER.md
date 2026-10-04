@@ -8,6 +8,11 @@ Paid 1.7.0 has no local-model path (every call proxies to `app.heyhenry.ai/api/v
 keep Ollama, Groq, OpenRouter, OpenCode and local model selection, and add paid's useful portable
 capabilities around that. **No working local capability is ever downgraded to imitate paid Henry.**
 
+> Rows below are the campaign record as written and are not retro-edited.
+> Groq was removed as a provider after the fact — see "Groq removed — provider
+> retired" at the end of this file; every earlier mention describes the
+> product as it stood at the time.
+
 ## Row lifecycle
 
 ```
@@ -762,3 +767,61 @@ Settings show Zen correctly; the answer does not use it.
 Diff the settings key the model picker writes against the key
 `resolveChat`/`ChatView` reads at send time, using the real component scope.
 This is a read-and-compare, not a guess.
+
+---
+
+## Groq removed — provider retired (2026-10-04)
+
+Groq is no longer a supported provider in Henry. This is a removal, not a
+de-prioritisation: nothing offers Groq, nothing routes to it, and no code path
+falls back to it.
+
+### What changed
+
+- Renderer and main process: provider catalogues, onboarding, the settings and
+  AI-provider panels, the sync bridge's provider/model tables, and the
+  web/TTS/voice/cost paths no longer declare Groq. Entries were deleted, not
+  hidden behind a flag.
+- Routing: `modelRouter.ts` no longer defaults to `'groq'`. A provider or model
+  that cannot be resolved now raises an explicit routing error naming the
+  unresolved id and the setting that fixes it. Nothing is substituted for it.
+- Migration: a persisted `provider=groq` selection is reported as
+  `provider_unsupported` and Henry asks for a supported provider, rather than
+  quietly answering from a different one.
+- `electron/ipc/syncBridge.ts` no longer carries `groq.com` endpoints or the
+  `Groq/llama-*` model ids; `electron/ipc/selfRepair.ts` no longer performs a
+  provider-key health check at all.
+- Service workers (`public/sw.js`, `renderer/sw.js`) no longer bypass
+  `groq.com`; the Vite web dev proxy no longer documents it as a
+  CORS-native provider.
+- `henry-proxy` Cloudflare worker (standalone, not part of the desktop app):
+  the hosted chat route used to forward to Groq and nothing else. It now
+  answers `503 provider_not_configured` and names the providers a caller can
+  use instead. It deliberately does **not** forward to another provider. Its
+  licensing, usage, pricing, health and Stripe routes are unchanged.
+- `proxy` Cloudflare worker (standalone mobile CORS proxy + companion relay):
+  the `/proxy/groq/*` route was removed. Every other route and the whole
+  companion relay are unchanged.
+
+### Fixtures that deliberately survived
+
+Groq-shaped strings were doing provider-independent duty as dummy fixtures in
+five test files. That coverage was kept and the fixtures renamed to obviously
+fake values (`acme-ai` / `Acme AI`, `fake-test-key-000`, `not-a-real-secret`):
+deleting them would have dropped the regression guard for the Defect C
+classification divergence, where four subsystems disagreed about which
+providers need an API key. Affected: `electron/providers/classification.test.ts`,
+`electron/agent/schedulerOpencodeWorker.test.ts`,
+`electron/coder/zenCredential.test.ts`, `electron/ipc/validation.test.ts`,
+`src/henry/voiceDiagnostics.test.ts` (its `gsk_` case covers the key *shape*,
+not the vendor).
+
+### Still open
+
+The Zen installed-package live acceptance recorded above is **not closed by this
+change.** It failed at step 5/6 because send-time resolution fell back to the
+`'groq'` default; that default no longer exists, so the recorded repro no longer
+predicts the current behaviour in either direction — and an explicit
+"no provider configured" error is not the same result as a working Zen turn.
+Re-run the acceptance against the installed package before Zen is called
+live-verified.

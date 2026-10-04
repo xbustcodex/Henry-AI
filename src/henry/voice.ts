@@ -54,7 +54,7 @@ function readInitialVoiceReplies(): boolean {
     if (settings[VOICE_REPLIES_SETTING_KEY] != null) {
       return settings[VOICE_REPLIES_SETTING_KEY] === 'true';
     }
-    // Legacy toggle from the Groq-era TTS button.
+    // Legacy toggle from the retired cloud-TTS button.
     return localStorage.getItem('henry_tts_enabled') === 'true';
   } catch {
     return false;
@@ -320,11 +320,8 @@ function stopAudioElement(): void {
 export async function speak(text: string, engine?: 'auto' | 'local' | 'elevenlabs'): Promise<void> {
   if (!text?.trim()) return;
   if (!window.henryAPI?.voiceSpeak) {
-    // Web mode — legacy browser/Groq path.
-    const settings = ((): Record<string, string> => {
-      try { return JSON.parse(localStorage.getItem('henry:settings') || '{}'); } catch { return {}; }
-    })();
-    await legacySpeak(text, settings, []);
+    // Web mode — no native voice ladder available, so use the browser voice.
+    await legacySpeak(text);
     return;
   }
 
@@ -363,7 +360,7 @@ export async function speak(text: string, engine?: 'auto' | 'local' | 'elevenlab
     // No audio came back. macOS `say` renders to the device itself in the main
     // process, but Windows has no local engine at all, so previously the reply
     // was silent there. SpeechSynthesis always exists in a renderer, so use it.
-    await legacySpeak(text, useStore.getState().settings, []);
+    await legacySpeak(text);
   } finally {
     const st = useVoiceStore.getState();
     if (st.state === 'speaking') st.setState('idle');
@@ -381,18 +378,13 @@ export async function stopSpeaking(): Promise<void> {
 
 /**
  * Speak a completed assistant reply. Desktop uses the local/ElevenLabs ladder;
- * web mode falls back to the legacy Groq/browser TTS with the caller's
- * settings + providers.
+ * web mode uses the browser voice.
  */
-export async function speakAssistantReply(
-  text: string,
-  settings: Record<string, string>,
-  providers: unknown[],
-): Promise<void> {
+export async function speakAssistantReply(text: string): Promise<void> {
   if (voiceIpcAvailable()) {
     await speak(text);
   } else {
-    await legacySpeak(text, settings, providers as never[]);
+    await legacySpeak(text);
   }
 }
 

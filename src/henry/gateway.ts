@@ -8,9 +8,12 @@ import { buildCoderSystemPrompt } from './buildCoderSystemPrompt';
  * Routes to the cheapest capable path:
  *
  * Tier 0 — Free local (rules, shell, math, greetings) — $0.00
- * Tier 1 — Groq llama-3.1-8b-instant — $0.05/1M tokens (basically free)
- * Tier 2 — Groq llama-3.3-70b-versatile — $0.59/1M tokens (cheap)
+ * Tier 1 — the fast chat model — whatever the Companion engine is set to
+ * Tier 2 — the same chat model, for a heavier task
  * Tier 3 — OpenAI/Runway — only for image/video gen
+ *
+ * The engine is never invented here. If the Companion engine is not set, the
+ * route carries an empty provider and the caller reports the misconfiguration.
  */
 
 export interface LocalResult {
@@ -86,10 +89,10 @@ function classifyTier(text: string): { tier: 1 | 2 | 3; reason: string } {
     return { tier: 3, reason: 'video gen \u2192 Runway' };
   }
 
-  // Short messages → fast 8b
-  if (len < 80) return { tier: 1, reason: 'short \u2192 8b' };
+  // Short messages → the fast chat model
+  if (len < 80) return { tier: 1, reason: 'short → fast chat model' };
 
-  // Complex tasks → 70b (still Groq, still cheap)
+  // Complex tasks → the same chat model, more of it
   const complex = [
     /\b(analyze|analyse|explain|compare|evaluate|strategy|roadmap|plan|draft|write|rewrite|summarize)\b.{15,}/i,
     /\b(pros and cons|trade.?offs?|recommend|decision|swot|business)\b/i,
@@ -97,21 +100,19 @@ function classifyTier(text: string): { tier: 1 | 2 | 3; reason: string } {
     /```[\s\S]{30,}/,
     /\b(debug|refactor|optimize|implement|build)\b.{20,}/i,
   ];
-  if (complex.some(p => p.test(text)) || len > 400) return { tier: 2, reason: 'complex \u2192 70b' };
+  if (complex.some(p => p.test(text)) || len > 400) return { tier: 2, reason: 'complex → full chat model' };
 
-  return { tier: 1, reason: 'standard \u2192 8b' };
+  return { tier: 1, reason: 'standard → fast chat model' };
 }
 
 function getModel(tier: 1 | 2 | 3, settings: Record<string, string>): { provider: string; model: string } {
-  if (tier === 1) return {
-    provider: settings.chat_fast_provider || settings.companion_provider || 'groq',
-    model:    settings.chat_fast_model    || 'llama-3.3-70b-versatile',
+  // Tier 3 is the only one that names a provider of its own — image and video
+  // generation have no chat-engine equivalent.
+  if (tier === 3) return { provider: 'openai', model: 'dall-e-3' };
+  return {
+    provider: (settings.companion_provider || '').trim(),
+    model: (settings.companion_model || '').trim(),
   };
-  if (tier === 2) return {
-    provider: settings.companion_provider || 'groq',
-    model:    settings.companion_model    || 'gemini-2.0-flash',
-  };
-  return { provider: 'openai', model: 'dall-e-3' };
 }
 
 // ── Main entry point ───────────────────────────────────────────────────────
@@ -138,7 +139,7 @@ export function route(text: string, context: GatewayContext = {}): GatewayResult
     return {
       handled: false,
       tier: 1,
-      provider: 'groq',
+      provider: (settings.companion_provider || '').trim(),
       model: DEFAULT_CODER_MODEL,
       reason: 'code intent → Qwen Coder 32B',
       estimatedTokens: Math.ceil(trimmed.length / 4) + 600,
@@ -152,9 +153,7 @@ export function route(text: string, context: GatewayContext = {}): GatewayResult
 
 // ── Cost tracking ──────────────────────────────────────────────────────────
 const PRICING: Record<string, number> = {
-  'llama-3.1-8b-instant':        0.05  / 1_000_000,
-  'llama-3.3-70b-versatile': 0.59  / 1_000_000,
-  'gemma2-9b-it':            0.20  / 1_000_000,
+
   'gpt-4o-mini':             0.15  / 1_000_000,
   'gpt-4o':                  2.50  / 1_000_000,
   'dall-e-3':                0.04, // per image

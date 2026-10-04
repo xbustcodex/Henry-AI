@@ -5,17 +5,15 @@
  * should call `callHenryAI()` instead of hitting providers directly.
  *
  * Routing chain (in priority order):
- *   1. User's own Groq key (free, BYOK) — if they have one configured, use it.
- *   2. User's local Ollama — if it's running, use it. Free, private, offline.
- *   3. User's own OpenAI / Anthropic / Google key — same logic, BYOK.
- *   4. Henry Cloud Proxy — ONLY if the user has a license key. This is the
+ *   1. User's local Ollama — if it's running, use it. Free, private, offline.
+ *   2. User's own OpenAI / Anthropic / Google / OpenRouter key — BYOK.
+ *   3. Henry Cloud Proxy — ONLY if the user has a license key. This is the
  *      paid path that the developer pre-pays for. Without a license, this
  *      branch is skipped entirely so the developer never pays for free users.
- *   5. Throw `NoBackendAvailableError` with a friendly message pointing the
- *      user at the easiest setup path (free Groq key, 60 seconds).
+ *   4. Throw `NoBackendAvailableError` pointing at the supported providers.
  *
- * This is the cost protection: free users with NO setup get a friendly nudge
- * to add a free Groq key, NOT a free ride on the developer's dime.
+ * This is the cost protection: users with NO setup get a friendly nudge to
+ * configure a provider, NOT a free ride on the developer's dime.
  */
 
 import { canUseHenryProxy, getDeviceId, getLicenseKey, HENRY_PROXY_URL, incrementUsage } from './proxyUsage';
@@ -31,7 +29,7 @@ export interface CallHenryAIOptions {
   maxTokens?: number;
   /** Temperature. 0.7 is the default; lower for factual, higher for creative. */
   temperature?: number;
-  /** Preferred Groq/proxy model. Defaults to llama-3.1-8b for speed/cost. */
+  /** Preferred model on the resolved backend. Defaults to the backend's own choice. */
   preferredModel?: string;
   /** AbortSignal for cancellation. */
   signal?: AbortSignal;
@@ -42,17 +40,17 @@ export interface CallHenryAIOptions {
 export class NoBackendAvailableError extends Error {
   readonly userFacingMessage: string;
   constructor() {
-    super('No AI backend available. User needs to set up Groq, Ollama, or a license.');
+    super('No AI backend available. User needs to configure a supported provider.');
     this.name = 'NoBackendAvailableError';
     this.userFacingMessage =
-      "Henry needs an AI provider to answer that. The fastest setup: open **Settings → AI Providers**, " +
-      "tap **Groq**, and paste a free key from console.groq.com (60 seconds). " +
-      "Or install **Ollama** for fully-local, fully-free AI.";
+      "Henry needs an AI provider to answer that. Open **Settings → AI Providers** and add one — " +
+      "OpenRouter and Google have free tiers, OpenCode Zen runs through the opencode bridge, " +
+      "and **Ollama** runs fully local and fully free.";
   }
 }
 
 interface ResolvedBackend {
-  kind: 'groq' | 'ollama' | 'openai' | 'anthropic' | 'google' | 'proxy';
+  kind: 'ollama' | 'openai' | 'anthropic' | 'google' | 'proxy';
   apiKey?: string;
   baseUrl?: string;
   model: string;
@@ -73,13 +71,7 @@ async function resolveBackend(preferredModel?: string): Promise<ResolvedBackend 
     return ((p?.api_key || p?.apiKey || '') as string).trim();
   };
 
-  // 1. Groq key (BYOK) — preferred because it's free + fast for the user
-  const groqKey = findKey('groq');
-  if (groqKey.length > 10) {
-    return { kind: 'groq', apiKey: groqKey, model: preferredModel || 'llama-3.1-8b-instant' };
-  }
-
-  // 2. Local Ollama
+  // 1. Local Ollama
   const ollamaProvider = providers.find((p) => p.id === 'ollama' && p.enabled);
   if (ollamaProvider) {
     // Quick liveness check — don't return ollama if the daemon isn't running
@@ -145,19 +137,6 @@ export async function callHenryAI(opts: CallHenryAIOptions): Promise<string | nu
   const maxTokens = opts.maxTokens ?? 500;
   const temperature = opts.temperature ?? 0.7;
   const signal = opts.signal ?? AbortSignal.timeout(30_000);
-
-  // ── Groq (direct via user's key) ────────────────────────────────────────
-  if (backend.kind === 'groq') {
-    const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${backend.apiKey}` },
-      body: JSON.stringify({ model: backend.model, messages: opts.messages, max_tokens: maxTokens, temperature, stream: false }),
-      signal,
-    });
-    if (!r.ok) throw new Error(`Groq error ${r.status}: ${await r.text().catch(() => 'unknown')}`);
-    const data = await r.json() as { choices?: Array<{ message?: { content?: string } }> };
-    return data.choices?.[0]?.message?.content?.trim() ?? '';
-  }
 
   // ── Ollama (local) ──────────────────────────────────────────────────────
   if (backend.kind === 'ollama') {
@@ -247,7 +226,7 @@ export async function callHenryAI(opts: CallHenryAIOptions): Promise<string | nu
         throw new Error('Henry license expired or invalid — check Settings → License.');
       }
       if (r.status === 429) {
-        throw new Error('Henry proxy daily limit reached. Add your free Groq key for unlimited use.');
+        throw new Error('Henry proxy daily limit reached. Add your own provider key in Settings for unlimited use.');
       }
       throw new Error(`Henry proxy error ${r.status}`);
     }
@@ -269,13 +248,12 @@ export async function hasAIBackend(): Promise<boolean> {
 
 /**
  * Returns a friendly description of which backend would be used, for diagnostic
- * UI. Examples: "Your Groq key", "Local Ollama", "Henry license proxy", "None".
+ * UI. Examples: "Local Ollama", "Your OpenAI key", "Henry license proxy", "None".
  */
 export async function describeActiveBackend(): Promise<string> {
   const b = await resolveBackend();
   if (!b) return 'None — set up an AI provider';
   switch (b.kind) {
-    case 'groq':      return `Your Groq key (${b.model})`;
     case 'ollama':    return `Local Ollama (${b.model})`;
     case 'openai':    return `Your OpenAI key (${b.model})`;
     case 'anthropic': return `Your Anthropic key (${b.model})`;

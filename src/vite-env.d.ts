@@ -1,7 +1,5 @@
 /// <reference types="vite/client" />
 
-declare const __GROQ_API_KEY__: string;
-
 // Ensure import.meta.env is always typed, even when vite package is not locally installed
 // (e.g. CI or partial installs). When vite/client IS present, its declaration wins.
 interface ImportMetaEnv {

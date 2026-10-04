@@ -31,8 +31,9 @@ actually ships is one gated slice at a time.
 
 - Electron + React + TS + Vite + Zustand + better-sqlite3 desktop app, signed +
   notarized + stapled, sellable.
-- Multi-provider AI with fallback: **Groq → license proxy → Ollama → error** (this is
-  the model router skeleton already).
+- Multi-provider AI with fallback (this is the model router skeleton already).
+  The v2.3.0 chain was **Groq → license proxy → Ollama → error**; Groq has since
+  been removed, and there is no silent fallback to another provider.
 - CRM, quoting, job tracking, financial reporting, USB serial 3D-printer bridge.
 - Cloudflare Worker (`henry-proxy`) for AI proxy, licensing (KV), Stripe webhook, pricing.
 - Companion phone remote-control + voice assistant features.
@@ -200,7 +201,7 @@ rather than getting their own stop-the-world build.
 ## Cost routing (keep bills low)
 
 - **Ollama (local, free):** vault summaries, file sorting, low-risk drafts, status updates.
-- **Cheap OpenRouter / Groq:** bulk tasks, first-pass research.
+- **Cheap OpenRouter free models:** bulk tasks, first-pass research.
 - **Claude / OpenAI (paid):** hard coding, architecture, planning, final review only.
 - Every call logs: model, estimated cost, reason, fallback. No hidden spend — ever.
 

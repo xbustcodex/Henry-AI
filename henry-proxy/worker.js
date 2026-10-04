@@ -1,32 +1,27 @@
 /**
  * Henry AI Cloud Proxy — Cloudflare Worker
- * 
- * Provides shared Groq access so Henry works immediately on install.
- * No API key needed for the free tier.
- * 
- * Rate limits:
- *   Free tier: 50 requests/day per device
- *   Pro tier (license key): 2000 requests/day
- *   Unlimited: custom enterprise
- * 
- * Deploy: wrangler deploy
- * Test:   wrangler dev
+ *
+ * Hosted licensing, billing and metering for Henry. Deploy: wrangler deploy,
+ * test: wrangler dev.
+ *
+ * The hosted chat tier (`POST /v1/chat`) used to forward every request to
+ * Groq. Groq is no longer a supported provider anywhere in Henry, and this
+ * worker will not quietly forward to some other provider instead — see
+ * `handleChat` below. Every other route (pricing, license, usage, Stripe
+ * webhook, health) is provider-independent and still serves.
  */
 
-const GROQ_API = 'https://api.groq.com/openai/v1/chat/completions';
 const FREE_DAILY_LIMIT = 50;
-const PRO_DAILY_LIMIT = 2000;
-const PRO_MAX_TOKENS = 8192;   // cap output to bound per-request cost on the hosted paid tier
 
 // Pricing — single source of truth. Surfaced at GET /v1/pricing so the desktop
 // app and the website can read one canonical set of numbers instead of drifting.
-// Cost basis (2026): Groq 8B $0.05/$0.08 per 1M in/out, 70B $0.59/$0.79; a typical
-// Henry request (~1.5k in + 0.4k out) costs ~$0.0001 (8B) to ~$0.0012 (70B).
-// Loaded cost to serve a hosted user is ~$1–4/mo; monthly price clears it 4–15x.
+// The hosted AI tier is currently unavailable (see handleChat), so these plans
+// describe the commercial offer only; bring-your-own-key and local use is the
+// way Henry runs today.
 const PRICING = {
   currency: 'USD',
   plans: {
-    free:     { price: 0,     period: 'forever',  label: 'Free (BYOK / Local)', note: 'Bring your own Groq/OpenAI key or run Ollama. Unlimited, fully local.' },
+    free:     { price: 0,     period: 'forever',  label: 'Free (BYOK / Local)', note: 'Bring your own OpenAI/OpenRouter key, or run Ollama locally. Unlimited, fully local.' },
     monthly:  { price: 14.99, period: 'month',    label: 'Henry Pro',           note: 'Hosted AI included — no API key needed.' },
     annual:   { price: 149,   period: 'year',     label: 'Henry Pro (Annual)',  note: '~2 months free vs monthly.' },
     lifetime: { price: 299,   period: 'one-time', label: 'Henry Pro Lifetime',  note: 'Never pay again.' },
@@ -87,108 +82,27 @@ export default {
   }
 };
 
-async function handleChat(request, env, corsHeaders) {
-  const deviceId = request.headers.get('X-Henry-Device') || 'unknown';
-  const licenseKey = request.headers.get('X-Henry-License') || '';
-  const today = new Date().toISOString().slice(0, 10);
-
-  // Determine tier
-  let tier = 'free';
-  let dailyLimit = FREE_DAILY_LIMIT;
-  
-  if (licenseKey && env.HENRY_KV) {
-    try {
-      const licenseData = await env.HENRY_KV.get(`license:${licenseKey}`, { type: 'json' });
-      // For monthly/annual plans the license carries an `expires` ISO date.
-      // Lifetime licenses omit it. A lapsed subscription silently falls back to free.
-      const notExpired = !licenseData?.expires || Date.now() < new Date(licenseData.expires).getTime();
-      if (licenseData?.active && notExpired) {
-        tier = licenseData.tier || 'pro';
-        dailyLimit = tier === 'pro' ? PRO_DAILY_LIMIT : FREE_DAILY_LIMIT;
-      }
-    } catch { /* invalid license, stay on free */ }
-  }
-
-  // Rate limiting
-  const rateKey = `rate:${deviceId}:${today}`;
-  let count = 0;
-  
-  if (env.HENRY_KV) {
-    try {
-      count = parseInt(await env.HENRY_KV.get(rateKey) || '0');
-      if (count >= dailyLimit) {
-        return Response.json({
-          error: {
-            message: `Henry free tier limit reached (${dailyLimit} requests/day). Upgrade to Henry Pro at henrysworkshop.app, or add your own Groq key in Settings for unlimited local use.`,
-            type: 'rate_limit',
-            tier,
-            limit: dailyLimit,
-            count,
-          }
-        }, { status: 429, headers: corsHeaders });
-      }
-    } catch { /* KV unavailable, allow request */ }
-  }
-
-  // Parse and validate request
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: 'Invalid JSON' }, { status: 400, headers: corsHeaders });
-  }
-
-  // Safety: cap max_tokens for free tier
-  if (tier === 'free') {
-    body.max_tokens = Math.min(body.max_tokens || 1024, 1024);
-  } else {
-    // Bound per-request output cost on the hosted paid tier (fair use).
-    body.max_tokens = Math.min(body.max_tokens || PRO_MAX_TOKENS, PRO_MAX_TOKENS);
-  }
-
-  // Force fast model on free tier to manage costs
-  if (tier === 'free') {
-    body.model = 'llama-3.1-8b-instant';
-  }
-
-  // Forward to Groq
-  const groqKey = env.GROQ_API_KEY;
-  if (!groqKey) {
-    return Response.json({ error: { message: 'Proxy misconfigured' } }, { status: 500, headers: corsHeaders });
-  }
-
-  try {
-    const groqResp = await fetch(GROQ_API, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${groqKey}`,
+/**
+ * The hosted chat tier.
+ *
+ * This forwarded to Groq and nothing else. Groq is retired, and the one thing
+ * this worker must not do is quietly forward to a different provider and bill
+ * the caller as if it were the same offer — so the route answers explicitly
+ * and names what the caller can do instead.
+ */
+async function handleChat(_request, _env, corsHeaders) {
+  return Response.json(
+    {
+      error: {
+        message:
+          'Hosted chat is unavailable: no AI provider is configured for this proxy. ' +
+          'Add your own key in Henry Settings (OpenAI, Anthropic, OpenRouter, Google or ' +
+          'OpenCode Zen) or run Ollama locally.',
+        type: 'provider_not_configured',
       },
-      body: JSON.stringify(body),
-    });
-
-    // Increment rate counter on success
-    if (groqResp.ok && env.HENRY_KV) {
-      env.HENRY_KV.put(rateKey, String(count + 1), { expirationTtl: 86400 }).catch(() => {});
-    }
-
-    // Stream or return response
-    const respHeaders = {
-      ...corsHeaders,
-      'Content-Type': groqResp.headers.get('Content-Type') || 'application/json',
-      'X-Henry-Tier': tier,
-      'X-Henry-Usage': `${count + 1}/${dailyLimit}`,
-    };
-
-    return new Response(groqResp.body, {
-      status: groqResp.status,
-      headers: respHeaders,
-    });
-  } catch (e) {
-    return Response.json({
-      error: { message: 'Proxy error: ' + (e.message || 'unknown') }
-    }, { status: 502, headers: corsHeaders });
-  }
+    },
+    { status: 503, headers: corsHeaders },
+  );
 }
 
 async function handleLicense(request, env, corsHeaders) {

@@ -5,26 +5,12 @@
 
 export type Intent = 'code' | 'long_context' | 'chat';
 
-export interface CoderModel {
-  id: string;
-  provider: 'groq' | 'cerebras';
-  contextWindow: number;
-  good_at: string[];
-  free: boolean;
-}
-
-export const CODER_MODELS: Record<string, CoderModel> = {
-  'qwen-2.5-coder-32b': {
-    id: 'qwen-2.5-coder-32b',
-    provider: 'groq',
-    contextWindow: 32_768,
-    good_at: ['code', 'refactor', 'debug', 'tests'],
-    free: true,
-  },
-};
-
+/**
+ * Model id used for code intent on the companion engine. There is no separate
+ * coder provider any more: code turns run on whatever engine the user selected,
+ * so the "coder model" is only a preferred id, not a provider of its own.
+ */
 export const DEFAULT_CODER_MODEL = 'qwen-2.5-coder-32b';
-export const CEREBRAS_FALLBACK_MODEL = 'qwen-2.5-coder-32b';
 
 const CODE_FENCE = /```/;
 const FILE_EXT = /\.(ts|tsx|js|jsx|py|rs|go|rb|java|kt|swift|cs|cpp|c|h|sh|sql|json|yaml|yml|toml|html|css|scss|vue|svelte|php|lua|r|m)\b/i;

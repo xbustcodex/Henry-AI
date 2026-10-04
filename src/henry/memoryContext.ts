@@ -9,7 +9,7 @@ import { scoreMemoryFact } from './workingMemory';
 
 /**
  * Caps for prompt-sized memory.
- * Tuned for 128K-context models (Groq Llama-3.1-8b-instant / 3.3-70b-versatile).
+ * Tuned for 128K-context models.
  * These are aggressive — the full memory block stays well under 20K tokens,
  * leaving 100K+ for conversation history and web context.
  */

@@ -159,7 +159,7 @@ export default function CostDashboard() {
                 {savings.freeTokens > 0 && (
                   <p className="text-[11px] text-henry-text-muted mt-2">
                     {(savings.freeTokens / 1000).toFixed(1)}K tokens this month via Ollama (free)
-                    {savings.groqFreeTokens > 0 && ` · ${(savings.groqFreeTokens / 1000).toFixed(1)}K via Groq`}
+                    {savings.freeTierTokens > 0 && ` · ${(savings.freeTierTokens / 1000).toFixed(1)}K via free Zen models`}
                   </p>
                 )}
               </div>

@@ -51,9 +51,14 @@ describe('the static catalogue carries no local models any more', () => {
     expect(AVAILABLE_MODELS.some((m) => m.provider === 'ollama')).toBe(false);
   });
 
-  it('still lists the cloud providers it always did', () => {
-    expect(AVAILABLE_MODELS.length).toBeGreaterThan(20);
-    expect(AVAILABLE_MODELS.some((m) => m.provider === 'anthropic')).toBe(true);
+  it('still carries the supported cloud catalogues', () => {
+    // Named providers, not a count: a raw length only ever asserted that the
+    // array had not been emptied, and it moved every time a provider was
+    // retired for a real reason.
+    const cloudProviders = new Set(AVAILABLE_MODELS.map((m) => m.provider));
+    for (const id of ['openai', 'anthropic', 'google', 'openrouter']) {
+      expect(cloudProviders.has(id)).toBe(true);
+    }
   });
 });
 

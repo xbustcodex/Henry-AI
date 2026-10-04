@@ -23,14 +23,22 @@ vi.mock('electron', () => ({
 vi.mock('./database', () => ({
   getDb: () => ({ prepare: () => ({ get: () => undefined }) }),
 }));
+import { TOOLS_UNSUPPORTED_MESSAGE } from './opencodeBridge';
+import type * as OpencodeBridgeModule from './opencodeBridge';
 
 const BRIDGE_TOKEN = 'bridge-token-for-tests';
 const BRIDGE_BASE = 'http://127.0.0.1:11540/v1';
 
-vi.mock('./opencodeBridge', () => ({
-  ensureOpencodeBridge: async () => ({ running: true, port: 11540, baseUrl: 'http://127.0.0.1:11540/v1', modelCount: 400 }),
-  opencodeBridgeToken: () => BRIDGE_TOKEN,
-}));
+vi.mock('./opencodeBridge', async () => {
+  const actual = await vi.importActual<typeof OpencodeBridgeModule>('./opencodeBridge');
+  return {
+    // The refusal message stays REAL — it is the thing under test here, and a
+    // mock-defined copy is exactly how the fixture drifted before.
+    ...actual,
+    ensureOpencodeBridge: async () => ({ running: true, port: 11540, baseUrl: 'http://127.0.0.1:11540/v1', modelCount: 400 }),
+    opencodeBridgeToken: () => BRIDGE_TOKEN,
+  };
+});
 
 import { registerAIHandlers, callAIWithTools } from './ai';
 import { registry } from '../agent/toolRegistry';
@@ -219,10 +227,11 @@ const TOOLS: ModelTool[] = [
   },
 ];
 
+// Imported rather than pasted: the fixture drifted out of sync with the real
+// refusal once before, which made this test assert a string no code emits.
 const REFUSAL = {
   error: {
-    message:
-      "The OpenCode bridge cannot execute Henry's tools. `opencode run` takes a single prompt and runs its own built-in tools; it cannot be given Henry's tool schema. For agent turns use Ollama, OpenAI, Groq or Anthropic.",
+    message: TOOLS_UNSUPPORTED_MESSAGE,
     type: 'bridge_tools_unsupported',
   },
 };

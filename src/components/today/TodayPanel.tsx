@@ -6,6 +6,7 @@ import type { DailyBriefing } from '../../henry/proactiveBriefing';
 import { getDailyIntention, setDailyIntention, clearDailyIntention } from '../../henry/dailyIntention';
 import { PANEL_QUICK_ASK } from '../../henry/henryQuickAsk';
 import { isMacOS, isLinux, isWindows } from '../../utils/platform';
+import { isOpencodeProvider } from '../../../electron/providers/classification';
 
 const HENRY_LAST_GREETING_KEY = 'henry:last_greeting_date';
 const HENRY_OPERATING_MODE_KEY = 'henry_operating_mode';
@@ -38,11 +39,15 @@ export default function TodayPanel() {
       api.getProviders().catch(() => []),
       api.getSettings().catch(() => ({})),
     ]).then(([providers, settings]: any[]) => {
-      const hasGroqKey = (providers || []).some((p: any) =>
-        p.id === 'groq' && (p.api_key || p.apiKey || '').length > 10
-      );
-      const isOllama = settings?.companion_provider === 'ollama';
-      setHenryStatus(isOllama ? 'ollama' : hasGroqKey ? 'ready' : 'needs-key');
+      // Any supported provider counts — BYOK key, OpenCode Zen, or local
+      // Ollama. This used to look for exactly one retired provider, so a
+      // working Zen or OpenRouter install showed "needs key" forever.
+      const providerRows: Array<{ id?: string; api_key?: string; apiKey?: string; enabled?: boolean }> = providers || [];
+      const hasKey = providerRows.some((p) => ((p.api_key || p.apiKey) || '').length > 10);
+      const selected = String(settings?.companion_provider || '');
+      const isOllama = selected === 'ollama';
+      const isOpencode = providerRows.some((p) => isOpencodeProvider(p.id)) || selected === 'opencode' || selected === 'opencode-zen';
+      setHenryStatus(isOllama ? 'ollama' : hasKey || isOpencode ? 'ready' : 'needs-key');
     }).catch(() => setHenryStatus('needs-key'));
   }, []); // ← [] = run once on mount, not on every render
   const [captureRoute, setCaptureRoute] = useState<'task'|'reminder'|'journal'|'auto'>('auto');
@@ -229,10 +234,10 @@ export default function TodayPanel() {
     try {
       const s = useStore.getState().settings;
       const providers = useStore.getState().providers;
-      const provider = s.companion_provider || 'groq';
-      const model = s.companion_model || 'llama-3.3-70b-versatile';
-      const prov = providers.find((p: any) => p.id === provider);
-      const apiKey = prov?.apiKey || (prov as any)?.api_key || '';
+      const provider = s.companion_provider || '';
+      const model = s.companion_model || '';
+      const prov = providers.find((p) => p.id === provider);
+      const apiKey = prov?.apiKey || '';
       const ownerName = localStorage.getItem('henry:owner_name') || 'there';
 
       const facts = (() => {
@@ -478,12 +483,17 @@ Keep it brief and encouraging.`;
     try {
       const s = useStore.getState().settings;
       const providers = useStore.getState().providers;
-      const provider = s.companion_provider || 'groq';
-      const model = s.companion_model || 'llama-3.3-70b-versatile';
+      const provider = s.companion_provider || '';
+      const model = s.companion_model || '';
+      if (!provider || !model) {
+        setHenryReply('No AI provider selected. Pick one in Settings → AI Providers.');
+        setHenryStreaming(false);
+        return;
+      }
       const prov = providers.find((p) => p.id === provider);
       const apiKey = prov?.apiKey || '';
-      if (!apiKey) {
-        setHenryReply('No API key found. Add one in Settings.');
+      if (!apiKey && provider !== 'ollama') {
+        setHenryReply(`No API key saved for ${provider}. Add one in Settings → AI Providers.`);
         setHenryStreaming(false);
         return;
       }
@@ -621,9 +631,9 @@ Keep it brief and encouraging.`;
             }`}>
               <span className="text-sm">{henryStatus === 'ready' ? '✓' : henryStatus === 'ollama' ? '⚡' : henryStatus === 'proxy' ? '◉' : '⚠'}</span>
               <span className="flex-1">
-                {henryStatus === 'ready' ? 'Henry is ready — Groq AI connected' :
+                {henryStatus === 'ready' ? 'Henry is ready — AI provider connected' :
                  henryStatus === 'ollama' ? 'Henry is ready — running on local Ollama' :
-                 'Henry needs a Groq API key to respond'}
+                 'Henry needs an AI provider to respond'}
               </span>
               {henryStatus === 'needs-key' && (
                 <button onClick={() => (window as any).useStore?.getState?.()?.setCurrentView?.('settings')}

@@ -128,7 +128,7 @@ export default function CompleteStep({ onBack }: CompleteStepProps) {
             <p className="text-sm text-henry-text-dim leading-relaxed">
               You can connect an AI provider anytime from{' '}
               <strong className="text-henry-text">Settings → AI Providers</strong>.
-              Henry works with Groq (free), Ollama (local), OpenAI, Anthropic, and Google.
+              Henry works with OpenRouter, OpenCode Zen, Ollama (local), OpenAI, Anthropic, and Google.
             </p>
           </div>
         </div>

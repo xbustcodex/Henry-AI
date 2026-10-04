@@ -92,7 +92,6 @@ class RedactingFormatter(logging.Formatter):
         r"hf_[A-Za-z0-9]{10,}",            # HuggingFace token
         r"npm_[A-Za-z0-9]{10,}",           # npm access token
         r"xai-[A-Za-z0-9]{30,}",           # xAI (Grok) API key
-        r"gsk_[A-Za-z0-9]{10,}",           # Groq Cloud API key
     ]
     _PREFIX_RE = re.compile(
         r"(?<![A-Za-z0-9_-])(" + "|".join(_PREFIX_PATTERNS) + r")(?![A-Za-z0-9_-])"

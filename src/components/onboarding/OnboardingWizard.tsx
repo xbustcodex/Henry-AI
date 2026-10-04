@@ -25,10 +25,36 @@ type StepId =
 /** Steps whose content is macOS-only; skipped entirely elsewhere. */
 const MACOS_ONLY_STEPS = new Set<StepId>(['accessibility', 'screen']);
 
+interface StoredProvider { id: string; name: string; apiKey: string }
+
+function readJson(key: string, fallback: unknown): unknown {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch { return fallback; }
+}
+
+function toStoredProvider(value: unknown): StoredProvider[] {
+  if (!value || typeof value !== 'object') return [];
+  const rec = value as Record<string, unknown>;
+  const id = typeof rec.id === 'string' ? rec.id : '';
+  const name = typeof rec.name === 'string' && rec.name ? rec.name : id;
+  const rawKey = typeof rec.apiKey === 'string' ? rec.apiKey
+    : typeof rec.api_key === 'string' ? rec.api_key : '';
+  return [{ id, name, apiKey: rawKey.trim() }];
+}
+
 const STEP_ORDER: StepId[] = [
   'welcome', 'howItWorks', 'accessibility', 'screen',
   'ai', 'companion', 'panels', 'memory', 'done',
 ];
+const AI_PROVIDER_CHOICES = [
+  { id: 'openrouter', label: 'OpenRouter', icon: '🔀', desc: 'One key, 300+ models, free tier available', keyUrl: 'https://openrouter.ai/keys' },
+  { id: 'google', label: 'Google Gemini', icon: '✨', desc: 'Free quota to start — key in 30 seconds', keyUrl: 'https://aistudio.google.com/app/apikey' },
+  { id: 'opencode-zen', label: 'OpenCode Zen', icon: '✨', desc: 'Zen models via the opencode bridge — free models need no key', keyUrl: 'https://opencode.ai/docs/zen/' },
+  { id: 'ollama', label: 'Local Ollama', icon: '🏠', desc: 'Runs on this machine — free, private, offline', keyUrl: 'https://ollama.com/download' },
+] as const;
+
 
 function getApi(): any {
   return (typeof window !== 'undefined') ? (window as any).henryAPI : undefined;
@@ -55,7 +81,7 @@ function AutoAdvance({ onAdvance }: { onAdvance: () => void }) {
 }
 
 export default function OnboardingWizard({ onComplete }: Props) {
-  const { setProviders, providers } = useStore();
+  const { providers } = useStore();
   const [step, setStep] = useState<StepId>('welcome');
   const [acc, setAcc] = useState<boolean | null>(null);
   const [scr, setScr] = useState<boolean | null>(null);
@@ -63,9 +89,7 @@ export default function OnboardingWizard({ onComplete }: Props) {
   const [memJob, setMemJob] = useState('');
   const [memGoal, setMemGoal] = useState('');
   const [memSaved, setMemSaved] = useState(false);
-  const [groqKey, setGroqKey] = useState('');
-  const [groqError, setGroqError] = useState('');
-  const [groqSaving, setGroqSaving] = useState(false);
+  const [aiProviderLabel, setAiProviderLabel] = useState<string | null>(null);
   const [hasAi, setHasAi] = useState(false);
   const [pairCode, setPairCode] = useState<string | null>(null);
   const [pairCountdown, setPairCountdown] = useState(0);
@@ -97,12 +121,21 @@ export default function OnboardingWizard({ onComplete }: Props) {
   }, [checkPerms]);
 
   // ── AI provider ───────────────────────────────────────────────────────────
+  // Any supported provider counts — cloud BYOK, OpenCode Zen, or local Ollama.
+  // A single retired provider used to be the only thing that counted here, which
+  // made Henry report "no AI" while a working Zen/Ollama setup was live.
   const refreshAiState = useCallback(() => {
     try {
-      const lsProviders = JSON.parse(localStorage.getItem('henry:providers') || '[]') as Array<any>;
-      const groq = lsProviders.find((p: any) => p.id === 'groq');
-      setHasAi(!!groq && (groq.apiKey || groq.api_key || '').length > 10);
-    } catch { setHasAi(false); }
+      const rawProviders = readJson('henry:providers', []);
+      const stored = (Array.isArray(rawProviders) ? rawProviders : []).flatMap(toStoredProvider);
+      const rawSettings = readJson('henry:settings', {});
+      const lsSettings = rawSettings && typeof rawSettings === 'object'
+        ? (rawSettings as Record<string, unknown>) : {};
+      const byKey = stored.find((p) => p.apiKey.length > 10);
+      const selected = typeof lsSettings.companion_provider === 'string' ? lsSettings.companion_provider.trim() : '';
+      setAiProviderLabel(byKey ? byKey.name || byKey.id : selected || null);
+      setHasAi(!!byKey || selected.length > 0);
+    } catch { setHasAi(false); setAiProviderLabel(null); }
   }, []);
   useEffect(() => { refreshAiState(); }, [refreshAiState, providers]);
 
@@ -218,33 +251,6 @@ export default function OnboardingWizard({ onComplete }: Props) {
     onComplete();
   }
 
-  async function saveGroqKey() {
-    const key = groqKey.trim();
-    if (!key.startsWith('gsk_') || key.length < 30) {
-      setGroqError('Groq keys start with gsk_ — double-check you copied the whole thing');
-      return;
-    }
-    setGroqSaving(true); setGroqError('');
-    try {
-      const api = getApi();
-      try { await api?.saveProvider?.({ id: 'groq', name: 'Groq', api_key: key, apiKey: key, enabled: 1, models: '[]' }); } catch { /* */ }
-      try { await api?.saveSetting?.('companion_provider', 'groq'); } catch { /* */ }
-      try { await api?.saveSetting?.('companion_model', 'llama-3.3-70b-versatile'); } catch { /* */ }
-      try { await api?.saveSetting?.('worker_provider', 'groq'); } catch { /* */ }
-      try { await api?.saveSetting?.('worker_model', 'llama-3.3-70b-versatile'); } catch { /* */ }
-      const updated = (providers || []).filter((p: any) => p.id !== 'groq');
-      updated.push({ id: 'groq', name: 'Groq', apiKey: key, enabled: true, models: ['llama-3.3-70b-versatile'] } as any);
-      setProviders(updated as any);
-      try {
-        const ex = JSON.parse(localStorage.getItem('henry:providers') || '[]');
-        const fil = ex.filter((p: any) => p.id !== 'groq');
-        fil.push({ id: 'groq', name: 'Groq', api_key: key, apiKey: key, enabled: true, models: '[]' });
-        localStorage.setItem('henry:providers', JSON.stringify(fil));
-      } catch { /* */ }
-      setHasAi(true);
-      next();
-    } finally { setGroqSaving(false); }
-  }
 
   function openSettings(uri: string, ipcName: 'openPermissions' | 'openScreenRecording') {
     // Only attempt to open system preferences on macOS. This must use the
@@ -362,8 +368,8 @@ export default function OnboardingWizard({ onComplete }: Props) {
                 <div className="flex items-start gap-3">
                   <span className="text-henry-accent text-base flex-shrink-0">⚡</span>
                   <div>
-                    <p className="text-white text-sm font-semibold">Unlimited with a free Groq key</p>
-                    <p className="text-white/50 text-xs leading-snug">Groq is free to sign up. Paste your key and Henry uses their servers — no monthly cost.</p>
+                    <p className="text-white text-sm font-semibold">Unlimited with your own provider key</p>
+                    <p className="text-white/50 text-xs leading-snug">OpenRouter or Google Gemini have free tiers, and local Ollama is free forever. You pick — Henry never picks for you.</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
@@ -379,7 +385,7 @@ export default function OnboardingWizard({ onComplete }: Props) {
             <div className="grid grid-cols-2 gap-2 text-left">
               {([
                 ['⌨️', 'Permissions', isMacOS() ? '2 Mac settings — takes 60 sec' : isLinux() ? 'Linux capabilities — auto-checked' : 'System settings — auto-checked'],
-                ['⚡', 'Free AI key', 'Groq — unlimited, no card'],
+                ['⚡', 'AI provider', 'OpenRouter · Zen · Ollama — your call'],
                 ['📱', 'Phone app', 'Install as an app from Safari'],
                 ['🧠', 'Memory', 'Teach Henry about yourself'],
               ] as [string,string,string][]).map(([icon, t, d]) => (
@@ -555,17 +561,18 @@ export default function OnboardingWizard({ onComplete }: Props) {
           <div className="space-y-5">
             <div className="text-center">
               <p className="text-5xl mb-3">⚡</p>
-              <h2 className="text-2xl font-bold text-white">Get unlimited AI — free</h2>
+              <h2 className="text-2xl font-bold text-white">Choose your AI provider</h2>
               <p className="text-white/55 text-sm mt-2 leading-relaxed">
-                Henry comes with 50 free requests/day. Add a Groq key for unlimited — takes 90 seconds and Groq is free to sign up.
+                Henry needs one provider configured before it can answer. OpenRouter and Google have free
+                tiers, OpenCode Zen runs through the opencode bridge, and local Ollama is free and private.
               </p>
             </div>
 
             {hasAi ? (
               <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-5 text-center space-y-3">
                 <p className="text-4xl">✓</p>
-                <p className="text-green-400 font-semibold text-lg">Groq key saved</p>
-                <p className="text-white/50 text-xs">Unlimited AI responses. Qwen Coder activates automatically for code questions.</p>
+                <p className="text-green-400 font-semibold text-lg">Provider connected</p>
+                <p className="text-white/50 text-xs">{aiProviderLabel || 'Your AI provider'} is configured — Henry can answer now.</p>
                 <button onClick={next} className={primary}>Continue →</button>
               </div>
             ) : (
@@ -589,48 +596,31 @@ export default function OnboardingWizard({ onComplete }: Props) {
                   </div>
                 </div>
 
-                {/* Groq walkthrough */}
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-4">
-                  <p className="text-[10px] uppercase tracking-widest text-white/40">Get your free key</p>
-                  <ol className="space-y-3.5">
-                    {step3(1, 'Click "Open Groq" below.',
-                      <>Sign up for free — just email + password. No card needed ever.</>)}
-                    {step3(2, 'Go to API Keys in the left sidebar.',
-                      <>Click Create API Key → give it any name → click Submit.</>)}
-                    {step3(3, 'Copy the key.',
-                      <>It starts with <code className="text-henry-accent bg-henry-accent/10 px-1 rounded">gsk_</code> — copy the whole thing.</>)}
-                    {step3(4, 'Paste it below.',
-                      <>Henry saves it to your Mac only. It never goes to any Henry server.</>)}
-                  </ol>
-                  <button onClick={() => openUrl('https://console.groq.com/keys')}
-                    className="w-full py-2.5 rounded-xl border border-henry-accent/30 bg-henry-accent/10 text-henry-accent text-xs font-bold hover:bg-henry-accent/20 transition-all">
-                    Open console.groq.com/keys ↗
-                  </button>
+                {/* Supported providers — key entry itself lives in Settings → AI Providers */}
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-2">
+                  <p className="text-[10px] uppercase tracking-widest text-white/40 mb-1">Supported providers</p>
+                  {AI_PROVIDER_CHOICES.map((p) => (
+                    <button key={p.id} onClick={() => openUrl(p.keyUrl)}
+                      className="w-full flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-left hover:border-henry-accent/40 transition-all">
+                      <span className="text-lg">{p.icon}</span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-sm font-semibold text-white">{p.label}</span>
+                        <span className="block text-[11px] text-white/50 leading-snug">{p.desc}</span>
+                      </span>
+                      <span className="text-white/40 text-[11px] font-medium shrink-0">Get key ↗</span>
+                    </button>
+                  ))}
                 </div>
 
-                {/* Key input */}
-                <div className="space-y-2">
-                  <input type="password" value={groqKey}
-                    onChange={e => { setGroqKey(e.target.value); if (groqError) setGroqError(''); }}
-                    onKeyDown={e => { if (e.key === 'Enter' && groqKey.trim()) void saveGroqKey(); }}
-                    placeholder="gsk_…"
-                    className="w-full bg-white/5 border border-white/15 rounded-xl px-4 py-3 text-white placeholder:text-white/30 outline-none focus:border-henry-accent/60 transition-all font-mono text-sm"
-                    autoFocus />
-                  {groqError && <p className="text-red-400 text-xs px-1">{groqError}</p>}
-                </div>
-
-                <button onClick={() => void saveGroqKey()} disabled={!groqKey.trim() || groqSaving} className={primary}>
-                  {groqSaving ? 'Saving…' : 'Save key + continue →'}
-                </button>
-
-                {/* Smart coder routing note */}
                 <div className="bg-henry-accent/5 border border-henry-accent/15 rounded-xl p-3">
                   <p className="text-white/60 text-[11px] leading-relaxed">
-                    <span className="text-henry-accent font-semibold">Smart coder routing:</span> When you ask code questions, Henry automatically switches to Qwen 2.5 Coder 32B — a model specifically trained for programming. You don't do anything differently. Toggle it off in Settings → AI Providers anytime.
+                    <span className="text-henry-accent font-semibold">Where do keys go?</span>{' '}
+                    Paste them in <span className="text-white/80">Settings → AI Providers</span>. Henry stores
+                    them on this machine only — they never go to a Henry server. Running Ollama locally
+                    needs no key at all.
                   </p>
                 </div>
-
-                <button onClick={next} className={ghost + ' block w-full text-center'}>Skip — add a key later in Settings</button>
+                <button onClick={next} className={ghost + ' block w-full text-center'}>Skip — pick a provider in Settings later</button>
               </>
             )}
           </div>
@@ -888,7 +878,7 @@ export default function OnboardingWizard({ onComplete }: Props) {
               {([
                 ['🔐', isMacOS() ? 'Accessibility' : 'Computer Control', isMacOS() ? acc === true : true],
                 ['📸', isMacOS() ? 'Screen Recording' : 'Screen Capture', isMacOS() ? scr === true : true],
-                ['⚡', 'Groq AI key (unlimited)', hasAi],
+                ['⚡', 'AI provider configured', hasAi],
                 ['📱', 'Phone companion paired', linkedDevices.length > 0],
               ] as [string, string, boolean][]).map(([icon, label, ok]) => (
                 <div key={label} className="flex items-center justify-between text-sm py-0.5">
@@ -933,7 +923,7 @@ export default function OnboardingWizard({ onComplete }: Props) {
                 {isMacOS() && !acc && <p className="text-white/60 text-xs">• Accessibility — Settings → Privacy → Accessibility → add Henry AI</p>}
                 {isMacOS() && !scr && <p className="text-white/60 text-xs">• Screen Recording — Settings → Privacy → Screen & System Audio Recording</p>}
                 {!isMacOS() && <p className="text-white/60 text-xs">• Computer Control — install xdotool/wmctrl (keyboard/mouse) and xclip (clipboard)</p>}
-                {!hasAi && <p className="text-white/60 text-xs">• Groq key — console.groq.com/keys → Henry Settings → AI Providers</p>}
+                {!hasAi && <p className="text-white/60 text-xs">• AI provider — Settings → AI Providers → pick OpenRouter, Zen, or local Ollama</p>}
                 {linkedDevices.length === 0 && <p className="text-white/60 text-xs">• Phone app — open the companion URL from Settings → Companion in your browser</p>}
               </div>
             )}

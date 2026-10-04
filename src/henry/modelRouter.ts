@@ -1,43 +1,135 @@
 /**
  * Henry AI — Model Router
- * Routes each task to the right provider/model based on task type and quality preference.
- * Single source of truth for all model selection logic.
+ *
+ * Single source of truth for chat model selection.
+ *
+ * Two rules this module exists to enforce:
+ *
+ *  1. **No silent substitution.** Every routing decision names the provider the
+ *     user actually chose. When that provider or model cannot be resolved the
+ *     router throws a `ProviderRoutingError` that says exactly what is
+ *     unresolved and which setting key fixes it. It never quietly hands the
+ *     message to a different provider, and never picks a different model.
+ *
+ *  2. **The engine key the picker writes is the key the send path reads.** The
+ *     model picker in Settings → Engines writes `companion_provider` /
+ *     `companion_model` for the Companion engine. That pair — and only that pair
+ *     — drives chat. `worker_provider` / `worker_model` belong to the Worker
+ *     engine (queue, Routines, the scheduler) and must not hijack a chat tier,
+ *     and `chat_fast_provider` / `chat_fast_model` are written by no surface in
+ *     the app at all. Routing on either is what let a Companion selection be
+ *     silently replaced by an unrelated row at send time.
  */
 
-export type TaskType =
-  | 'chat_fast'      // short replies, acks, UI, light planning, ambient flow
-  | 'chat_balanced'  // normal conversational chat
-  | 'chat_quality'   // long summaries, planning, writing, strategy, reasoning
-  | 'stt'            // speech-to-text (Groq Whisper)
-  | 'tts';           // text-to-speech
+import { PROVIDERS } from '../providers/models';
+import { isOpencodeProvider, isOllamaProvider } from '../../electron/providers/classification';
+import { retiredProviderUnavailableMessage } from '../../electron/providers/retiredProviders';
 
 export type QualityPreference = 'fast' | 'balanced' | 'quality';
 
+export type ChatTier = 'fast' | 'balanced' | 'quality';
+
+export type MessageTask = 'chat_fast' | 'chat_balanced' | 'chat_quality';
+
 export interface ModelRoute {
+  /** Provider id exactly as the user selected it. Never rewritten here. */
   provider: string;
+  /** Model id exactly as the user selected it. Never substituted here. */
   model: string;
   apiKey: string;
   /** Which tier was chosen — drives the "why" shown to the user. */
-  tier?: 'fast' | 'balanced' | 'quality';
+  tier?: ChatTier;
   /** Plain-English reason the router picked this model (e.g. "Quick question → fast model"). */
   reason?: string;
 }
 
-export interface STTRoute {
-  model: string;
-  apiKey: string;
+/** The settings keys the model picker writes for the Companion (chat) engine. */
+export const CHAT_PROVIDER_SETTING = 'companion_provider';
+export const CHAT_MODEL_SETTING = 'companion_model';
+
+/**
+ * A provider row as it arrives from the store or the providers IPC. Rows are
+ * written in camelCase by the renderer and read back in snake_case by the main
+ * process, so both spellings are accepted and `models` may be a JSON string.
+ * `AIProvider` satisfies this structurally.
+ */
+export interface ProviderRow {
+  id?: string | null;
+  name?: string | null;
+  api_key?: string | null;
+  apiKey?: string | null;
+  models?: unknown;
 }
 
-export interface TTSRoute {
-  provider: 'groq' | 'browser' | 'off';
+// ── Routing errors ───────────────────────────────────────────────────────────
+
+export type RoutingErrorCode =
+  /** No provider is selected at all. */
+  | 'provider_not_configured'
+  /** A provider id Henry no longer supports is still selected. */
+  | 'provider_unsupported'
+  /** A supported provider is selected but no provider row exists for it. */
+  | 'provider_row_missing'
+  /** A provider is selected but no model is. */
+  | 'model_not_configured'
+  /** The selected model is not offered by the selected provider. */
+  | 'model_unavailable'
+  /** The provider row exists but carries no credential. */
+  | 'api_key_missing';
+
+export interface RoutingErrorDetails {
+  code: RoutingErrorCode;
+  /** The provider id that could not be resolved. `''` when nothing is selected. */
+  providerId: string;
+  /** The model id that could not be resolved. `''` when nothing is selected. */
   model: string;
-  voice: string;
-  apiKey: string;
+  /** The settings key the user has to change. */
+  settingKey: string;
+  tier: ChatTier;
+  /** One sentence naming the unresolved thing and what to do about it. */
+  detail: string;
+}
+
+/**
+ * Thrown by {@link resolveChat} when the configured engine cannot be resolved.
+ *
+ * It carries structured fields so a chat surface can render a precise message
+ * ("provider `opencode-zen` has no row") rather than a generic failure, and it
+ * is never caught and retried against another provider — there is nothing to
+ * retry to.
+ */
+export class ProviderRoutingError extends Error {
+  override readonly name = 'ProviderRoutingError';
+  readonly code: RoutingErrorCode;
+  readonly providerId: string;
+  readonly model: string;
+  readonly settingKey: string;
+  readonly tier: ChatTier;
+  readonly detail: string;
+
+  constructor(details: RoutingErrorDetails) {
+    super(details.detail);
+    this.code = details.code;
+    this.providerId = details.providerId;
+    this.model = details.model;
+    this.settingKey = details.settingKey;
+    this.tier = details.tier;
+    this.detail = details.detail;
+  }
+}
+
+export function isProviderRoutingError(e: unknown): e is ProviderRoutingError {
+  return e instanceof ProviderRoutingError;
+}
+
+/** True for provider ids Henry still supports. Everything else is retired. */
+export function isSupportedProviderId(id: string): boolean {
+  return Object.prototype.hasOwnProperty.call(PROVIDERS, id);
 }
 
 // ── Task detection patterns ────────────────────────────────────────────────────
 
-/** Patterns that always route to the quality (70B) model. */
+/** Patterns that always route to the quality model. */
 const QUALITY_PATTERNS = [
   // Long summaries
   /\b(summarize|summarise|summary)\b.{20,}/i,
@@ -58,10 +150,9 @@ const QUALITY_PATTERNS = [
   /```[\s\S]{50,}/,
   /\b(function|class|module|component|api|interface|schema)\b.{20,}/i,
   /\b(debug|fix|refactor|optimize|implement|build)\b.{15,}/i,
-  // Long input
 ];
 
-/** Patterns that always route to fast (8B) model. */
+/** Patterns that always route to the fast model. */
 const FAST_PATTERNS = [
   // Acknowledgments
   /^(ok|okay|got it|sure|yes|yeah|no|nope|thanks|thank you|cool|great|perfect|sounds good|alright|noted|yep|k|i see|interesting|right|understood|makes sense)\.?$/i,
@@ -79,7 +170,7 @@ const FAST_PATTERNS = [
  * Detect task complexity from message content.
  * Returns the appropriate tier for balanced mode routing.
  */
-export function detectTaskType(content: string): 'chat_fast' | 'chat_balanced' | 'chat_quality' {
+export function detectTaskType(content: string): MessageTask {
   const trimmed = content.trim();
   const len = trimmed.length;
 
@@ -96,7 +187,7 @@ export function detectTaskType(content: string): 'chat_fast' | 'chat_balanced' |
     if (p.test(trimmed)) return 'chat_quality';
   }
 
-  // Length-based fallback
+  // Length-based classification
   if (len > 400) return 'chat_quality';
   if (len < 120) return 'chat_fast';
 
@@ -104,7 +195,7 @@ export function detectTaskType(content: string): 'chat_fast' | 'chat_balanced' |
 }
 
 /**
- * Returns true if this message should use the deeper model (70B).
+ * Returns true if this message should use the deeper model.
  * Used by ChatView to decide whether to emit a presence phrase first.
  */
 export function requiresQualityModel(
@@ -117,153 +208,158 @@ export function requiresQualityModel(
   return detectTaskType(content) === 'chat_quality';
 }
 
+/** How the tier is decided, given the user's preference and the message. */
+function pickTier(preference: QualityPreference, messageTask: MessageTask): ChatTier {
+  if (preference === 'fast') return 'fast';
+  if (preference === 'quality') return 'quality';
+  return messageTask === 'chat_fast' ? 'fast'
+    : messageTask === 'chat_quality' ? 'quality'
+    : 'balanced';
+}
+
+/** Plain-English "why" surfaced under each reply. */
+function pickReason(preference: QualityPreference, messageTask: MessageTask): string {
+  if (preference === 'fast') return 'Fast mode (your setting)';
+  if (preference === 'quality') return 'Quality mode (your setting)';
+  if (messageTask === 'chat_fast') return 'Quick question → fast model';
+  if (messageTask === 'chat_quality') return 'Heavier task → quality model';
+  return 'Balanced default';
+}
+
+/** A provider row's model list, whether stored as an array or as a JSON string. */
+function rowModels(row: ProviderRow): string[] {
+  const m = row.models;
+  if (Array.isArray(m)) return m.map(String);
+  if (typeof m === 'string') {
+    try {
+      const parsed: unknown = JSON.parse(m);
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch { return []; }
+  }
+  return [];
+}
+
+// ── Chat routing ──────────────────────────────────────────────────────────────
+
 /**
  * Resolve which LLM provider+model to use for a chat message.
- * Falls back down the chain if the preferred model isn't configured.
+ *
+ * There is exactly one source of truth — the Companion engine the model picker
+ * writes — and exactly one failure mode: if it cannot be resolved, this throws
+ * {@link ProviderRoutingError}. It never falls through to another provider, to a
+ * default model, or to the first model in a provider's list.
+ *
+ * @throws {ProviderRoutingError}
  */
 export function resolveChat(
   content: string,
   settings: Record<string, string>,
-  providers: any[],
+  providers: ProviderRow[],
 ): ModelRoute {
   const preference = (settings.model_quality_preference || 'balanced') as QualityPreference;
   const messageTask = detectTaskType(content);
+  const tier = pickTier(preference, messageTask);
+  const providerId = (settings[CHAT_PROVIDER_SETTING] ?? '').trim();
+  const model = (settings[CHAT_MODEL_SETTING] ?? '').trim();
 
-  let targetTier: 'fast' | 'balanced' | 'quality';
-  if (preference === 'fast') {
-    targetTier = 'fast';
-  } else if (preference === 'quality') {
-    targetTier = 'quality';
-  } else {
-    // balanced: route by message content
-    targetTier = messageTask === 'chat_fast' ? 'fast'
-      : messageTask === 'chat_quality' ? 'quality'
-      : 'balanced';
+  // Five call sites below need the same shape and the same "name what is
+  // unresolved, name the key that fixes it" guarantee, so they all build the
+  // error here and `throw` it inline — which is also what lets the compiler
+  // narrow past each guard.
+  const routingError = (code: RoutingErrorCode, settingKey: string, detail: string) =>
+    new ProviderRoutingError({ code, providerId, model, settingKey, tier, detail });
+
+  if (!providerId) {
+    throw routingError(
+      'provider_not_configured',
+      CHAT_PROVIDER_SETTING,
+      `No chat engine is selected. Pick a provider and model in Settings → Engines `
+      + `(this sets \`${CHAT_PROVIDER_SETTING}\` / \`${CHAT_MODEL_SETTING}\`).`,
+    );
   }
 
-  // Plain-English "why" surfaced under each reply (build plan, Phase 1.3).
-  const reason = ((): string => {
-    if (preference === 'fast') return 'Fast mode (your setting)';
-    if (preference === 'quality') return 'Quality mode (your setting)';
-    if (messageTask === 'chat_fast') return 'Quick question → fast model';
-    if (messageTask === 'chat_quality') return 'Heavier task → quality model';
-    return 'Balanced default';
-  })();
-
-  // Tier configs — fall through to primary if tier not configured
-  const primaryProvider = settings.companion_provider || 'groq';
-  const primaryModel = settings.companion_model || 'llama-3.3-70b-versatile';
-  const fastProvider = settings.chat_fast_provider || primaryProvider;
-  const fastModel = settings.chat_fast_model || primaryModel;
-  const qualityProvider = settings.worker_provider || settings.companion_provider || 'groq';
-  const qualityModel = settings.worker_model || 'llama-3.3-70b-versatile';
-
-  let chosenProvider: string;
-  let chosenModel: string;
-  if (targetTier === 'fast') {
-    chosenProvider = fastProvider;
-    chosenModel = fastModel;
-  } else if (targetTier === 'quality') {
-    chosenProvider = qualityProvider;
-    chosenModel = qualityModel;
-  } else {
-    // balanced falls back to primary
-    chosenProvider = primaryProvider;
-    chosenModel = primaryModel;
+  // A retired provider is reported with the same sentence the main process
+  // throws at the transport boundary, so the chat surface and the transport
+  // never tell the user two different stories.
+  //
+  // Do not delete this branch as dead code. `migrateRetiredProviders` runs at
+  // boot and blanks every setting whose value is a retired id, so a migrated
+  // install reaches `provider_not_configured` above and never gets here. This
+  // branch is the window *before* that migration has run on the machine — a
+  // settings map still holding the old id — plus any provider retired later
+  // whose id the current blanking pass has not yet seen. It is the difference
+  // between "pick a provider" and "the provider you picked is gone".
+  const retired = retiredProviderUnavailableMessage(providerId);
+  if (retired) {
+    throw routingError('provider_unsupported', CHAT_PROVIDER_SETTING, retired);
   }
 
-  // Resolve API key — fallback to primary if chosen provider has no key
-  const provObj = providers.find((p: any) => p.id === chosenProvider);
-  const apiKey = provObj?.api_key || provObj?.apiKey || '';
-
-  if (!apiKey && chosenProvider !== primaryProvider) {
-    const primary = providers.find((p: any) => p.id === primaryProvider);
-    const primaryKey = primary?.api_key || primary?.apiKey || '';
-    if (!primaryKey) {
-      // Neither tier provider nor primary has a key — surface a clear error
-      throw new Error(
-        'No API key configured for any provider. Please add a provider in Settings → Engines.'
-      );
-    }
-    // Validate the model exists in the primary provider's model list
-    const primaryModels: string[] = (() => {
-      try {
-        const m = primary?.models;
-        return Array.isArray(m) ? m : (typeof m === 'string' ? JSON.parse(m) : []);
-      } catch { return []; }
-    })();
-    const resolvedModel =
-      primaryModels.length === 0 || primaryModels.includes(primaryModel)
-        ? primaryModel
-        : primaryModels[0];
-    return {
-      provider: primaryProvider,
-      model: resolvedModel,
-      apiKey: primaryKey,
-      tier: targetTier,
-      reason: `${reason} · fell back to your primary (no key for the ${targetTier} provider)`,
-    };
+  // A provider id outside the shipped registry has no adapter and no model
+  // catalogue behind it. It is reported, never resolved to a substitute.
+  if (!isSupportedProviderId(providerId)) {
+    throw routingError(
+      'provider_unsupported',
+      CHAT_PROVIDER_SETTING,
+      `Provider \`${providerId}\` is no longer available. Choose a supported provider `
+      + `in Settings → Engines (this replaces \`${CHAT_PROVIDER_SETTING}\`).`,
+    );
   }
 
-  // Validate that the chosen model actually exists in this provider's model list
-  const providerModels: string[] = (() => {
-    try {
-      const m = provObj?.models;
-      return Array.isArray(m) ? m : (typeof m === 'string' ? JSON.parse(m) : []);
-    } catch { return []; }
-  })();
-  const finalModel =
-    providerModels.length === 0 || providerModels.includes(chosenModel)
-      ? chosenModel
-      : providerModels[0] || chosenModel;
+  const row = providers.find((p) => p?.id === providerId);
+  if (!row) {
+    throw routingError(
+      'provider_row_missing',
+      CHAT_PROVIDER_SETTING,
+      `Provider \`${providerId}\` is selected but has no provider record. Open `
+      + `Settings → AI Providers and add \`${providerId}\`, or pick a different engine.`,
+    );
+  }
 
-  return { provider: chosenProvider, model: finalModel, apiKey, tier: targetTier, reason };
-}
+  if (!model) {
+    throw routingError(
+      'model_not_configured',
+      CHAT_MODEL_SETTING,
+      `No model is selected for provider \`${providerId}\`. Pick a model in `
+      + `Settings → Engines (this sets \`${CHAT_MODEL_SETTING}\`).`,
+    );
+  }
 
-/** Resolve STT route — Groq Whisper, with retry model available. */
-export function resolveSTT(
-  settings: Record<string, string>,
-  providers: any[],
-): STTRoute {
-  const model = settings.stt_model || 'whisper-large-v3-turbo';
-  const groq = providers.find((p: any) => p.id === 'groq');
-  const apiKey = groq?.api_key || groq?.apiKey || '';
-  return { model, apiKey };
-}
+  const offered = rowModels(row);
+  if (offered.length > 0 && !offered.includes(model)) {
+    throw routingError(
+      'model_unavailable',
+      CHAT_MODEL_SETTING,
+      `Model \`${model}\` is not offered by provider \`${providerId}\` `
+      + `(${offered.length} model${offered.length === 1 ? '' : 's'} available). Pick one of `
+      + `them in Settings → Engines (this sets \`${CHAT_MODEL_SETTING}\`).`,
+    );
+  }
 
-/** Resolve STT retry route — higher-accuracy model for noisy/low-confidence audio. */
-export function resolveSTTRetry(
-  settings: Record<string, string>,
-  providers: any[],
-): STTRoute {
-  // Use whisper-large-v3 as high-accuracy retry (user can override)
-  const model = settings.stt_retry_model || 'whisper-large-v3';
-  const groq = providers.find((p: any) => p.id === 'groq');
-  const apiKey = groq?.api_key || groq?.apiKey || '';
-  return { model, apiKey };
-}
+  const apiKey = (row.api_key ?? row.apiKey ?? '').trim();
+  // Ollama and the opencode bridge read no Henry-side credential, so an empty
+  // key is legitimate for them and must not be reported as a misconfiguration.
+  const needsKey = !isOllamaProvider(row.id, row.name) && !isOpencodeProvider(row.id, row.name);
+  if (needsKey && !apiKey) {
+    throw routingError(
+      'api_key_missing',
+      CHAT_PROVIDER_SETTING,
+      `Provider \`${providerId}\` has no API key. Add its key in Settings → AI `
+      + `Providers, or pick a different engine.`,
+    );
+  }
 
-/** Resolve TTS route — Groq PlayAI TTS or browser speech synthesis. */
-export function resolveTTS(
-  settings: Record<string, string>,
-  providers: any[],
-): TTSRoute {
-  const provider = (settings.tts_provider || 'browser') as TTSRoute['provider'];
-  const model = settings.tts_model_groq || 'playai-tts';
-  const voice = settings.tts_voice_groq || 'Fritz-PlayAI';
-  const groq = providers.find((p: any) => p.id === 'groq');
-  const apiKey = groq?.api_key || groq?.apiKey || '';
-  return { provider, model, voice, apiKey };
+  return {
+    provider: providerId,
+    model,
+    apiKey,
+    tier,
+    reason: pickReason(preference, messageTask),
+  };
 }
 
 /** Human-readable label for the resolved route — shown in status bar. */
 export function routeLabel(route: ModelRoute): string {
-  const shortModel = route.model
-    .replace('llama-3.1-', '')
-    .replace('llama-3.3-', '')
-    .replace('-versatile', '')
-    .replace('-instant', '');
-  return `${route.provider} / ${shortModel}`;
+  return `${route.provider} / ${modelShortName(route.model)}`;
 }
 
 /** Short display name for a model ID. */

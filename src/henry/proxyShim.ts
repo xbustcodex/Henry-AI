@@ -5,7 +5,7 @@
  *   Monkey-patches window.fetch on app start. Any fetch to the Henry Cloud
  *   Proxy is intercepted and re-routed through `callHenryAI()`, which only
  *   uses the real proxy when the user has a license key. Free users get
- *   transparently served by their OWN Groq key, OR Ollama, OR (if neither
+ *   transparently served by their OWN provider key, OR Ollama, OR (if neither
  *   exists) a friendly error message that points them at setup.
  *
  * Why a shim instead of refactoring every panel:
@@ -18,7 +18,7 @@
  *   - Streaming proxy calls (ChatView's main chat loop) — those have their
  *     own license gate inside ChatView. The shim only intercepts non-stream
  *     POSTs because that's what every panel uses.
- *   - Direct API calls to Groq / OpenAI / Anthropic / Ollama — those go
+ *   - Direct API calls to OpenAI / Anthropic / Ollama — those go
  *     straight through to the real provider with the user's own key.
  *
  * How to use:
@@ -88,7 +88,7 @@ export function installProxyShim(): void {
         signal: init?.signal ?? undefined,
       });
 
-      // Mimic the Groq/OpenAI-style response shape every panel expects
+      // Mimic the OpenAI-style response shape every panel expects
       const fake = {
         id: `henry-shim-${Date.now()}`,
         object: 'chat.completion',

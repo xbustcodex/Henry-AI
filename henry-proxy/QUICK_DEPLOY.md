@@ -1,10 +1,11 @@
 # Deploy Henry Proxy — 4 commands
 
-This deploys Henry AI's cloud backend so new users get AI without an API key.
+This deploys Henry AI's licensing and metering backend. It does not serve AI:
+the hosted chat route was retired with Groq and answers `503
+provider_not_configured`.
 
 ## Prerequisites
 - Cloudflare account (free at cloudflare.com)
-- Your Groq API key (console.groq.com)
 
 ## Deploy
 
@@ -19,9 +20,7 @@ npx wrangler login
 npx wrangler kv namespace create HENRY_KV
 # ↑ Copy the "id" from output into wrangler.toml replacing "REPLACE_WITH_KV_ID"
 
-# 4. Set your Groq API key as a secret
-npx wrangler secret put GROQ_API_KEY
-# ↑ Paste your gsk_... key when prompted
+# 4. (no provider secret — the chat route is disabled)
 
 # 5. Deploy!
 npx wrangler deploy
@@ -42,6 +41,8 @@ npm run build:mac:unsigned
 ```
 
 ## What this enables
-- New users get 50 free AI requests/day without any API key
-- Pro users with license keys get 2000/day
+- License validation and metering for Henry
+- Pro users with license keys are recognised (2000/day tier recorded in KV)
 - You control the rate limits in worker.js
+
+It does **not** serve AI: hosted chat is disabled.

@@ -7,7 +7,7 @@
     <img src="https://img.shields.io/github/v/release/xbustcodex/Henry-AI?label=Download&color=6366f1" />
   </a>
   <img src="https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey" />
-  <img src="https://img.shields.io/badge/AI-Groq%20Free%20Tier-22c55e" />
+  <img src="https://img.shields.io/badge/AI-Your%20Engine%2C%20Local%20or%20BYOK-22c55e" />
   <img src="https://img.shields.io/badge/License-MIT-white" />
 </div>
 
@@ -102,8 +102,7 @@ Every chat request routes to the cheapest capable AI:
 | What you say | How it's handled | Cost |
 |---|---|---|
 | "Hi", "thanks", time, math | Local — no API | **$0.00** |
-| Simple questions | Groq 8b-instant | **$0.05/1M tokens** |
-| Writing, analysis, deep work | Groq 70b-versatile | **$0.59/1M tokens** |
+| Everything else | The provider + model you selected in Settings → Engines | your provider's price |
 | Coding | Claude Code (your subscription) or local | **$0 marginal** |
 | Voice in/out | whisper.cpp + system voice | **$0.00** |
 | Image generation | DALL-E 3 (optional key) | $0.04/image |
@@ -119,7 +118,7 @@ Henry checks and fixes himself on every launch: cloudflared, ffmpeg, yt-dlp, and
    - **Windows x64 / arm64:** `Henry-AI-Setup-<version>-<arch>.exe`, or the portable `.exe`
    - **macOS (Apple Silicon or Intel):** `Henry AI-<version>.dmg` — drag Henry AI to Applications
 2. Open Henry AI and follow the 60-second onboarding
-3. Get a free Groq API key at [console.groq.com/keys](https://console.groq.com/keys) — no credit card
+3. Pick an engine in Settings → Engines — Ollama for fully local (free), or bring your own key for OpenAI, Anthropic, Google, OpenRouter or OpenCode Zen
 
 ### From Source
 

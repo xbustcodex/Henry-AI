@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { matchesTriggerPhrase, launchDemo } from '../../henry/creatorsActivation';
 import { buildModelMessages, toPlainText } from '../../henry/messageBuilder';
-import { incrementUsage, getTodayUsage, getRemainingRequests, isNearLimit, canUseHenryProxy } from '../../henry/proxyUsage';
+import { getTodayUsage, getRemainingRequests, isNearLimit } from '../../henry/proxyUsage';
 import { hasUsableBackend, getBackendStatus } from '../../henry/backendStatus';
+import { retiredProviderName } from '@/providers/models';
 import { toast, promptDialog } from '../ui/Toast';
 import { useStore } from '../../store';
 import { useAmbientStore } from '../../henry/ambientStateStore';
@@ -27,7 +28,7 @@ import {
   HENRY_OPERATING_MODES,
   type HenryOperatingMode,
   isHenryOperatingMode,
-  buildGroqFreeSystemPrompt,
+  buildLeanSystemPrompt,
 } from '@/henry/charter';
 import {
   classifyMessageIntent,
@@ -53,7 +54,8 @@ import {
   buildBinaryContentError,
   isBinaryContent,
 } from '@/henry/errorMessages';
-import { resolveChat, requiresQualityModel, modelShortName } from '@/henry/modelRouter';
+import { resolveChat, requiresQualityModel, modelShortName, isProviderRoutingError } from '@/henry/modelRouter';
+import type { ModelRoute } from '@/henry/modelRouter';
 import { cancelTTS } from '@/henry/ttsService';
 import {
   useVoiceStore,
@@ -293,14 +295,6 @@ function resumeModeLabel(m: HenryOperatingMode): string {
 }
 
 
-// Henry Cloud Proxy — license-gated only. The developer pays the bill behind it,
-// so it is NEVER a fallback for free users. The hard gate `canUseHenryProxy()`
-// (in proxyUsage.ts) ensures only users with a valid license key can reach it.
-// Free users must BYOK (Groq, Ollama, OpenAI, etc.) or install Ollama.
-const HENRY_PROXY_URL = (import.meta as any).env?.VITE_HENRY_PROXY_URL || 'https://henry-proxy.henryai.workers.dev';
-const HENRY_PROXY_ENABLED = true; // proxy code path is enabled — but every call is still gated by canUseHenryProxy()
-const HENRY_PROXY_MAX_RETRIES = 1;
-
 /**
  * True when a speech rejection is the user's own doing rather than a failure:
  * the stop button, a new outgoing message, or switching TTS off all tear the
@@ -318,12 +312,8 @@ function isSpeechStop(err: unknown): boolean {
  * engine failure (no key, no engine, a spawn error) earns one toast so the
  * user knows voice replies are broken instead of wondering why it went quiet.
  */
-function speakReplySafely(
-  text: string,
-  settings: Record<string, string>,
-  providers: unknown[],
-): void {
-  void speakAssistantReply(text, settings, providers).catch((err: unknown) => {
+function speakReplySafely(text: string): void {
+  void speakAssistantReply(text).catch((err: unknown) => {
     if (isSpeechStop(err)) return;
     console.warn('[Henry voice] reply speech failed:', err);
     toast.error(`Voice reply failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -600,12 +590,7 @@ export default function ChatView() {
     if (lastSpokenMsgIdRef.current === lastMsg.id) return;
     lastSpokenMsgIdRef.current = lastMsg.id;
     if (useVoiceStore.getState().userTypedSinceReply) return; // user moved on — stay quiet
-    const s = useStore.getState().settings;
-    window.henryAPI?.getProviders?.().then((providers) => {
-      speakReplySafely(lastMsg.content, s, providers);
-    }).catch(() => {
-      speakReplySafely(lastMsg.content, s, []);
-    });
+    speakReplySafely(lastMsg.content);
   }, [isStreaming, ttsEnabled, handsFreeVoice, messages]);
 
   function toggleTts() {
@@ -1524,21 +1509,46 @@ What do you want to tackle first?`);
     }
 
     // ── Backend gate (cost protection) ────────────────────────────────────
-    // If the user has NO Groq key, NO Ollama, NO other BYOK key, and NO
-    // license, do not attempt any AI call. Render an inline setup card
-    // instead. This is THE wall that protects the developer from paying
-    // for free-tier usage — never bypass it.
-    if (!hasUsableBackend(settings)) {
+    // Never spend anyone's bill on a guess: if nothing at all is configured,
+    // attempt no AI call — render an inline setup card instead.
+    //
+    // This gate must only fire when there is genuinely no provider. It used to
+    // be the reason a fully configured OpenCode Zen install could never send:
+    // it ran BEFORE resolveChat and short-circuited on a status check that did
+    // not count opencode at all, so the router was never reached.
+    const selectedProviderId = (settings.companion_provider || '').trim();
+    const retiredSelection = retiredProviderName(selectedProviderId);
+    if (retiredSelection) {
+      addMessage({
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: `⚠️ **${retiredSelection} is no longer a supported provider.** Henry will not route to another provider in its place. Pick a supported provider in **Settings → AI Providers** and set it as your companion engine.`,
+        conversation_id: convId,
+        created_at: new Date().toISOString(),
+        model: 'provider-unavailable',
+        provider: 'henry',
+      });
+      setIsStreaming(false);
+      setStreamingContent('');
+      setCompanionStatus({ status: 'idle' });
+      return;
+    }
+    if (!hasUsableBackend(settings) && !selectedProviderId) {
       const backendStatus = getBackendStatus(settings);
       const availableOptions: string[] = [];
-      if (!backendStatus.kinds.includes('groq')) {
-        availableOptions.push(
-          '**Free Groq key (60 seconds, recommended)** — Get one at [console.groq.com/keys](https://console.groq.com/keys), then paste it in **Settings → AI Providers → Groq**. The free tier is 14,400 requests/day — plenty for normal use.'
-        );
-      }
       if (!backendStatus.kinds.includes('ollama')) {
         availableOptions.push(
           '**Local Ollama (fully private, fully free)** — Install from [ollama.com](https://ollama.com/download), then Henry connects automatically.'
+        );
+      }
+      if (!backendStatus.kinds.includes('openrouter')) {
+        availableOptions.push(
+          '**OpenRouter (free models available)** — Get a key at [openrouter.ai/keys](https://openrouter.ai/keys), then paste it in **Settings → AI Providers**.'
+        );
+      }
+      if (!backendStatus.kinds.includes('opencode-zen')) {
+        availableOptions.push(
+          '**OpenCode Zen** — Free Zen models run through the local opencode bridge with no key at all. Add **Settings → AI Providers → OpenCode Zen** to pick one.'
         );
       }
       if (!backendStatus.kinds.includes('openai')) {
@@ -1785,28 +1795,40 @@ What do you want to tackle first?`);
     const providers = await window.henryAPI.getProviders();
     const s = useStore.getState().settings;
 
-    const route = resolveChat(content, s, providers);
-    let companionProvider = route.provider;
-    let companionModel = route.model;
-    let provider = providers.find((p: any) => p.id === companionProvider);
-
-    // If router's choice has no provider object, fall back to companion_model_2 or raw companion
-    if (!provider || !companionModel) {
-      const fallbackModel = s.companion_model_2;
-      const fallbackProvider = s.companion_provider_2 || s.companion_provider;
-      if (fallbackModel && fallbackProvider) {
-        companionProvider = fallbackProvider;
-        companionModel = fallbackModel;
-        provider = providers.find((p: any) => p.id === companionProvider);
-      }
+    // An unresolvable provider is an explicit error naming that provider.
+    // It is never swapped for a different one: the silent substitution that
+    // used to live here is how a retired selection kept answering from
+    // somewhere the user never chose.
+    let route: ModelRoute;
+    try {
+      route = resolveChat(content, s, providers);
+    } catch (err) {
+      const detail = isProviderRoutingError(err)
+        ? err.detail
+        : err instanceof Error ? err.message : String(err);
+      addMessage({
+        id: crypto.randomUUID(),
+        conversation_id: convId,
+        role: 'assistant',
+        content: `⚠️ ${detail}`,
+        engine: 'companion',
+        created_at: new Date().toISOString(),
+      });
+      setIsStreaming(false);
+      setCompanionStatus({ status: 'idle' });
+      return;
     }
+
+    const companionProvider = route.provider;
+    const companionModel = route.model;
+    const provider = providers.find((p) => p.id === companionProvider);
 
     if (!provider || !companionModel) {
       addMessage({
         id: crypto.randomUUID(),
         conversation_id: convId,
         role: 'assistant',
-        content: '⚠️ No model configured. Go to Settings → Engines, click **Auto-detect** if you have Ollama running, or set a model manually.',
+        content: `⚠️ **Provider \`${companionProvider || '(none selected)'}\` is not configured** — no model \`${companionModel || '(none selected)'}\` resolved for it. Henry will not route to a different provider in its place. Set a provider and model in **Settings → AI Providers**.`,
         engine: 'companion',
         created_at: new Date().toISOString(),
       });
@@ -1868,7 +1890,6 @@ What do you want to tackle first?`);
     const historyTokensBefore = history.reduce((s, m) => s + estimateTokens(m.content) + 4, 0);
     // Use provider-appropriate context limit
     const providerLimits: Record<string, number> = {
-      groq: 100_000,
       anthropic: 180_000,
       openai: 100_000,
       google: 800_000,
@@ -1941,23 +1962,18 @@ What do you want to tackle first?`);
 
     const apiKey = provider.api_key || provider.apiKey || '';
 
-    // LEAN PROMPT: for Groq free tier AND Ollama — bypass the full 12k-token charter
-    // Exception: computer mode always gets the full prompt so action patterns are clear
-    const useLeanPrompt = (companionProvider === 'groq' || companionProvider === 'ollama') && effectiveMode !== 'computer';
-
-    // Use Henry Cloud Proxy if no personal Groq key is set
-    let effectiveApiKey = apiKey;
-    const effectiveProvider = companionProvider;
-    const effectiveModel = companionModel;
-    let useProxy = false;
-    if (companionProvider === 'groq' && (!apiKey || apiKey.length < 10) && HENRY_PROXY_ENABLED && canUseHenryProxy()) {
-      useProxy = true;
-      effectiveApiKey = 'henry-proxy'; // placeholder, proxy uses its own key
-    }
+    // LEAN PROMPT: local models run on a tight token budget — bypass the full
+    // 12k-token charter. Exception: computer mode always gets the full prompt
+    // so action patterns stay clear.
+    //
+    // There is deliberately no "route through the Henry proxy when the key is
+    // missing" branch any more: substituting a different provider for the one
+    // the user selected is exactly the silent fallback this must not do.
+    const useLeanPrompt = companionProvider === 'ollama' && effectiveMode !== 'computer';
 
     if (useLeanPrompt) {
-      const minimalSys = buildGroqFreeSystemPrompt(effectiveMode);
-      const messagesPayloadGroq: HenryAIMessage[] = [
+      const minimalSys = buildLeanSystemPrompt(effectiveMode);
+      const leanMessages: HenryAIMessage[] = [
         { role: 'system', content: minimalSys },
         ...guardedHistory.map((m) => ({
           role: m.role as HenryAIMessage['role'],
@@ -1965,107 +1981,38 @@ What do you want to tackle first?`);
         })),
         { role: 'user', content },
       ];
-      // Hard cap total to 2000 chars per slot for safety
-      if (messagesPayloadGroq.length > 1) {
+      // Hard cap total to 6000 chars of history for safety
+      if (leanMessages.length > 1) {
         let budget = 6000;
-        const sys0 = messagesPayloadGroq[0];
-        const conv = messagesPayloadGroq.slice(1, -1);
-        const last = messagesPayloadGroq[messagesPayloadGroq.length - 1];
+        const sys0 = leanMessages[0];
+        const conv = leanMessages.slice(1, -1);
+        const last = leanMessages[leanMessages.length - 1];
         const kept: HenryAIMessage[] = [];
         for (let i = conv.length - 1; i >= 0; i--) {
           if (conv[i].content.length <= budget) { kept.unshift(conv[i]); budget -= conv[i].content.length; }
         }
-        messagesPayloadGroq.splice(0, messagesPayloadGroq.length, sys0, ...kept, last);
+        leanMessages.splice(0, leanMessages.length, sys0, ...kept, last);
       }
-      // Route through Henry Cloud Proxy if no personal key
-      const groqStream = useProxy
-        ? (() => {
-            // Direct fetch to Henry proxy (streaming)
-            const ctrl = new AbortController();
-            const deviceId = (() => {
-              try {
-                let id = localStorage.getItem('henry:device_id');
-                if (!id) { id = crypto.randomUUID(); localStorage.setItem('henry:device_id', id); }
-                return id;
-              } catch { return 'unknown'; }
-            })();
-            const licenseKey = localStorage.getItem('henry:license_key') || '';
-            let chunkCb: ((c: string) => void) | undefined;
-            let doneCb: ((t: string) => void) | undefined;
-            let errCb: ((e: string) => void) | undefined;
-            void (async () => {
-              try {
-                const r = await fetch(HENRY_PROXY_URL + '/v1/chat', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'X-Henry-Device': deviceId,
-                    'X-Henry-License': licenseKey,
-                    'X-Henry-Version': '0.7.9',
-                  },
-                  body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: messagesPayloadGroq, max_tokens: 1024, stream: true }),
-                  signal: ctrl.signal,
-                });
-                if (!r.ok) {
-                  const errData = await r.json().catch(() => ({ error: { message: 'Proxy error ' + r.status } })) as any;
-                  const msg = errData.error?.message || 'Proxy error ' + r.status;
-                  if (r.status === 429) {
-                    errCb?.('**Daily limit reached** — 50 free requests/day used.\n\nAdd your free Groq key in **Settings → AI Providers** for unlimited responses (takes 60 seconds at console.groq.com).');
-                  } else {
-                    errCb?.(msg);
-                  }
-                  return;
-                }
-                const reader = r.body!.getReader(); const dec = new TextDecoder();
-                let full = '';
-                while (true) {
-                  const { done, value } = await reader.read();
-                  if (done) break;
-                  const text = dec.decode(value);
-                  for (const line of text.split('\n').filter(l => l.startsWith('data: '))) {
-                    const d = line.slice(6).trim();
-                    if (d === '[DONE]') {
-                      try { incrementUsage(); } catch { /* non-critical */ }
-                      doneCb?.(full); return;
-                    }
-                    try { const p = JSON.parse(d); const c = p.choices?.[0]?.delta?.content || ''; if (c) { full += c; chunkCb?.(c); } } catch { }
-                  }
-                }
-                doneCb?.(full);
-              } catch (e: any) {
-                if (e.name !== 'AbortError') errCb?.(e.message || 'Proxy connection failed');
-              }
-            })();
-            return {
-              onChunk: (cb: (c: string) => void) => { chunkCb = cb; },
-              onDone: (cb: (t: string) => void) => { doneCb = cb; },
-              onError: (cb: (e: string) => void) => { errCb = cb; },
-              cancel: () => ctrl.abort(),
-            };
-          })()
-        : window.henryAPI.streamMessage({
-            provider: companionProvider,
-            model: companionModel,
-            apiKey,
-            messages: messagesPayloadGroq,
-            temperature: 0.7,
-            maxTokens: 1024,
-          });
-      streamRef.current = groqStream;
-      groqStream.onChunk((chunk: string) => { appendStreamingContent(chunk); });
-      groqStream.onError((error: string) => {
-        let errorContent: string;
-        // Use the companionProvider to correctly attribute errors
-        errorContent = buildStreamError(companionProvider, companionModel, error);
+      const leanStream = window.henryAPI.streamMessage({
+        provider: companionProvider,
+        model: companionModel,
+        apiKey,
+        messages: leanMessages,
+        temperature: 0.7,
+        maxTokens: 1024,
+      });
+      streamRef.current = leanStream;
+      leanStream.onChunk((chunk: string) => { appendStreamingContent(chunk); });
+      leanStream.onError((error: string) => {
+        const errorContent = buildStreamError(companionProvider, companionModel, error);
         addMessage({ id: crypto.randomUUID(), conversation_id: convId, role: 'assistant', content: errorContent, engine: 'companion', created_at: new Date().toISOString() });
         setStreamingContent(''); setIsStreaming(false); setCompanionStatus({ status: 'idle' });
       });
-      groqStream.onDone(async (fullText: string) => {
-        // Save the message and finalize
+      leanStream.onDone(async (fullText: string) => {
         setStreamingContent('');
         if (!fullText?.trim()) {
           addMessage({ id: crypto.randomUUID(), conversation_id: convId, role: 'assistant' as const,
-            content: "Henry didn't respond. The message may have been too long or Groq hit a rate limit. Try a **New Chat**.",
+            content: "Henry didn't respond. The message may have been too long or the local model hit a limit. Try a **New Chat**.",
             engine: 'companion', created_at: new Date().toISOString() } as any);
         } else {
           const assistantMsg = { id: crypto.randomUUID(), conversation_id: convId, role: 'assistant' as const,
@@ -2143,40 +2090,6 @@ What do you want to tackle first?`);
         return;
       }
 
-      // Use gateway model selection if it overrides (tier 1 = fast 8b, tier 2 = 70b)
-      if (gatewayResult.tier === 1 && s.chat_fast_model) {
-        companionModel = s.chat_fast_model;
-        companionProvider = s.chat_fast_provider || companionProvider;
-      }
-      // tier 2 uses the already-set companion_model (70b)
-
-      // GROQ FREE TIER: 12,000 tokens/minute hard limit.
-      // Henry's full charter is 12,000+ tokens alone. Must slash aggressively.
-      if (companionProvider === 'groq') {
-        // Cap system prompt to 4,000 chars (~1,000 tokens) — leaves 11k for conversation
-        if (messagesPayload[0]?.role === 'system') {
-          const sys = messagesPayload[0].content;
-          const SYS_CAP = 4_000;
-          if (sys.length > SYS_CAP) {
-            // Keep the first part (identity/role) which is most important
-            messagesPayload[0].content = sys.slice(0, SYS_CAP) + '\n[Context condensed for free tier]';
-          }
-        }
-        // Cap total to 8,000 chars (~2,000 tokens) — well under Groq free 12k TPM
-        const totalChars = messagesPayload.reduce((s, m) => s + m.content.length, 0);
-        if (totalChars > 8_000) {
-          const sys = messagesPayload[0];
-          const rest = messagesPayload.slice(1);
-          let budget = 4_000; // 4k for conversation history after system prompt
-          const kept: typeof rest = [];
-          for (let i = rest.length - 1; i >= 0; i--) {
-            const chars = rest[i].content.length;
-            if (chars <= budget) { kept.unshift(rest[i]); budget -= chars; }
-          }
-          messagesPayload.splice(0, messagesPayload.length, sys, ...kept);
-        }
-      }
-
       const stream = window.henryAPI.streamMessage({
         provider: companionProvider,
         model: companionModel,
@@ -2223,14 +2136,20 @@ What do you want to tackle first?`);
           try { trackCost(companionModel, totalTok); } catch { /* ignore */ }
         }
 
-        // Extract facts from this exchange in the background (non-blocking)
+        // Extract facts from this exchange in the background (non-blocking),
+        // on the same engine that just answered — no separate vendor.
         void (async () => {
           try {
-            const st = useStore.getState();
-            const groqKey = st.providers?.find((p: any) => p.id === 'groq')?.apiKey || '';
-            if (groqKey && messagesPayload.length >= 2) {
+            if (messagesPayload.length >= 2) {
               const recentMsgs = messagesPayload.slice(-6).map(m => ({ role: m.role, content: String(m.content || '') }));
-              const facts = await extractFactsFromConversation(recentMsgs, groqKey);
+              const facts = await extractFactsFromConversation(recentMsgs, {
+                provider: companionProvider,
+                model: companionModel,
+                apiKey,
+                apiUrl: companionProvider === 'ollama'
+                  ? (s.ollama_base_url || 'http://localhost:11434')
+                  : undefined,
+              });
               if (facts.length > 0) {
                 addFacts(facts);
                 await persistFactsToDb(facts);
@@ -2258,11 +2177,10 @@ What do you want to tackle first?`);
           } catch { /* non-critical — continue without results */ }
         }
 
-        // Empty response guard — Groq/API returned nothing (context too large, rate limit, or network drop)
+        // Empty response guard — the provider returned nothing (context too large,
+        // rate limit, or network drop).
         if (!fullText || !fullText.trim()) {
-          const retryMsg = companionProvider === 'groq'
-            ? "Henry didn't get a response from Groq. This usually means the conversation is too long for one request, or Groq hit a rate limit.\n\n**Try:** Start a new chat and ask the same question. Or ask a shorter, more specific question in this chat."
-            : `Henry got an empty response from ${companionProvider}. The request may have been too long or hit a rate limit. Try starting a new chat.`;
+          const retryMsg = `Henry got an empty response from ${companionProvider}. This usually means the conversation is too long for one request, or the provider hit a rate limit.\n\n**Try:** Start a new chat and ask the same question. Or ask a shorter, more specific question in this chat.`;
           addMessage({
             id: crypto.randomUUID(),
             conversation_id: convId,
@@ -2524,7 +2442,7 @@ What do you want to tackle first?`);
             `\`\`\``,
             `Then send your message again.`,
             ``,
-            `Or switch to a cloud provider (Groq / OpenAI / Anthropic) in **Settings → Engines** — those work without Ollama.`,
+            `Or switch to a cloud provider (OpenRouter / OpenAI / Anthropic / OpenCode Zen) in **Settings → AI Providers** — those work without Ollama.`,
           ].join('\n');
         } else if (isOllamaModelMissing) {
           errorContent = [

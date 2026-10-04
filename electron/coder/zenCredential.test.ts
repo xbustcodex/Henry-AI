@@ -55,7 +55,7 @@ describe('a saved Zen key is restored at launch', () => {
 
   it('ignores keys stored under other providers', () => {
     const db = providersDb();
-    db.prepare('INSERT INTO providers VALUES (?, ?, ?)').run('groq', 'Groq', encryptKey('gsk_not_zen'));
+    db.prepare('INSERT INTO providers VALUES (?, ?, ?)').run('acme-ai', 'Acme AI', encryptKey('not-a-real-secret'));
     rehydrateOpencodeZenCredential(asDb(db));
     expect(getOpencodeZenCredential()).toBe('');
   });

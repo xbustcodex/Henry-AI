@@ -39,7 +39,7 @@ Do not unnecessarily platform-specialize:
 - reminders
 - provider routing
 - Ollama
-- Groq/other AI providers
+- OpenAI/Anthropic/Google/OpenRouter/OpenCode Zen providers
 - sync
 - business features
 - journal
@@ -172,8 +172,10 @@ Current Linux runtime has successfully detected and used:
 - Ollama
 - deepseek-r1:7b
 
-Do not make Groq mandatory when a working local/provider configuration
-already exists.
+Groq is removed. It is not a supported provider and must not be reintroduced as
+a default, a fallback, or a required key. If a provider or model cannot be
+resolved, surface an explicit configuration error naming what is unresolved —
+never substitute a different provider, and never silently fall back.
 
 Do not expose API keys in logs, reports, tests, screenshots, or commits.
 

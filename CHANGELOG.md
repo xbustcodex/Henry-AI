@@ -1,5 +1,24 @@
 # Changelog
 
+## Groq removed (2026-10-04)
+
+Groq is no longer a supported provider. It is not merely deprioritised: it is
+gone from every provider list, the sync bridge's model tables, onboarding,
+settings, the service workers' bypass list and the web dev proxy. An
+unresolvable provider or model now produces an explicit routing error naming
+what is unresolved and which setting fixes it — there is no silent fallback to
+another provider — and a persisted `provider=groq` selection is reported as an
+unsupported provider rather than being quietly replaced.
+
+The standalone Cloudflare workers were kept: `proxy/` lost only its
+`/proxy/groq/*` route, and `henry-proxy/` (licensing, usage, pricing, Stripe)
+keeps every one of its routes while its hosted chat route now answers
+`503 provider_not_configured` instead of forwarding somewhere else.
+
+Groq-shaped dummy fixtures in five test files were kept as coverage and renamed
+to obviously-fake values — they guard the provider-classification regression,
+not Groq. Details: `PARITY_LEDGER.md`, "Groq removed — provider retired".
+
 ## Parity completion campaign — 130 rows, 88 closed
 
 The verification and burn-down phase is finished and every actionable row has been

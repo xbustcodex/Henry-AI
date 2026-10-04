@@ -576,22 +576,6 @@ export function HEALTH_CHECKS(db: Database.Database): HealthCheck[] {
       },
     },
 
-    // ── Henry settings check ──────────────────────────────────────────────────
-    {
-      id: 'groq_key',
-      name: 'Groq API Key',
-      category: 'configuration',
-      description: 'Free AI model access — Henry\'s brain (configuration, not system health)',
-      check: async (_db) => {
-        try {
-          const row = _db.prepare("SELECT api_key FROM providers WHERE id='groq' AND enabled=1;").get() as { api_key: string } | undefined;
-          if (row && row.api_key && row.api_key.length > 10) return { ok: true, detail: `Key set (${row.api_key.length} chars)` };
-          return { ok: true, detail: 'No Groq API key — configure in Settings → AI Providers (optional)' };
-        } catch { return { ok: true, detail: 'Could not check API key' }; }
-      },
-      // No auto-fix for API keys — user must configure in Settings
-    },
-
     {
       id: 'tunnel_config',
       name: 'Auto-Tunnel Setting',

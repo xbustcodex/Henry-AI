@@ -75,7 +75,7 @@ function sse(res: http.ServerResponse, payload: unknown): void {
 export const TOOLS_UNSUPPORTED_MESSAGE =
   'The OpenCode bridge cannot execute Henry\'s tools. `opencode run` takes a single ' +
   'prompt and runs its own built-in tools; it cannot be given Henry\'s tool schema. ' +
-  'For agent turns use Ollama, OpenAI, Groq or Anthropic.';
+  'For agent turns use Ollama, OpenAI or Anthropic.';
 
 function readBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {

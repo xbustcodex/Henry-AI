@@ -763,11 +763,13 @@ export function buildMediumSystemPrompt(
 }
 
 /**
- * GROQ FREE TIER system prompt — hard limit 400 tokens total.
- * Groq free tier: 12,000-20,000 TPM. Henry's full charter is 12,000+ tokens.
- * This replaces the charter entirely for Groq to guarantee it fits.
+ * Lean system prompt — hard limit ~400 tokens total.
+ *
+ * For tight budgets: small local models, and any provider whose throughput or
+ * token-per-minute ceiling will not carry Henry's full 12,000-token charter.
+ * This replaces the charter entirely so the turn is guaranteed to fit.
  */
-export function buildGroqFreeSystemPrompt(mode: HenryOperatingMode): string {
+export function buildLeanSystemPrompt(mode: HenryOperatingMode): string {
   const ownerName = safeLocalGet('henry:owner_name')?.trim() || 'you';
   const macUsername = safeLocalGet('henry:mac_username')?.trim() || '';
   const macHome = safeLocalGet('henry:mac_home')?.trim() || '';

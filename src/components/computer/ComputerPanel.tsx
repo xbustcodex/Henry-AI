@@ -3,7 +3,7 @@ import { useStore } from '../../store';
 import { type ComputerStep } from '../../henry/computerAgent';
 import { isMacOS, isLinux, isWindows, getPlatformName } from '../../utils/platform';
 
-// Direct sync server execution — bypasses Groq tool-use API (which fails on llama)
+// Direct sync server execution — the sync server drives the action itself
 async function execOnMac(command: string): Promise<{success: boolean; output: string; error: string}> {
   try {
     const r = await fetch('http://127.0.0.1:4242/computer/shell', {
@@ -243,9 +243,7 @@ function parseCommand(text: string): { shell: string; description: string }[] {
 export default function ComputerPanel() {
   const { providers, settings } = useStore();
 
-  const groq = providers.find(p => p.id === 'groq');
-  const openai = providers.find(p => p.id === 'openai');
-  const activeProvider = (groq?.apiKey ? groq : openai) ?? null;
+  const activeProvider = providers.find((p) => p.apiKey) ?? null;
 
   const [command, setCommand] = useState('');
   const [running, setRunning] = useState(false);
@@ -541,7 +539,7 @@ export default function ComputerPanel() {
       <div className="px-5 py-4 border-t border-henry-border/20 shrink-0">
         {!hasKey && (
           <p className="text-xs text-henry-error mb-2">
-            Groq or OpenAI key required.{' '}
+            An AI provider key is required for computer control.{' '}
             <button
               onClick={() => useStore.getState().setCurrentView('settings' as any)}
               className="underline"

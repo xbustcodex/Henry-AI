@@ -1,7 +1,11 @@
 # Henry AI Cloud Proxy — Deploy Guide
 
-This Cloudflare Worker provides shared Groq AI access to Henry users.
-Free tier: 50 requests/day per device. Pro tier: 2000/day with license key.
+This Cloudflare Worker handles Henry's licensing, billing and metering. The
+hosted chat route is disabled: it used to forward to Groq, and Groq is no longer
+a supported provider anywhere in Henry, so `POST /v1/chat` answers `503
+provider_not_configured` rather than forwarding to something else.
+
+KV rate limit: 50 requests/day per device. Pro tier: 2000/day with license key.
 
 ## Deploy in 5 minutes
 
@@ -17,11 +21,9 @@ wrangler kv:namespace create HENRY_KV
 # Copy the ID into wrangler.toml → kv_namespaces[0].id
 ```
 
-### 3. Add Groq API key as secret
-```bash
-wrangler secret put GROQ_API_KEY
-# Paste your Groq key when prompted
-```
+### 3. (No provider secret to set)
+The worker holds no AI provider credential. Deploying it as-is serves licensing
+and metering only.
 
 ### 4. Deploy
 ```bash
@@ -43,7 +45,7 @@ wrangler kv:key put "license:LICENSE-KEY-HERE" '{"active":true,"tier":"pro","own
 
 ## Endpoints
 - GET  /health              → status check
-- POST /v1/chat             → proxied Groq completion
+- POST /v1/chat             → 503 provider_not_configured (no hosted provider)
 - GET  /v1/license          → validate license key
 - GET  /v1/usage            → check daily usage
 

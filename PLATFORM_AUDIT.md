@@ -1,5 +1,12 @@
 # PLATFORM_AUDIT.md
 
+> **Superseded in part.** Groq was a supported provider when this audit was
+> recorded. It has since been removed from Henry entirely, and is no longer a
+> supported provider. The findings below are left exactly as recorded; where
+> they mention Groq they describe a code path that no longer exists (`selfRepair.ts`
+> no longer performs a provider-key health check, and there is no Groq provider
+> row). See "Groq removed — provider retired" in `PARITY_LEDGER.md`.
+
 ## 1. Current Architecture
 
 The codebase maintains a shared core with OS-specific adaptations. The renderer process **must not** import Node's `os` module directly — it must use the preload-contextBridge platform API (`window.henryAPI.platform()`). The main process may use `process.platform` or Node APIs freely.
@@ -76,7 +83,7 @@ The codebase maintains a shared core with OS-specific adaptations. The renderer 
 
 ### Shared/Core (Should Remain Platform-Neutral)
 
-- Chat, memory, tasks, reminders, provider routing, Ollama, Groq/other AI providers, sync, business features, journal, habits, common UI state
+- Chat, memory, tasks, reminders, provider routing, Ollama and the supported AI providers, sync, business features, journal, habits, common UI state
 - `src/utils/platform.ts` — platform detection (new, renderer-safe)
 - `src/henry/charter.capabilityRegistry` — capability registry (platform-neutral)
 - `electron/ipc/computer.ts` — computer control (uses `process.platform`)
@@ -1156,7 +1163,6 @@ Optional dependencies correctly classified:
 - cloudflared → optional (remote companion only)
 - espeak-ng → optional (TTS fallback to Web Speech API)
 - whisper-cpp → optional (voice input)
-- Groq API key → configuration (not health)
 
 No Apple URI/AppleScript on Linux. No Homebrew failure on Linux. No macOS permission screens on Linux.
 

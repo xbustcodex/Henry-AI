@@ -25,7 +25,6 @@ self.addEventListener('fetch', (event) => {
 
   // Never intercept AI API calls — always go to network
   if (
-    url.hostname.includes('groq.com') ||
     url.hostname.includes('openai.com') ||
     url.hostname.includes('anthropic.com') ||
     url.hostname.includes('googleapis.com') ||

@@ -2,7 +2,7 @@
  * Henry AI — Context Tier System
  *
  * Classifies message intent and selects the appropriate context tier before
- * every AI call. Keeps Groq (and all providers) well within TPM limits.
+ * every AI call. Keeps every provider well within its token-per-minute limits.
  *
  * THREE TIERS:
  *   LIGHT  — default for most conversational turns.
@@ -37,14 +37,11 @@ export function estimatePayloadTokens(
 }
 
 /**
- * Hard cap: never send more than this many tokens to any provider.
- * Groq free-tier TPM limits make 6k the safe ceiling.
+ * Hard cap: never send more than this many tokens to any provider. Callers
+ * apply a provider-specific limit when one is known; this is the ceiling for
+ * anyone without one. We reserve ~8k for the system prompt and ~4k for output.
  */
-// Per-provider context limits (in tokens)
-// Groq 70b: 128k context. OpenAI GPT-4o: 128k. Claude: 200k.
-// We reserve ~8k for system prompt and ~4k for output.
 export const TOKEN_HARD_LIMIT = 50_000;  // safe for all major providers
-export const TOKEN_HARD_LIMIT_GROQ = 100_000;  // Groq has 128k
 export const TOKEN_HARD_LIMIT_ANTHROPIC = 180_000;  // Claude has 200k
 
 // ── Context tiers ─────────────────────────────────────────────────────────────

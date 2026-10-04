@@ -164,19 +164,28 @@ export default function HQPanel() {
     // Get providers from store
     const providers = useStore.getState().providers;
     const s = useStore.getState().settings;
-    const provider = providers?.find((p: any) => p.id === (s.companion_provider || 'groq')) || providers?.[0];
-    const apiKey = provider?.apiKey || (provider as any)?.api_key || '';
+    // No invented default: HQ runs on the companion engine the user chose.
+    // If none is chosen, say so instead of quietly reaching for another one.
+    const companionProvider = (s.companion_provider || '').trim();
+    const companionModel = (s.companion_model || '').trim();
+    if (!companionProvider || !companionModel) {
+      setChatLog(l => [...l, { role: 'henry', text: 'No AI provider selected. Pick one in **Settings → AI Providers** and set it as your companion engine.' }]);
+      setChatBusy(false);
+      return;
+    }
+    const provider = providers?.find((p) => p.id === companionProvider);
+    const apiKey = provider?.apiKey || '';
 
-    if (!apiKey && s.companion_provider !== 'ollama') {
-      setChatLog(l => [...l, { role: 'henry', text: 'No AI key configured. Go to **Settings → AI Providers** to add your Groq key.' }]);
+    if (!apiKey && companionProvider !== 'ollama') {
+      setChatLog(l => [...l, { role: 'henry', text: `No API key saved for **${companionProvider}**. Add it in **Settings → AI Providers**.` }]);
       setChatBusy(false);
       return;
     }
 
     let fullText = '';
     const stream = getApi()?.streamMessage({
-      provider: s.companion_provider || 'groq',
-      model: s.companion_model || 'llama-3.3-70b-versatile',
+      provider: companionProvider,
+      model: companionModel,
       apiKey,
       messages: [
         { role: 'system', content: systemPrompt },

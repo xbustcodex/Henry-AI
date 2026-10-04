@@ -1,7 +1,7 @@
 /**
  * Cerebras provider — OpenAI-compatible client used as a silent fallback
- * when Groq returns 429. Cerebras hosts Qwen Coder and Llama at very high
- * throughput, and their free tier absorbs Groq's rate-limit spikes.
+ * when a rate-limited upstream returns 429. Cerebras hosts Qwen Coder and Llama
+ * at very high throughput, and their free tier absorbs those spikes.
  *
  * API docs: https://inference-docs.cerebras.ai/
  */
@@ -28,8 +28,8 @@ export const CEREBRAS_MODEL_MAP: Record<string, string> = {
   'llama-3.1-8b-instant': 'llama3.1-8b',
 };
 
-function mapModel(groqModelId: string): string {
-  return CEREBRAS_MODEL_MAP[groqModelId] || groqModelId;
+function mapModel(upstreamModelId: string): string {
+  return CEREBRAS_MODEL_MAP[upstreamModelId] || upstreamModelId;
 }
 
 export async function cerebrasChat(opts: CerebrasChatOptions): Promise<{
@@ -79,7 +79,7 @@ export async function tryCerebrasFallback(args: {
   });
 }
 
-export function isGroqRateLimit(errOrStatus: unknown): boolean {
+export function isRateLimit(errOrStatus: unknown): boolean {
   if (typeof errOrStatus === 'number') return errOrStatus === 429;
   if (typeof errOrStatus === 'string') return /\b429\b|rate.?limit|too many requests/i.test(errOrStatus);
   if (errOrStatus && typeof errOrStatus === 'object') {

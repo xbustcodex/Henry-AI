@@ -159,13 +159,13 @@ describe('a scheduler worker on an opencode-backed provider', () => {
   it('still refuses a genuinely key-gated provider', async () => {
     // Widening the exemption must not exempt everything: a cloud provider with
     // no key is still a configuration error the user has to fix.
-    const { aiCalls: calls, lastError } = await fireOnce(dbWithWorker('groq', 'Groq', ''));
+    const { aiCalls: calls, lastError } = await fireOnce(dbWithWorker('acme-ai', 'Acme AI', ''));
     expect(lastError).toMatch(/missing an API key/);
     expect(calls).toBe(0);
   });
 
   it('accepts a key-gated provider once its key is present', async () => {
-    const { aiCalls: calls, lastError } = await fireOnce(dbWithWorker('groq', 'Groq', 'gsk_real'));
+    const { aiCalls: calls, lastError } = await fireOnce(dbWithWorker('acme-ai', 'Acme AI', 'fake-test-key-000'));
     expect(lastError).toBe('');
     expect(calls).toBe(1);
   });

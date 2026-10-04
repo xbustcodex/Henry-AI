@@ -1,17 +1,17 @@
 /**
  * Ollama adapter — real incremental streaming and real tool calling.
  *
- * Why this module exists: `electron/ipc/ai.ts` had `streamOpenAI`,
- * `streamAnthropic` and `streamGroq` but no Ollama streamer, so an Ollama chat
- * turn fell through to the non-streaming `callAI` and the user watched a blank
- * screen for the whole generation and then got one buffered chunk. Measured on
- * the installed package: 626 characters after 20.7 s of silence, with
+ * Why this module exists: `electron/ipc/ai.ts` had `streamOpenAI` and
+ * `streamAnthropic` but no Ollama streamer, so an Ollama chat turn fell through
+ * to the non-streaming `callAI` and the user watched a blank screen for the
+ * whole generation and then got one buffered chunk. Measured on the installed
+ * package: 626 characters after 20.7 s of silence, with
  * `firstChunkMs == lastChunkMs`.
  *
  * The same gap existed for tool calling: `callAIWithTools` only routed
- * `openai`, `groq` and `anthropic`, and every other provider — including
- * Ollama, which advertises a `tools` capability per model — degraded to a plain
- * text round that returns `toolCalls: []` by construction.
+ * `openai` and `anthropic`, and every other provider — including Ollama, which
+ * advertises a `tools` capability per model — degraded to a plain text round
+ * that returns `toolCalls: []` by construction.
  *
  * This module is deliberately free of Electron imports so it can be tested
  * against a stubbed transport with no network and no credentials.

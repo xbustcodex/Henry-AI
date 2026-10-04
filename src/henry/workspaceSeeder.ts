@@ -62,7 +62,7 @@ function doc_HenryAIOverview(): string {
   return header('Henry AI – Overview', 'Active', 'High-level overview of what Henry is, who it serves, and how it works.', 'Henry AI – Architecture Spec; Henry AI – Product Roadmap') +
 `## What Henry Is
 Henry is a personal AI operating system. Not a generic chatbot — a presence.
-He runs on Groq (8B Instant / 70B Versatile), works offline with Ollama, and carries full memory across sessions.
+He runs on whatever AI provider you choose, works offline with Ollama, and carries full memory across sessions.
 
 ## Core Capabilities
 - Deep conversational memory (7-layer system: facts, sessions, working memory, personal memory, projects, relationships, narrative)
@@ -88,7 +88,7 @@ function doc_ProductRoadmap(): string {
   return header('Henry AI – Product Roadmap', 'Active', 'Active development roadmap including core systems, memory, voice, and workspace.', 'Henry AI – Overview; Henry AI – Architecture Spec') +
 `## Phase 1 — Foundation (Complete)
 - [x] Electron desktop shell
-- [x] Groq integration (8B Instant + 70B Versatile)
+- [x] Multi-provider integration (OpenCode Zen, OpenRouter, OpenAI, Anthropic)
 - [x] Multi-provider support (OpenAI, Anthropic, Ollama, OpenRouter)
 - [x] Basic chat with streaming
 - [x] Settings and provider management
@@ -138,7 +138,7 @@ function doc_ArchitectureSpec(): string {
 - Frontend: React + TypeScript + Vite
 - Desktop: Electron
 - Mobile: Capacitor
-- AI: Groq (primary), Ollama (offline), OpenAI / Anthropic / OpenRouter (optional)
+- AI: OpenCode Zen / OpenRouter (primary), Ollama (offline), OpenAI / Anthropic (optional)
 - Database: SQLite (via better-sqlite3 in Electron); localStorage fallback in web mode
 - Build: pnpm monorepo
 
@@ -162,7 +162,7 @@ Web mode uses \`src/webMock.ts\` — a full localStorage-backed implementation o
 - 70B Versatile (llama-3.3-70b-versatile): deep work, writing, code, strategy
 
 ## Proxy Layer
-All external API calls go through Vite dev proxy in web mode (\`/proxy/groq/...\`, \`/proxy/openai/...\`, etc).
+All external API calls go through Vite dev proxy in web mode (\`/proxy/openai/...\`, \`/proxy/openrouter/...\`, etc).
 In Electron, calls go direct via the main process.
 
 ## Key Files
@@ -176,12 +176,12 @@ In Electron, calls go direct via the main process.
 }
 
 function doc_ModelRoutingSpec(): string {
-  return header('Henry AI – Model Routing Spec', 'Active', 'How Henry routes between 8B Instant and 70B Versatile based on task type.', 'Henry AI – Architecture Spec') +
-`## Groq Models Used
+  return header('Henry AI – Model Routing Spec', 'Active', 'How Henry picks between a fast and a quality model based on task type.', 'Henry AI – Architecture Spec') +
+`## Models Used
 | Model | ID | Use Case |
 |---|---|---|
-| LLaMA 3.1 8B Instant | llama-3.1-8b-instant | Fast replies, companion chat, voice |
-| LLaMA 3.3 70B Versatile | llama-3.3-70b-versatile | Deep work, writing, code, strategy |
+| (your provider's fast model) | <model-id> | Fast replies, companion chat, voice |
+| (your provider's quality model) | <model-id> | Deep work, writing, code, strategy |
 
 ## Routing Logic
 The companion_model (8B) handles all primary responses.
@@ -295,7 +295,7 @@ function doc_StatusUpdate(): string {
 `## As Of: ${today}
 
 ## What Is Working
-- Full chat system with streaming (Groq 8B + 70B)
+- Full chat system with streaming (fast tier + quality tier)
 - 10 operating modes fully implemented
 - 7-layer memory system complete
 - All UI panels built (Today, Journal, Reminders, Finance, Print Studio, Image Gen)
@@ -664,8 +664,8 @@ function doc_PoliciesAndSystemNotes(): string {
 
 ## System Notes
 - Memory bandwidth: shallow / normal / deep / maximum (set in settings)
-- Groq is the default provider — hardwired as primary
-- Fallback chain: Groq → Ollama → OpenAI (if configured)
+- The provider you selected is the provider Henry uses — there is no silent fallback
+- Unresolved providers raise an explicit error naming them
 
 ## Backup Policy
 Exports available from Finance and other panels.
@@ -678,7 +678,7 @@ function doc_IntegrationsList(): string {
 `## Active Integrations
 | Service | Status | Used For |
 |---|---|---|
-| Groq | Active | Primary AI (8B Instant + 70B Versatile) |
+| OpenCode Zen | Active | Zen models through the local opencode bridge |
 | DuckDuckGo | Active | Web search (no key required) |
 | Jina.ai | Active | URL content reading (free) |
 
@@ -722,9 +722,9 @@ const WORKSPACE_FILES: Array<{ path: string; content: () => string }> = [
   // 03 Marketing Content
   { path: '/workspace/03_Marketing_Content/Brand Notes.md', content: doc_BrandNotes },
   { path: '/workspace/03_Marketing_Content/Messaging.md', content: () => header('Messaging', 'Draft', 'Core messages and value propositions for Henry AI.') + '## Core Message\nHenry is a personal AI that actually remembers you.\n\n## Value Props\n- Continuity: picks up where you left off\n- Memory: knows what matters\n- Presence: not a tool, a companion\n- Privacy: your data, your machine\n\n## For Who\nPower users, creators, builders who want depth and continuity — not generic chat.\n' },
-  { path: '/workspace/03_Marketing_Content/Content Ideas.md', content: () => header('Content Ideas', 'Draft', 'Content topics worth creating when the time is right.') + '## Ideas\n- How I built my personal AI OS\n- What 7-layer memory actually means\n- Why I stopped using ChatGPT for everything\n- The difference between a tool and a presence\n- Building with Groq: speed that changes the feel\n\n## Formats\nBlog / Twitter thread / Short video / Demo video\n' },
-  { path: '/workspace/03_Marketing_Content/Landing Page Copy.md', content: () => header('Landing Page Copy', 'Draft', 'Draft copy for a Henry AI landing page.') + '## Headline\nYour personal AI. The one that actually knows you.\n\n## Subheadline\nHenry remembers everything. Picks up where you left off. Works the way you work.\n\n## Features Section\n- Deep memory across every session\n- 10 specialized modes for every kind of thinking\n- Works offline with Ollama, blazing fast with Groq\n- Creative writing, code, strategy — all in one place\n\n## CTA\nGet early access →\n' },
-  { path: '/workspace/03_Marketing_Content/Social Post Ideas.md', content: () => header('Social Post Ideas', 'Draft', 'Short-form social content ideas.') + '## Post Ideas\n- "I built an AI that tells me where we left off every morning."\n- "Henry has 7 layers of memory. Your AI has none."\n- "Built with Groq. Feels like it\'s thinking before I finish typing."\n- "Personal AI shouldn\'t feel generic. Henry doesn\'t."\n' },
+  { path: '/workspace/03_Marketing_Content/Content Ideas.md', content: () => header('Content Ideas', 'Draft', 'Content topics worth creating when the time is right.') + '## Ideas\n- How I built my personal AI OS\n- What 7-layer memory actually means\n- Why I stopped using ChatGPT for everything\n- The difference between a tool and a presence\n- Routing to the right model: speed that changes the feel\n\n## Formats\nBlog / Twitter thread / Short video / Demo video\n' },
+  { path: '/workspace/03_Marketing_Content/Landing Page Copy.md', content: () => header('Landing Page Copy', 'Draft', 'Draft copy for a Henry AI landing page.') + '## Headline\nYour personal AI. The one that actually knows you.\n\n## Subheadline\nHenry remembers everything. Picks up where you left off. Works the way you work.\n\n## Features Section\n- Deep memory across every session\n- 10 specialized modes for every kind of thinking\n- Works offline with Ollama, blazing fast with OpenCode Zen\n- Creative writing, code, strategy — all in one place\n\n## CTA\nGet early access →\n' },
+  { path: '/workspace/03_Marketing_Content/Social Post Ideas.md', content: () => header('Social Post Ideas', 'Draft', 'Short-form social content ideas.') + '## Post Ideas\n- "I built an AI that tells me where we left off every morning."\n- "Henry has 7 layers of memory. Your AI has none."\n- "Built on open models. Feels like it\'s thinking before I finish typing."\n- "Personal AI shouldn\'t feel generic. Henry doesn\'t."\n' },
   // 04 Operations Legal
   { path: '/workspace/04_Operations_Legal/Policies.md', content: doc_PoliciesAndSystemNotes },
   { path: '/workspace/04_Operations_Legal/System Notes.md', content: () => header('System Notes', 'Active', 'Technical system notes and configuration references.') + '## Environment\n- Node.js + Electron for desktop\n- Vite for web build\n- pnpm for package management\n- SQLite via better-sqlite3\n\n## Key Config\n- Provider settings: henry:settings in localStorage\n- Memory bandwidth: henry:memory_bandwidth:v1\n- Owner name: henry:owner_name\n\n## Logs\nWorkflow logs available in Replit console during development.\n' },
@@ -759,7 +759,7 @@ const WORKSPACE_FILES: Array<{ path: string; content: () => string }> = [
   { path: '/workspace/09_Exports_Backups/backups/.keep', content: () => '# Backups folder\nManual and automated backups stored here.\n' },
   { path: '/workspace/09_Exports_Backups/snapshots/.keep', content: () => '# Snapshots folder\nWorkspace and memory snapshots stored here.\n' },
   // 10 System
-  { path: '/workspace/10_System/config.json', content: () => JSON.stringify({ workspace_version: '1.0.0', owner: getOwnerName(), created_at: new Date().toISOString(), memory_bandwidth_default: 'normal', primary_provider: 'groq', primary_model: 'llama-3.3-70b-versatile', worker_model: 'llama-3.3-70b-versatile', features: { web_tools: true, voice: true, ambient_brain: true } }, null, 2) },
+  { path: '/workspace/10_System/config.json', content: () => JSON.stringify({ workspace_version: '1.0.0', owner: getOwnerName(), created_at: new Date().toISOString(), memory_bandwidth_default: 'normal', primary_provider: 'opencode-zen', primary_model: '', worker_model: '', features: { web_tools: true, voice: true, ambient_brain: true } }, null, 2) },
   { path: '/workspace/10_System/memory_schema.md', content: () => header('Memory Schema Notes', 'Active', 'Human-readable summary of the Henry memory database schema.') + '## Tables\nSee Henry AI Memory Blueprint in 01_Product_Engineering for full schema.\n\n## Quick Reference\n- personal_memory: facts about you (the user)\n- session_memory: per-conversation state\n- working_memory: active commitments and open loops\n- projects: project tracking\n- goals / commitments / milestones: life and work tracking\n- relationship_memory: patterns about people\n- narrative_memory: rolling story arcs\n- memory_summaries: compressed conversation history\n- memory_graph_edges: links between memory nodes\n' },
   { path: '/workspace/10_System/logs/.keep', content: () => '# Logs folder\nSystem logs stored here.\n' },
   { path: '/workspace/10_System/prompts/.keep', content: () => '# Prompts folder\nSystem prompts and prompt templates stored here.\n' },

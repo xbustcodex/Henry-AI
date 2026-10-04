@@ -6,7 +6,7 @@
  * injects the results as rich context before the streaming call.
  *
  * Tool definitions follow OpenAI function-calling schema so they are
- * ready for agentic use (Groq compound, GPT-4o tool calling, etc.).
+ * ready for agentic use (native tool calling across providers).
  */
 
 import {

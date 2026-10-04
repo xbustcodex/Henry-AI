@@ -28,5 +28,4 @@ Cloudflare Workers free tier: 100,000 requests/day — more than enough for pers
 | /proxy/openai/*    | api.openai.com                           |
 | /proxy/anthropic/* | api.anthropic.com                        |
 | /proxy/google/*    | generativelanguage.googleapis.com        |
-| /proxy/groq/*      | api.groq.com (free, fast)                |
 | /proxy/openrouter/*| openrouter.ai (free models available)    |

@@ -127,66 +127,6 @@ export const AVAILABLE_MODELS: AIModel[] = [
     recommended: 'companion',
   },
 
-  // ── Groq — ultra-fast inference (LPU) ─────────────
-  {
-    id: 'llama-3.1-8b-instant',
-    name: 'LLaMA 3.1 8B Instant ⚡',
-    provider: 'groq',
-    contextWindow: 128000,
-    inputPricePer1M: 0.05,
-    outputPricePer1M: 0.08,
-    capabilities: ['chat', 'code'],
-    recommended: 'companion',
-  },
-  {
-    id: 'llama-3.3-70b-versatile',
-    name: 'LLaMA 3.3 70B Versatile',
-    provider: 'groq',
-    contextWindow: 128000,
-    inputPricePer1M: 0.59,
-    outputPricePer1M: 0.79,
-    capabilities: ['chat', 'code', 'reasoning'],
-    recommended: 'worker',
-  },
-  {
-    id: 'llama-3.1-70b-versatile',
-    name: 'LLaMA 3.1 70B Versatile',
-    provider: 'groq',
-    contextWindow: 128000,
-    inputPricePer1M: 0.59,
-    outputPricePer1M: 0.79,
-    capabilities: ['chat', 'code', 'reasoning'],
-    recommended: 'companion',
-  },
-  {
-    id: 'mixtral-8x7b-32768',
-    name: 'Mixtral 8x7B',
-    provider: 'groq',
-    contextWindow: 32768,
-    inputPricePer1M: 0.24,
-    outputPricePer1M: 0.24,
-    capabilities: ['chat', 'code'],
-  },
-  {
-    id: 'gemma2-9b-it',
-    name: 'Gemma 2 9B',
-    provider: 'groq',
-    contextWindow: 8192,
-    inputPricePer1M: 0.20,
-    outputPricePer1M: 0.20,
-    capabilities: ['chat'],
-  },
-  {
-    id: 'deepseek-r1-distill-llama-70b',
-    name: 'DeepSeek R1 Distill 70B',
-    provider: 'groq',
-    contextWindow: 128000,
-    inputPricePer1M: 0.75,
-    outputPricePer1M: 0.99,
-    capabilities: ['chat', 'reasoning'],
-    recommended: 'worker',
-  },
-
   // NOTE: there are deliberately no `provider: 'ollama'` entries here.
   //
   // This file used to carry 19 hand-written local models with invented
@@ -298,14 +238,6 @@ export const PROVIDERS = {
     keyUrl: 'https://aistudio.google.com/apikey',
     keyPrefix: 'AI',
   },
-  groq: {
-    id: 'groq',
-    name: 'Groq',
-    icon: '⚡',
-    description: 'Fastest free AI — LPU hardware, sub-500ms responses. llama-3.3-70b + Qwen 2.5 Coder 32B for code. Best for real-time use.',
-    keyUrl: 'https://console.groq.com/keys',
-    keyPrefix: 'gsk_',
-  },
   openrouter: {
     id: 'openrouter',
     name: 'OpenRouter',
@@ -367,6 +299,28 @@ export const PROVIDERS = {
 } as const;
 
 export type ProviderId = keyof typeof PROVIDERS;
+
+/**
+ * Provider ids Henry used to ship that are no longer supported at all — there
+ * is no transport, no key, and no model catalogue behind them.
+ *
+ * An install that still has one of these selected must be told the provider is
+ * gone. It must NOT be silently swapped for a different provider: that is the
+ * silent fallback this list exists to prevent.
+ */
+export const RETIRED_PROVIDERS: Record<string, string> = {
+  groq: 'Groq',
+};
+
+/** Display name for a retired provider, or null if the id is still supported. */
+export function retiredProviderName(providerId: string | null | undefined): string | null {
+  const id = (providerId ?? '').trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(RETIRED_PROVIDERS, id) ? RETIRED_PROVIDERS[id] : null;
+}
+
+export function isRetiredProvider(providerId: string | null | undefined): boolean {
+  return retiredProviderName(providerId) !== null;
+}
 
 export function getModelsForProvider(providerId: string): AIModel[] {
   return AVAILABLE_MODELS.filter((m) => m.provider === providerId);

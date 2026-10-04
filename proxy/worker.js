@@ -9,7 +9,6 @@
  *    /proxy/openai/*      → api.openai.com
  *    /proxy/anthropic/*   → api.anthropic.com
  *    /proxy/google/*      → generativelanguage.googleapis.com
- *    /proxy/groq/*        → api.groq.com
  *    /proxy/openrouter/*  → openrouter.ai
  *    /proxy/ddg/*         → api.duckduckgo.com
  *
@@ -41,7 +40,6 @@ const AI_ROUTES = {
   '/proxy/openai':     'https://api.openai.com',
   '/proxy/anthropic':  'https://api.anthropic.com',
   '/proxy/google':     'https://generativelanguage.googleapis.com',
-  '/proxy/groq':       'https://api.groq.com',
   '/proxy/openrouter': 'https://openrouter.ai',
   '/proxy/ddg':        'https://api.duckduckgo.com',
 };

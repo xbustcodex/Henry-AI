@@ -1670,11 +1670,8 @@ self.addEventListener('fetch', (event) => {
     const dbSettings2 = dbGet<{key:string;value:string}>('SELECT key, value FROM settings');
     const settingsMap2: Record<string,string> = {};
     for (const {key,value} of dbSettings2) settingsMap2[key] = value;
-    const dbProviders2 = dbGet<{id:string;api_key:string}>('SELECT id, api_key FROM providers WHERE enabled=1');
-    const groq2 = dbProviders2.find(p => p.id === 'groq');
-    const apiKey2 = groq2?.api_key || '';
     const ollamaModel = settingsMap2['companion_model'] || 'llama3.2:latest';
-    const useOllama = !apiKey2 && (settingsMap2['companion_provider'] === 'ollama');
+    const useOllama = settingsMap2['companion_provider'] === 'ollama';
 
     const extractionPrompt = 'You are Henry extraction engine. Analyze this text and extract EVERYTHING useful. Leave nothing out.\n\n' +
       'TEXT TO ANALYZE:\n' + text + (source ? '\nSource: ' + source : '') +
@@ -1694,41 +1691,10 @@ self.addEventListener('fetch', (event) => {
     (async () => {
       try {
         let extractedText = '';
-        if (apiKey2) {
-          const { default: https2 } = await import('https');
-          const postBody2 = JSON.stringify({
-            model: 'llama-3.3-70b-versatile',
-            messages: [{ role: 'user', content: extractionPrompt }],
-            temperature: 0.3,
-            max_tokens: 1200,
-          });
-          await new Promise<void>((resolve) => {
-            const opts2 = {
-              hostname: 'api.groq.com',
-              path: '/openai/v1/chat/completions',
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + apiKey2,
-                'Content-Length': Buffer.byteLength(postBody2),
-              },
-            };
-            const req2 = https2.request(opts2, (r2) => {
-              let data = '';
-              r2.on('data', (chunk: Buffer) => { data += chunk.toString(); });
-              r2.on('end', () => {
-                try {
-                  const parsed = JSON.parse(data);
-                  extractedText = parsed.choices?.[0]?.message?.content || '';
-                } catch { /* ignore */ }
-                resolve();
-              });
-            });
-            req2.on('error', () => resolve());
-            req2.write(postBody2);
-            req2.end();
-          });
-        } else if (useOllama) {
+        // Groq was the hosted half of this extraction path and is gone. Ollama
+        // is the remaining engine; when it is not selected the raw capture is
+        // still saved and only the derived extraction is skipped.
+        if (useOllama) {
           const ollamaResp = await fetch('http://127.0.0.1:11434/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -2826,17 +2792,14 @@ self.addEventListener('fetch', (event) => {
       const g2 = global as any;
       const rlStore2: Record<string, number> = g2['__henry_rl__'] || {};
       const now3 = Date.now();
-      const dbP = dbGet<{id:string;api_key:string}>('SELECT id, api_key FROM providers WHERE enabled=1');
       const dbS = dbGet<{key:string;value:string}>('SELECT key, value FROM settings');
       const sMap: Record<string,string> = {};
       for (const {key,value} of dbS as {key:string;value:string}[]) sMap[key] = value;
-      const groqKey2 = (dbP as {id:string;api_key:string}[]).find(p => p.id === 'groq')?.api_key || '';
       const gemKey2 = sMap['gemini_api_key'] || '';
       const cerKey2 = sMap['cerebras_api_key'] || '';
       const orKey2 = sMap['openrouter_api_key'] || '';
       const lines2 = ['Iron Gateway v2 — AI Provider Status:\n'];
       const provStatus = [
-        { name: 'Groq (llama-4-scout, 3.3-70b, qwen3, 8b)', key: groqKey2 },
         { name: 'Gemini 2.0 Flash + 1.5 Flash', key: gemKey2 },
         { name: 'Cerebras (llama-4-scout)', key: cerKey2 },
         { name: 'OpenRouter (:free models)', key: orKey2 },
@@ -2858,7 +2821,7 @@ self.addEventListener('fetch', (event) => {
     }
 
     // ── Set API key for additional providers ────────────────────────────────────
-    const setKeyMatch = lowerText.match(/^set (gemini|openrouter|cerebras|groq) (?:api )?key[:\s]+(.+)/i);
+    const setKeyMatch = lowerText.match(/^set (gemini|openrouter|cerebras) (?:api )?key[:\s]+(.+)/i);
     if (setKeyMatch) {
       const provider = setKeyMatch[1].toLowerCase();
       const keyVal = setKeyMatch[2].trim();
@@ -2880,7 +2843,7 @@ self.addEventListener('fetch', (event) => {
         const knowledgeAnswer = (() => {
       // Version / identity
       if (/^(?:what version|which version|your version|version number|what.*version are you)/.test(lowerText) || lowerText === 'version') {
-        return 'Henry AI v2.3.0 — your Mac AI: reads files, runs code, runs local AI, remembers your business.\n\n150+ instant local commands, all <20ms.\n\n🔩 Iron Gateway v2: 10 free AI providers — Groq (llama-4-scout, llama-3.3-70b, qwen3), Gemini 2.0+1.5 Flash, Cerebras, OpenRouter. Round-robin with auto-failover.\n\nSay \'what can you do\' to see everything.';
+        return 'Henry AI v2.3.0 — your Mac AI: reads files, runs code, runs local AI, remembers your business.\n\n150+ instant local commands, all <20ms.\n\n🔩 Iron Gateway v2: free AI providers — Gemini 2.0+1.5 Flash, Cerebras, OpenRouter, plus Ollama locally. Round-robin with auto-failover.\n\nSay \'what can you do\' to see everything.';
       }
       if (/^(?:what can you do|capabilities|features|what are you capable of|what do you do|your features)/.test(lowerText) || lowerText === 'help') {
         return '\uD83E\uDDE0 **Henry \u2014 What I Can Do**\n\n' + [
@@ -2906,8 +2869,8 @@ self.addEventListener('fetch', (event) => {
           'run: [shell], python run: [code], read file: /path, open [App]',
           '',
           '**\uD83C\uDF10 AI**',
-          'Iron Gateway: Groq, Gemini, Cerebras, OpenRouter, Ollama (local)',
-          '10 providers, auto-failover, no rate-limit issues',
+          'Iron Gateway: Gemini, Cerebras, OpenRouter, Ollama (local)',
+          'auto-failover, no rate-limit issues',
         ].join('\n');
       }
 
@@ -3106,7 +3069,7 @@ self.addEventListener('fetch', (event) => {
     }
 
     if (/^(?:what is henry'?s? setup|what does the setup do|what is the setup stuff|explain.*setup|henry setup|what are you connected to|what.*connection|how.*setup.*work|what providers|what is iron gateway|explain iron gateway)/.test(lowerText)) {
-      sendReply('**Henry\'s Setup — what it is:**\n\n**Iron Gateway** is Henry\'s AI engine. It connects to multiple AI providers so Henry always has a brain:\n\n• **Groq** (free, fast) — you already have a key, this is what Henry uses now\n• **Gemini** — Google\'s AI, very capable, has a free tier\n• **Ollama** — runs AI *locally* on your Mac or TheVault, completely private\n\nThe setup panels let you connect these. You don\'t need all of them — Groq is enough. But Ollama would let Henry work offline using your own hardware.\n\n**Right now:**\n• Groq ✅ connected and working\n• Ollama ❌ not running (say "start ollama" to fix)\n• Screen Recording ❌ needs toggle in System Settings\n• Accessibility ❌ needs toggle in System Settings\n• Mic — should work (tap the mic button in the chat bar)\n\nSay "fix screen recording", "fix accessibility", or "start ollama" and I\'ll open the right place.');
+      sendReply('**Henry\'s Setup — what it is:**\n\n**Iron Gateway** is Henry\'s AI engine. It connects to multiple AI providers so Henry always has a brain:\n\n• **Gemini** — Google\'s AI, very capable, has a free tier\n• **Cerebras / OpenRouter** — hosted OpenAI-compatible models on a free tier\n• **Ollama** — runs AI *locally* on your Mac or TheVault, completely private\n\nThe setup panels let you connect these. Ollama would let Henry work offline using your own hardware.\n\n**Right now:**\n• Ollama ❌ not running (say "start ollama" to fix)\n• Screen Recording ❌ needs toggle in System Settings\n• Accessibility ❌ needs toggle in System Settings\n• Mic — should work (tap the mic button)\n\nSay **"ai status"** to see which providers are ready.');
       return;
     }
 
@@ -3115,20 +3078,19 @@ self.addEventListener('fetch', (event) => {
       }
       if (/^(?:how does(?: henry'?s?)? iron gateway|explain iron gateway|what is iron gateway|iron gateway explained|how does.*ai.*work|what providers|which providers|what ai providers)/.test(lowerText)) {
         return '🔩 **Iron Gateway v2** — Henry\'s free AI engine:\n\n' +
-          '1. Groq/llama-4-scout-17b (fastest)\n2. Groq/llama-3.3-70b\n3. Groq/qwen3-32b\n' +
-          '4. Groq/llama-3.1-8b-instant\n5. Gemini 2.0 Flash\n6. Gemini 1.5 Flash\n' +
-          '7. Cerebras/llama-4-scout\n8. OpenRouter/llama-3.3-70b:free\n' +
-          '9. OpenRouter/gemma-3-27b:free\n10. OpenRouter/deepseek-r1:free\n\n' +
+          '1. Gemini 2.0 Flash\n2. Gemini 1.5 Flash\n' +
+          '3. Cerebras/llama-4-scout\n4. OpenRouter/llama-3.3-70b:free\n' +
+          '5. OpenRouter/gemma-3-27b:free\n6. OpenRouter/deepseek-r1:free\n\n' +
           'Round-robin with 60s rate-limit cooldowns. Add keys: "set gemini key: YOUR_KEY"';
       }
       if (/^(?:how does(?: henry'?s?)? iron gateway|explain iron gateway|iron gateway|what is iron gateway|what providers|which providers)/.test(lowerText)) {
-        return '🔩 **Iron Gateway v2** — Henry\'s free AI engine:\n\n1. Groq/llama-4-scout (fastest)\n2. Groq/llama-3.3-70b\n3. Groq/qwen3-32b\n4. Groq/8b-instant\n5. Gemini 2.0 Flash\n6. Gemini 1.5 Flash\n7. Cerebras/llama-4-scout\n8-10. OpenRouter (llama, gemma, deepseek):free\n\nRound-robin with 60s cooldowns. Add keys: "set gemini key: YOUR_KEY"';
+        return '🔩 **Iron Gateway v2** — Henry\'s free AI engine:\n\n1. Gemini 2.0 Flash\n2. Gemini 1.5 Flash\n3. Cerebras/llama-4-scout\n4-6. OpenRouter (llama, gemma, deepseek):free\n\nRound-robin with 60s cooldowns. Add keys: "set gemini key: YOUR_KEY"';
       }
       if (/^(?:what (?:ai |model |llm )(?:are you|is this)|which model|what model|what.*(?:model|ai) (?:are you|using)|how fast are you|your response time)/.test(lowerText)) {
         const g3 = global as any;
         const rl = g3['__henry_rl__'] || {};
         const now5 = Date.now();
-        const providerNames = ['Groq/llama-4-scout','Groq/llama-3.3-70b','Groq/qwen3-32b','Groq/llama-3.1-8b','Gemini/flash-2.0','Gemini/flash-1.5','Cerebras/llama-4-scout','OpenRouter/llama-3.3-70b'];
+        const providerNames = ['Gemini/flash-2.0','Gemini/flash-1.5','Cerebras/llama-4-scout','OpenRouter/llama-3.3-70b'];
         const available = providerNames.filter(p => !rl[p] || rl[p] < now5);
         return "Iron Gateway v2 — I'm running on the first available free provider:\n\n" +
           available.slice(0,4).map((p,i) => (i===0 ? '▶ ' : '  ') + p).join('\n') +
@@ -3160,7 +3122,7 @@ self.addEventListener('fetch', (event) => {
           `**2. Teach me about yourself** — Say "remember that I [fact]" and I store it permanently. The more you tell me, the more personal every response gets.\n\n` +
           `**3. Talk naturally** — "Remind me to call John at 3pm Friday" works. "Add a task: finish the report" works. No special syntax needed.\n\n` +
           `**4. Install me on your phone** — Open your companion URL in Safari, tap Share → Add to Home Screen. Free real app.\n\n` +
-          `**5. Get unlimited free AI** — Go to aistudio.google.com for a free Gemini key (no card), and groq.com for a free Groq key. Paste both in Settings → AI Providers.`;
+          `**5. Get free AI** — Go to aistudio.google.com for a free Gemini key (no card), or run Ollama locally for a fully offline model. Paste the key in Settings → AI Providers.`;
       }
       if (/^(how are you doing|self.?assess|what (can't|cannot|can you not) (you )?do|what.*gaps|assess yourself|how (good|well|smart) are you)/.test(lowerText)) {
         const gaps: Array<{query:string;count:number;failReason:string}> = (() => {
@@ -5415,19 +5377,11 @@ self.addEventListener('fetch', (event) => {
     if (webSearchMatch) {
       const _wq = (Array.isArray(webSearchMatch) ? webSearchMatch[1] || webSearchMatch[2] : '').trim();
       if (_wq.length > 2) {
-        try {
-          const _wgk = (dbGetOne<{api_key:string}>("SELECT api_key FROM providers WHERE id='groq' AND enabled=1 LIMIT 1") as {api_key:string}|null)?.api_key || '';
-          const _wr = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+_wgk},
-            body: JSON.stringify({ model:'llama-3.3-70b-versatile', messages:[
-              {role:'system',content:'Answer factually and concisely. Today is '+new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})+'. State facts directly, no preamble.'},
-              {role:'user',content:_wq}
-            ], temperature:0.2, max_tokens:500 }),
-            signal: AbortSignal.timeout(15000),
-          });
-          const _wj = await _wr.json() as {choices?:{message:{content:string}}[]};
-          sendReply((_wj.choices?.[0]?.message?.content||'').trim() || 'Could not find an answer.');
-        } catch { sendReply('Search failed. Try again.'); }
+        // This had exactly one engine: a Groq completion that answered from the
+        // model's own memory, with no search behind it. Groq is gone, and
+        // answering from a different provider would quietly return something
+        // the user never asked for, so the feature says it has no engine.
+        sendReply('Ask an AI question is unavailable: it needs an AI provider, and none is configured. Say "ai status" to see which providers are ready.');
         return;
       }
     }
@@ -8423,53 +8377,11 @@ const _rbDir = path.join(henryDir, 'backups') + '/';
     const print3dMatch = resolvedText.match(/^(?:print|make|generate|create|design|3d model|3d print|make stl|generate stl|make 3d|build)(?: a| an| me(?: a| an)?)?(?: 3d| stl| 3mf| model| part| object| thing)?[:\s]+(.+)/i);
     if (print3dMatch && (print3dMatch[1]||'').trim().length > 3) {
       const _3dDesc = (print3dMatch[1]||'').trim();
-      const _openscad = OPENSCAD_BIN;
-      sendReply('🖨️ Designing **' + _3dDesc + '**... (15-30 sec)');
-      try {
-        const _groqKey3d = (dbGetOne<{api_key:string}>("SELECT api_key FROM providers WHERE id='groq' AND enabled=1 LIMIT 1") as {api_key:string}|null)?.api_key || '';
-        const _3dSys = [
-          'You are an expert 3D printing engineer. Generate ONLY valid OpenSCAD code — no markdown, no explanation, no backticks.',
-          'RULES:',
-          '1. First line must be: // Henry-3D: [description]',
-          '2. Units = millimeters. Use $fn=64 for curves.',
-          '3. Walls >= 1.6mm thick. No overhangs > 45 degrees without supports.',
-          '4. Use difference(), union(), intersection() for booleans.',
-          '5. Produce exactly ONE manifold solid — no disconnected parts.',
-          '6. No external libraries — standard OpenSCAD only.',
-          '7. GEOMETRY RULES: A "hook" = backplate + protruding arm that curves/hooks at end.',
-          '   A "shelf" = horizontal platform with wall-mount holes.',
-          '   A "bracket" = L-shaped or U-shaped support.',
-          '   A "stand" = base + vertical/angled support.',
-          '   A "clip" = gripping mechanism that snaps around something.',
-          '   Do NOT make a hook look like a shelf. Hooks PROTRUDE from the wall.',
-          '8. For wall-mount objects: include 4mm diameter screw holes in backplate.',
-          '9. Code must compile without errors in OpenSCAD 2021+.',
-        ].join('\n');
-        const _3dResp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+_groqKey3d},
-          body: JSON.stringify({ model:'llama-3.3-70b-versatile', messages:[{role:'system',content:_3dSys},{role:'user',content:'OpenSCAD code for: '+_3dDesc}], temperature:0.25, max_tokens:2000 }),
-          signal: AbortSignal.timeout(28000),
-        });
-        const _3dJson = await _3dResp.json() as {choices?:{message:{content:string}}[]};
-        const _scad = (_3dJson.choices?.[0]?.message?.content||'').trim()
-          .replace(/^```(?:openscad|scad)?\n?/im,'').replace(/\n?```$/,'').trim();
-        if (!_scad || !_scad.includes(';')) { sendReply('❌ AI could not generate valid code. Try a simpler description.'); return; }
-        const { writeFileSync:_wf3, unlinkSync:_ul3, copyFileSync:_cf3, statSync:_st3 } = await import('fs') as typeof import('fs');
-        const { tmpdir:_td3 } = await import('os') as typeof import('os');
-        const { execSync:_es3 } = await import('child_process') as typeof import('child_process');
-        const _sn = _3dDesc.toLowerCase().replace(/[^a-z0-9]+/g,'_').slice(0,28);
-        const _scadTmp = _td3()+'/henry_'+_sn+'_'+Date.now()+'.scad';
-        const _stlTmp  = _scadTmp.replace('.scad','.stl');
-        const _desk    = (process.env.HOME||'')+'/Desktop/henry_'+_sn;
-        _wf3(_scadTmp, _scad, 'utf8');
-        try {
-          _es3('"'+_openscad+'" -o "'+_stlTmp+'" "'+_scadTmp+'" --export-format binstl 2>/dev/null', {timeout:45000,shell:'/bin/bash'});
-        } catch { try{_ul3(_scadTmp);}catch{}; sendReply('❌ Compile error. Try a simpler shape.\n\n```openscad\n'+_scad.slice(0,300)+'\n```'); return; }
-        _cf3(_stlTmp, _desk+'.stl'); _cf3(_scadTmp, _desk+'.scad');
-        const _kb = Math.round(_st3(_desk+'.stl').size/1024);
-        try{_ul3(_scadTmp);_ul3(_stlTmp);}catch{}
-        sendReply('✅ **'+_3dDesc+'** — 3D model ready!\n\n📁 Desktop: `henry_'+_sn+'.stl` ('+_kb+' KB)\n✏️ Editable: `henry_'+_sn+'.scad`\n\nOpen in Bambu Studio, PrusaSlicer, or Cura to slice & print.\n\n```openscad\n'+_scad.slice(0,450)+(_scad.length>450?'\n// ... (full code in .scad file)':'')+'\n```');
-      } catch(e){ sendReply('❌ 3D generation failed: '+String(e).slice(0,80)); }
+      // Writing the OpenSCAD model needs an LLM, and Groq was the only engine
+      // behind "make stl". With it gone there is no model to ask, and the
+      // OpenSCAD binary cannot invent geometry from English. Say so rather than
+      // emit a placeholder and call it a printable model.
+      sendReply('🖨️ Cannot design **' + _3dDesc + '** yet: turning a description into an STL needs an AI provider to write the model, and none is configured. Say "ai status" to see which providers are ready.');
       return;
     }
 
@@ -8634,8 +8546,6 @@ const _rbDir = path.join(henryDir, 'backups') + '/';
       const dbSettings2 = dbGet<{key:string;value:string}>('SELECT key, value FROM settings');
       const settingsMap: Record<string,string> = {};
       for (const {key,value} of dbSettings2 as {key:string;value:string}[]) settingsMap[key] = value;
-      const dbProviders2 = dbGet<{id:string;api_key:string}>('SELECT id, api_key FROM providers WHERE enabled=1');
-      const groqKey = (dbProviders2 as {id:string;api_key:string}[]).find(p => p.id === 'groq')?.api_key || '';
       const geminiKey = settingsMap['gemini_api_key'] || '';
       const cerebrasKey = settingsMap['cerebras_api_key'] || '';
       const openrouterKey = settingsMap['openrouter_api_key'] || '';
@@ -8655,18 +8565,6 @@ const _rbDir = path.join(henryDir, 'backups') + '/';
       };
 
       const providers: ProviderDef[] = [
-        // Groq tier-1: fast 70B (best quality, ~30 RPM free)
-        { name: 'Groq/llama-4-scout', hostname: 'api.groq.com', path: '/openai/v1/chat/completions',
-          model: 'meta-llama/llama-4-scout-17b-16e-instruct', key: groqKey },
-        // Groq tier-2: llama-3.3-70b versatile
-        { name: 'Groq/llama-3.3-70b', hostname: 'api.groq.com', path: '/openai/v1/chat/completions',
-          model: 'llama-3.3-70b-versatile', key: groqKey },
-        // Groq tier-3: Qwen3-32b
-        { name: 'Groq/qwen3-32b', hostname: 'api.groq.com', path: '/openai/v1/chat/completions',
-          model: 'qwen/qwen3-32b', key: groqKey },
-        // Groq tier-4: fast 8B (very high rate limits, lower quality)
-        { name: 'Groq/llama-3.1-8b', hostname: 'api.groq.com', path: '/openai/v1/chat/completions',
-          model: 'llama-3.1-8b-instant', key: groqKey },
         // Gemini 2.0 Flash (15 RPM free, 1M tokens/day)
         { name: 'Gemini/flash-2.0', hostname: 'generativelanguage.googleapis.com',
           path: '/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse',
@@ -8691,7 +8589,7 @@ const _rbDir = path.join(henryDir, 'backups') + '/';
       ].filter(p => p.key.length > 4); // Only include providers with valid keys
 
       if (providers.length === 0) {
-        sendReply('No AI providers configured. Add a Groq API key in Settings.');
+        sendReply('No AI providers configured. Add an API key in Settings → AI Providers, or start Ollama for a local model.')
         return;
       }
 
@@ -8837,7 +8735,7 @@ const _rbDir = path.join(henryDir, 'backups') + '/';
           postBody2 = JSON.stringify({ contents: geminiContents, systemInstruction, generationConfig: { temperature: 0.4, maxOutputTokens: 1200 } });
           reqHeaders = { 'Content-Type': 'application/json', 'x-goog-api-key': prov.key };
         } else {
-          // OpenAI-compatible (Groq, Cerebras, OpenRouter)
+          // OpenAI-compatible (Cerebras, OpenRouter)
           postBody2 = JSON.stringify({ model: prov.model, messages: messages2, temperature: 0.4, max_tokens: 1200, stream: true });
           reqHeaders = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + prov.key, 'Content-Length': String(Buffer.byteLength(postBody2)) };
           if (prov.hostname === 'openrouter.ai') {

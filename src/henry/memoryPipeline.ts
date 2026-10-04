@@ -1,7 +1,7 @@
 /**
  * Henry Memory Pipeline v2
  *
- * Uses a fast Groq call to extract real facts from conversations.
+ * Uses a fast completion on the selected provider to extract real facts from conversations.
  * Stores them structured. Surfaces them in every future conversation.
  *
  * Facts look like:
@@ -75,12 +75,24 @@ export function buildMemoryContext(): string {
   return 'What Henry knows about Topher:\n' + top.map(f => '• ' + f.fact).join('\n');
 }
 
-// ── Extract facts from conversation using Groq (fast 8b model) ────────────
+// ── Extract facts from a conversation using the selected provider ──────────
+//
+// The extraction call runs on whatever engine the user actually selected,
+// through the same provider-aware IPC every other turn uses. It used to POST
+// straight to one vendor's OpenAI-compatible endpoint with a hardcoded model,
+// so it silently did nothing for every other provider.
+export interface FactExtractionTarget {
+  provider: string;
+  model: string;
+  apiKey: string;
+  apiUrl?: string;
+}
+
 export async function extractFactsFromConversation(
   messages: { role: string; content: string }[],
-  apiKey: string
+  target: FactExtractionTarget,
 ): Promise<MemoryFact[]> {
-  if (!apiKey || messages.length < 2) return [];
+  if (!target.provider || !target.model || messages.length < 2) return [];
 
   // Only extract from substantial exchanges
   const userMessages = messages.filter(m => m.role === 'user').map(m => m.content).join('\n');
@@ -99,21 +111,17 @@ ${messages.slice(-6).map(m => `${m.role}: ${m.content.slice(0, 200)}`).join('\n'
 Return ONLY valid JSON like: [{"fact":"Name: Topher","category":"person","importance":3},...]`;
 
   try {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 400,
-        temperature: 0.1,
-        stream: false,
-      }),
+    const res = await window.henryAPI.sendMessage({
+      provider: target.provider,
+      model: target.model,
+      apiKey: target.apiKey,
+      apiUrl: target.apiUrl,
+      messages: [{ role: 'user', content: prompt }],
+      maxTokens: 400,
+      temperature: 0.1,
     });
 
-    if (!res.ok) return [];
-    const data = await res.json() as { choices: { message: { content: string } }[] };
-    const text = data.choices?.[0]?.message?.content || '[]';
+    const text = typeof res?.content === 'string' && res.content ? res.content : '[]';
     const clean = text.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(clean) as Array<{ fact: string; category: string; importance: number }>;
 

@@ -63,7 +63,7 @@ All audits pass. The Linux x64 build is verified as a release candidate. Windows
 - System stats: /proc/stat, /proc/meminfo, upower/acpi
 - File manager: discovered via .desktop FileManager category (Thunar, Nautilus, etc.)
 - cloudflared: which cloudflared, auto-install via apt
-- Self-repair: platform-aware (no Homebrew on Linux, Groq key = config not health)
+- Self-repair: platform-aware (no Homebrew on Linux, no AI-provider key checks)
 - Onboarding: capability-checked (no macOS permission steps)
 - Ollama/deepseek-r1:7b: works
 

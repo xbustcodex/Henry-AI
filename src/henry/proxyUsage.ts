@@ -5,7 +5,7 @@
  * Shows users how many requests remain today.
  *
  * IMPORTANT — cost protection:
- * The Henry Cloud Proxy fronts a real Groq API key (the developer's). Every
+ * The Henry Cloud Proxy fronts a real provider API key (the developer's). Every
  * request through the proxy costs the developer real money. To prevent free
  * users from running up the developer's bill, the proxy is gated by license
  * key — `canUseHenryProxy()` is the single source of truth. All call sites
@@ -41,7 +41,7 @@ export function setLicenseKey(key: string): void {
  * THE proxy gate. Returns true ONLY if the user has a non-empty license key.
  *
  * Without a license, the proxy is unavailable on the client — they can either
- * use their own free Groq key, run Ollama locally, or buy a license. This
+ * use their own provider key, run Ollama locally, or buy a license. This
  * protects the developer from paying for free-tier usage.
  *
  * Note: the Cloudflare Worker also enforces this server-side. The client-side

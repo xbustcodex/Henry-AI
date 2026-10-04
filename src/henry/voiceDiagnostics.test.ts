@@ -19,7 +19,8 @@ describe('redaction', () => {
   it('removes Anthropic keys', () => {
     expect(redact('key sk-ant-abcdefghijklmnop rejected')).not.toContain('sk-ant-abcdefghijklmnop');
   });
-  it('removes Groq keys', () => {
+  it('removes gsk_-prefixed keys', () => {
+    // `gsk_` is a generic vendor-prefixed key shape, not any one provider.
     expect(redact('gsk_abcdefghijklmnop')).not.toContain('gsk_abcdefghijklmnop');
   });
   it('removes Google keys', () => {

@@ -1,13 +1,19 @@
 # Henry Proxy — Cloudflare Worker
 
-License-only proxy that fronts a Groq API key. **Every call is paid by you (the
-operator), so the worker never serves chat without a valid license.**
+Licensing, billing and metering for Henry. **The hosted chat route is currently
+disabled** — it used to front a Groq API key, and Groq is no longer a supported
+provider anywhere in Henry, so `POST /v1/chat` answers `503
+provider_not_configured` instead of quietly forwarding to a different provider.
+Pricing, `/v1/license`, `/v1/usage` and the Stripe webhook are unaffected.
 
-## What changed (v2.0)
+## What changed (v2.0 — Groq era)
 
-- **License is now mandatory** for `/v1/chat`. No license → `401`.
-- **Rate limit is per-license**, not per-device (prevents device-ID rotation).
-- **Model whitelist** — only the cheap Groq models are allowed.
+> The model whitelist, cost dials and license gating this section lists are no
+> longer in `worker.js` — only the KV license entries they read are still live.
+
+- **License is mandatory** for `/v1/chat` (v2.0 behaviour, Groq's era; the route
+  now answers `503 provider_not_configured` before any license check).
+- ~~**Model whitelist**~~ — was a Groq-model whitelist; retired with Groq.
 - **Hard caps** on `max_tokens`, request body size, and history depth.
 - `/v1/license` and `/v1/usage` reflect license-based state.
 
@@ -20,7 +26,6 @@ authoritative check. Don't soften it.
 ```bash
 cd henry-proxy
 npx wrangler login                         # one time
-npx wrangler secret put GROQ_API_KEY       # paste your Groq key
 npx wrangler deploy
 ```
 
@@ -28,13 +33,13 @@ Test:
 
 ```bash
 curl https://henry-proxy.henryai.workers.dev/health
-# → { "ok": true, "version": "2.0.0", "service": "henry-proxy", "mode": "license-only" }
+# → { "ok": true, "version": "1.1.0", "service": "henry-proxy" }
 
-# Without license:
+# Chat (no hosted provider is configured):
 curl -X POST https://henry-proxy.henryai.workers.dev/v1/chat \
   -H 'Content-Type: application/json' \
   -d '{"messages":[{"role":"user","content":"hi"}]}'
-# → 401 license_required
+# → 503 provider_not_configured
 ```
 
 ## Issuing a license
@@ -96,15 +101,11 @@ curl -H "X-Henry-License: HENRY-XXXX-XXXX-XXXX" \
 
 ## Cost dials (worker.js constants)
 
-- `TIER_LIMITS` — daily request quotas per tier
-- `ALLOWED_MODELS` — Groq models you'll let licensees call (whitelist)
-- `DEFAULT_MODEL` — coercion target if user requests a non-whitelisted model
-- `MAX_TOKENS_HARD_CAP` — 4096; upper bound on `max_tokens` regardless of tier
-- `MAX_REQUEST_BYTES` — 200 KB; rejects oversize prompts before hitting Groq
-- `MAX_MESSAGES` — 80; trims history depth to prevent token blowup
-
-If you ever change these to be more permissive, audit your Groq billing dashboard
-the next day.
+The v2.0 Groq-era dials (`TIER_LIMITS`, `ALLOWED_MODELS`, `DEFAULT_MODEL`,
+`MAX_TOKENS_HARD_CAP`, `MAX_REQUEST_BYTES`, `MAX_MESSAGES`) were removed with
+the chat route: `worker.js` forwards nothing and holds no provider key, so there
+is no per-token cost to bound. The only limit left is `FREE_DAILY_LIMIT`
+(`/v1/usage`).
 
 ## Last-seen audit (free)
 

@@ -14,6 +14,7 @@ import { encryptKey, decryptKey, migrateProviderKeys, canEncrypt } from './_keyS
 import { guardedEvent, revokeChannelApprovals } from './validation';
 import { rehydrateOpencodeZenCredential, setOpencodeZenCredential } from '../coder/opencode';
 import { OPENCODE_ZEN_PROVIDER_ID } from '../providers/classification';
+import { migrateRetiredProviders } from '../providers/retiredProviders';
 import { log } from '../lib/log';
 import {
   DEFAULT_POLICY,
@@ -43,6 +44,11 @@ import {
 } from './appLog';
 
 export function registerSettingsHandlers(db: Database.Database, getMainWindow?: () => import('electron').BrowserWindow | null) {
+  // Erase providers Henry no longer supports, and blank any saved selection
+  // still pointing at one. Runs BEFORE `migrateProviderKeys` on purpose: the
+  // retired credential is deleted unread rather than decrypted and rewritten.
+  // Idempotent and tolerant of a not-yet-created `providers` table.
+  migrateRetiredProviders(db);
   // Encrypt any plaintext keys left over from before this feature shipped.
   // Safe to call every launch — already-encrypted rows are detected by prefix.
   migrateProviderKeys(db);

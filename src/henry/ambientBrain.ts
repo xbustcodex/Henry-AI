@@ -4,7 +4,7 @@
  * Makes Henry feel continuous, present, and alive rather than transactional.
  */
 
-import { speak, cancelTTS } from './ttsService';
+import { cancelTTS } from './ttsService';
 
 // ── Presence phrase pools ──────────────────────────────────────────────────────
 

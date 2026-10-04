@@ -1,7 +1,7 @@
 /**
  * Henry Computer Agent — real agentic computer control loop.
  *
- * Uses Groq's native tool-use API (not plain chat) so tool calls are
+ * Uses the provider's native tool-use API (not plain chat) so tool calls are
  * structured JSON, not hallucinated text. Executes actual IPC, verifies
  * with screenshots, feeds results back to model for next step.
  */
@@ -176,18 +176,17 @@ export async function runComputerAgent(opts: ComputerAgentOptions): Promise<void
     onStep, onDone, onError, maxSteps = 20,
   } = opts;
 
-  // Only Groq and OpenAI support function calling reliably
-  if (provider !== 'groq' && provider !== 'openai') {
-    onError(`Computer control requires Groq or OpenAI. Current provider: ${provider}. Change in Settings.`);
+  // Computer control needs a provider with reliable function calling. Naming
+  // the one you have and stopping is the whole point — Henry must not quietly
+  // drive your machine through some other provider you never picked.
+  if (provider !== 'openai') {
+    onError(`Computer control requires OpenAI. Current provider: ${provider}. Change it in Settings → AI Providers.`);
     return;
   }
 
-  const apiUrl = provider === 'groq'
-    ? 'https://api.groq.com/openai/v1/chat/completions'
-    : 'https://api.openai.com/v1/chat/completions';
+  const apiUrl = 'https://api.openai.com/v1/chat/completions';
 
-  // Use a model that supports tool use well
-  const effectiveModel = provider === 'groq' ? 'llama-3.3-70b-versatile' : model;
+  const effectiveModel = model;
 
   const messages: any[] = [
     {

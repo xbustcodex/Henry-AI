@@ -18,7 +18,7 @@ Desktop remains the source of truth. Sync via LAN (port 4242 HTTP+SSE) with clou
 - **Camera**: `@capacitor/camera` installed; configured in `capacitor.config.ts`
 - **QR scanner**: `@capacitor-mlkit/barcode-scanning` (native-only, externalized from web Rollup build)
 
-Supports OpenAI, Anthropic, Google Gemini, Groq, and Ollama. 10 built-in modes + unlimited custom modes:
+Supports OpenAI, Anthropic, Google Gemini, OpenRouter, OpenCode Zen, and Ollama. 10 built-in modes + unlimited custom modes:
 - **Chat** · **Writing** · **Code** · **App Builder** · **3D / Design** · **Secretary** · **Computer** · **Coach** · **Strategic** · **Business Builder**
 - **Custom Modes** — create and save your own modes with name, icon, description, system prompt, and launch with one tap
 
@@ -65,7 +65,7 @@ Supports OpenAI, Anthropic, Google Gemini, Groq, and Ollama. 10 built-in modes +
 - `buildRichMemoryBlock()` includes last 3 meeting summaries in every Henry system prompt for full context continuity
 
 **Core AI**
-- **Groq hardwired** — Groq is set as the permanent default engine; 8B Instant (fast) + 70B Versatile (quality) auto-routed by `modelRouter.ts`
+- **Engine selection, no hardwired default** — the chat engine is whatever provider + model is selected in Settings; `modelRouter.ts` resolves it and raises an explicit configuration error if it cannot be resolved. Groq was removed and must not return
 - **Maximum memory** — `HENRY_MEMORY_CAPS` tuned for 128K context: 50 facts, 12K summary, 40 history turns, 8K chars/message
 - **maxTokens wired** — passed to every stream call; each provider falls back to 4096 when a caller does not set one
 - **Full web access** — `webTools.ts` tool layer: `search_web`, `open_url`, `extract_page_text`, `summarize_page`, `collect_sources`; auto-detects web intent before LLM call; injects live context into system prompt; shows source citations as clickable pills
@@ -90,9 +90,9 @@ Supports OpenAI, Anthropic, Google Gemini, Groq, and Ollama. 10 built-in modes +
 - **Emotion Detection** — `emotionDetector.ts`: detects 9 emotional states (overwhelmed, stressed, urgent, scattered, excited, confused, discouraged, confident, focused); `buildEmotionBlock()` injected into every enriched system prompt
 - **State Indicator Bar** — shows Thinking…/Planning…/Acting…/Responding…/Done ✓ with 1.5s flash; planning (spinner) + acting (dots) states added
 - **Presence Phrases** — spoken via browser TTS before quality tasks; wired in `ambientBrain.ts`
-- **Voice input (Groq Whisper)** — mic button → MediaRecorder → Groq Whisper STT → inserts transcript into chat
+- **Voice input (local Whisper)** — mic button → MediaRecorder → local whisper.cpp STT → inserts transcript into chat
 - **Document ingestion** — drag-and-drop or attach files in chat input; Henry gives multi-angle perspective
-- **Status indicators** — live state bar shows Thinking…(8B/70B) → Responding… → Done with 1.5s checkmark; presence phrases spoken via browser TTS before heavy tasks
+- **Status indicators** — live state bar shows Thinking… → Responding… → Done with 1.5s checkmark; presence phrases spoken via browser TTS before heavy tasks
 
 **Three New Modes**
 - **Coach mode** — executive coaching approach: one focused question at a time, reflects back, challenges excuses, accountability focus, ends each session with one clear next action
@@ -130,7 +130,7 @@ Supports OpenAI, Anthropic, Google Gemini, Groq, and Ollama. 10 built-in modes +
 **UX / Quality**
 - **Journal panel** — date-stamped entries with Henry reflection on demand; sidebar search
 - **Focus timer panel** — Pomodoro timer with AI check-ins
-- **Meeting Recorder panel** — record → Groq Whisper → AI summary + action items → save tasks
+- **Meeting Recorder panel** — record → local Whisper STT → AI summary + action items → save tasks
 - **Modes panel** — custom mode editor (icon, name, description, system prompt)
 - **Conversation auto-naming** — 4-6 word title generated after first exchange
 - **Message copy + code blocks** — hover to copy; syntax-highlighted code with language badge
@@ -285,7 +285,6 @@ iOS/Android apps don't have a local server, so AI API calls need a proxy:
 **Best free AI for mobile:**
 | Provider    | Free tier               | Setup |
 |-------------|------------------------|-------|
-| Groq        | Llama 3.3 70B, Mistral | groq.com → free API key |
 | Google Gemini | Gemini Flash          | aistudio.google.com → free key |
 | OpenRouter  | 50+ free models        | openrouter.ai → free key |
 | Ollama (Mac)| Unlimited, local       | Point mobile to Mac IP in settings |

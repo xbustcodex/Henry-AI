@@ -73,13 +73,7 @@ const WEB_SECURITY_DEFAULTS: WebSecurityPolicy = {
 const webSecurityPolicy: WebSecurityPolicy = { ...WEB_SECURITY_DEFAULTS };
 
 
-import { tryCerebrasFallback, isGroqRateLimit } from './henry/providers/cerebras';
 import { log } from './henry/log';
-
-// ── Direct API endpoints (bypass the Vite dev-server proxy) ───────────────
-// Groq supports browser-side CORS requests natively — calling api.groq.com
-// directly is simpler and more reliable than routing through the local proxy.
-const GROQ_DIRECT = 'https://api.groq.com';
 
 // ── Mobile proxy support ───────────────────────────────────────────────────
 // On web/Electron: relative /proxy/* paths work (Vite dev server or IPC).
@@ -97,11 +91,6 @@ function getProxyBase(): string {
 
 function proxyFetch(path: string, init?: RequestInit): Promise<Response> {
   return fetch(`${getProxyBase()}${path}`, init);
-}
-
-// Direct fetch to Groq — no local proxy hop, no Replit reverse-proxy layers.
-function groqFetch(path: string, init?: RequestInit): Promise<Response> {
-  return fetch(`${GROQ_DIRECT}${path}`, init);
 }
 
 // ── Worker Brain: actual AI execution in web mode ──────────────────────────
@@ -158,14 +147,6 @@ async function runWorkerAI(params: {
 
     if (workerProvider === 'openai') {
       const res = await proxyFetch('/proxy/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ model: workerModel, messages, temperature: 0.7, max_tokens: 4000 }),
-      });
-      const data = await res.json() as any;
-      resultText = data.choices?.[0]?.message?.content ?? '';
-    } else if (workerProvider === 'groq') {
-      const res = await groqFetch('/openai/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
         body: JSON.stringify({ model: workerModel, messages, temperature: 0.7, max_tokens: 4000 }),
@@ -470,16 +451,6 @@ const henryAPI: Window['henryAPI'] = {
       return { content: data.choices[0].message.content, usage: data.usage };
     }
 
-    if (provider === 'groq') {
-      const res = await groqFetch('/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ model, messages, temperature: temperature ?? 0.7, max_tokens: maxTokens }),
-      });
-      const data = await res.json() as { choices: Array<{ message: { content: string } }>; usage?: HenryAIUsage };
-      return { content: data.choices[0].message.content, usage: data.usage };
-    }
-
     if (provider === 'openrouter') {
       const res = await proxyFetch('/proxy/openrouter/api/v1/chat/completions', {
         method: 'POST',
@@ -593,34 +564,6 @@ const henryAPI: Window['henryAPI'] = {
             const errBody = await res.text().catch(() => '');
             let errMsg = `OpenAI ${res.status}: ${res.statusText}`;
             try { const j = JSON.parse(errBody) as { error?: { message?: string } }; if (j.error?.message) errMsg = `OpenAI error: ${j.error.message}`; } catch { /* */ }
-            throw new Error(errMsg);
-          }
-          await readOpenAIStream(res);
-          doneCb?.(fullText, estimateUsage(fullText, params));
-        } else if (provider === 'groq') {
-          const res = await groqFetch('/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-            body: JSON.stringify({ model, messages, temperature: temperature ?? 0.7, max_tokens: maxTokens, stream: true }),
-            signal: controller.signal,
-          });
-          if (!res.ok) {
-            const errBody = await res.text().catch(() => '');
-            let errMsg = `Groq ${res.status}: ${res.statusText}`;
-            try { const j = JSON.parse(errBody) as { error?: { message?: string } }; if (j.error?.message) errMsg = `Groq error: ${j.error.message}`; } catch { /* */ }
-            // Silent Cerebras fallback on 429 rate-limit
-            if (isGroqRateLimit(res.status)) {
-              const cerebrasKey = (params as any).cerebrasApiKey as string | undefined
-                ?? localStorage.getItem('henry:cerebras_api_key') ?? undefined;
-              // Cerebras in the browser preview is text-only.
-              const fallback = await tryCerebrasFallback({
-                cerebrasApiKey: cerebrasKey,
-                model,
-                messages: messages.map((m) => ({ role: m.role, content: flattenContent(m.content) })),
-                signal: controller.signal,
-              });
-              if (fallback?.ok) { chunkCb?.(fallback.text); doneCb?.(fallback.text, estimateUsage(fallback.text, params)); return; }
-            }
             throw new Error(errMsg);
           }
           await readOpenAIStream(res);
@@ -820,8 +763,6 @@ const henryAPI: Window['henryAPI'] = {
               const settings = getStore<Record<string, string>>('henry:settings', {});
               const baseUrl = settings.ollama_base_url || 'http://localhost:11434';
               friendly = `Cannot reach Ollama at ${baseUrl}.\n\nMake sure Ollama is running with:\n  OLLAMA_HOST=0.0.0.0 OLLAMA_ORIGINS=* ollama serve\n\nThen confirm the base URL in Settings → Engines matches your Mac's local IP (e.g. http://192.168.1.x:11434).`;
-            } else if (provider === 'groq') {
-              friendly = `Couldn't reach Groq — this is usually a brief network hiccup. Try sending again. If it keeps happening, reload the page.`;
             } else {
               friendly = `Network error reaching ${provider} API (${raw}).\n\nCheck your connection and API key in Settings → AI Providers.`;
             }
@@ -1688,34 +1629,6 @@ const henryAPI: Window['henryAPI'] = {
   installUpdate: async () => {},
   onUpdateAvailable: () => () => {},
   onUpdateDownloaded: () => () => {},
-
-  whisperTranscribe: async (audioBlob: Blob, apiKey: string): Promise<string> => {
-    // Groq Whisper validates by file extension — derive correct one from MIME type
-    const MIME_TO_EXT: Record<string, string> = {
-      'audio/webm': 'webm',
-      'audio/mp4': 'mp4',
-      'audio/mpeg': 'mp3',
-      'audio/ogg': 'ogg',
-      'audio/wav': 'wav',
-      'audio/x-m4a': 'm4a',
-    };
-    const baseType = audioBlob.type.split(';')[0].trim();
-    const ext = MIME_TO_EXT[baseType] || 'webm';
-    const form = new FormData();
-    form.append('file', audioBlob, `recording.${ext}`);
-    form.append('model', 'whisper-large-v3');
-    form.append('response_format', 'text');
-    const res = await groqFetch('/openai/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}` },
-      body: form,
-    });
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '');
-      throw new Error(`Whisper error ${res.status}${errText ? ': ' + errText.slice(0, 200) : ''}`);
-    }
-    return await res.text();
-  },
 
   // ── Desktop-only surfaces ───────────────────────────────────────────────
   // These exist on the real preload API but cannot work in a browser build:

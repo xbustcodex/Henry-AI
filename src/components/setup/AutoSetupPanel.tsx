@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useStore } from '../../store';
 import { isMacOS, isLinux, isWindows, getPlatformName } from '../../utils/platform';
+import { isOpencodeProvider } from '../../../electron/providers/classification';
 
 const getApi = () => (window as any).henryAPI as any;
 
@@ -36,7 +37,7 @@ export default function AutoSetupPanel() {
     return [
       { id:'accessibility', icon:'⌨', label:controlLabel,                description:`Lets Henry control your ${platformName.toLowerCase()}`, status:'checking', autoFix:true },
       { id:'screen',        icon:'📸', label:screenLabel,                description:`Needed for screenshot feature in Henry HQ`,     status:'checking', autoFix:true },
-      { id:'ai',            icon:'◉', label:'AI Provider',              description:'Groq key or Ollama for chat + smart capture',   status:'checking', autoFix:true },
+      { id:'ai',            icon:'◉', label:'AI Provider',              description:'A provider key, OpenCode Zen, or Ollama for chat + smart capture', status:'checking', autoFix:true },
       { id:'ollama',        icon:'⚡', label:'Ollama (free local AI)',   description:'Optional: free offline AI — runs on your computer (not required)',  status:'checking' },
       { id:'hotkeys',       icon:'⌥', label:'Global Hotkeys',           description:'Global hotkeys for capture and navigation',       status:'checking' },
       { id:'sync',          icon:'⊚', label:'Henry Sync Server',        description:'Connects desktop app, mobile + browser capture', status:'checking' },
@@ -76,23 +77,27 @@ export default function AutoSetupPanel() {
       }
     } catch { patch('screen', { status:'missing' }); }
 
-    // AI provider — must have BYOK key, Ollama, or a paid license (no freebies)
-    const hasGroq = (providers||[]).some((p:any) => p.id==='groq' && (p.apiKey||p.api_key||'').length > 10);
+    // AI provider — any supported backend counts: a BYOK key, OpenCode Zen
+    // (credential-optional), local Ollama, or a paid license.
+    const hasKey = (id: string) => (providers||[]).some((p:any) => p.id===id && (p.apiKey||p.api_key||'').length > 10);
     const isOllama = settings?.companion_provider === 'ollama';
-    const hasOpenAI = (providers||[]).some((p:any) => p.id==='openai' && (p.apiKey||p.api_key||'').length > 10);
-    const hasAnthropic = (providers||[]).some((p:any) => p.id==='anthropic' && (p.apiKey||p.api_key||'').length > 10);
-    const hasGoogle = (providers||[]).some((p:any) => p.id==='google' && (p.apiKey||p.api_key||'').length > 10);
+    const hasOpenRouter = hasKey('openrouter');
+    const hasOpenAI = hasKey('openai');
+    const hasAnthropic = hasKey('anthropic');
+    const hasGoogle = hasKey('google');
+    const hasZen = (providers||[]).some((p:any) => isOpencodeProvider(p.id) && p.enabled !== false);
     const hasLicense = ((localStorage.getItem('henry:license_key') || '').trim()).length > 0;
-    const hasAnyBackend = hasGroq || isOllama || hasOpenAI || hasAnthropic || hasGoogle || hasLicense;
+    const hasAnyBackend = hasOpenRouter || isOllama || hasZen || hasOpenAI || hasAnthropic || hasGoogle || hasLicense;
     patch('ai', {
       status: hasAnyBackend ? 'ok' : 'missing',
-      description: hasGroq ? 'Groq key connected — fast, free tier 14,400/day ✓' :
-                   isOllama ? 'Ollama connected — local, private, free ✓' :
+      description: isOllama ? 'Ollama connected — local, private, free ✓' :
+                   hasZen ? 'OpenCode Zen connected — free Zen models, no key needed ✓' :
+                   hasOpenRouter ? 'OpenRouter key connected ✓' :
                    hasAnthropic ? 'Anthropic key connected ✓' :
                    hasOpenAI ? 'OpenAI key connected ✓' :
                    hasGoogle ? 'Google key connected ✓' :
                    hasLicense ? 'Henry license active ✓' :
-                   'Add a free Groq key (60 sec) or install Ollama — Settings → AI Providers',
+                   'Add an AI provider or install Ollama — Settings → AI Providers',
     });
 
     // Ollama
@@ -180,9 +185,8 @@ export default function AutoSetupPanel() {
       // Linux/Windows: no macOS permission needed — capability is inherent or unavailable.
       patch('screen', { status: isLinux() ? 'ok' : 'missing', description: isLinux() ? 'Screen capture available' : 'Capability check unavailable' });
     } else if (id === 'ai') {
-      // AI is already working via proxy — direct to settings to upgrade
       setCurrentView('settings' as any);
-      patch('ai', { status: 'ok', description: 'Add Groq key for unlimited requests' });
+      patch('ai', { status: 'ok', description: 'Add your own provider key in Settings → AI Providers' });
     } else if (id === 'ollama') {
       await getApi()?.computerRunShell?.({ command:'open https://ollama.com', timeout:3000 });
       patch('ollama',{ status:'missing', description:'Installing Ollama — visit ollama.com' });

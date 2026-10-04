@@ -33,7 +33,7 @@ export function getOllamaBaseUrl(settings?: Record<string, string>): string {
 /**
  * One-time / idempotent defaults: when no companion provider is set, use local Ollama.
  * When companion is already ollama, sync host/model from henry_* keys.
- * Does not replace explicit cloud providers (e.g. user chose groq + key).
+ * Does not replace explicit cloud providers (e.g. the user picked one + key).
  */
 export function applyOllamaBrainDefaultsIfNeeded(): void {
   try {

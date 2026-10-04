@@ -10,12 +10,28 @@
  * without a license key. Free users see "needs setup" — never a free ride.
  */
 
-export type BackendKind = 'groq' | 'ollama' | 'openai' | 'anthropic' | 'google' | 'openrouter' | 'relay' | 'license';
+import {
+  OPENCODE_PROVIDER_ID,
+  OPENCODE_PROVIDER_IDS,
+  OPENCODE_ZEN_PROVIDER_ID,
+  isOpencodeProvider,
+} from '../../electron/providers/classification';
+
+export type BackendKind =
+  | 'ollama'
+  | 'opencode-zen'
+  | 'opencode'
+  | 'openai'
+  | 'anthropic'
+  | 'google'
+  | 'openrouter'
+  | 'relay'
+  | 'license';
 
 export interface BackendStatus {
   hasAny: boolean;
   kinds: BackendKind[];
-  /** Best-pick description for UI, e.g. "Your Groq key" or "Local Ollama" */
+  /** Best-pick description for UI, e.g. "Your OpenAI key" or "Local Ollama" */
   primaryLabel: string;
   /** True if the only path is the paid proxy (license-gated) */
   proxyOnly: boolean;
@@ -23,10 +39,39 @@ export interface BackendStatus {
 
 interface ProviderRow {
   id: string;
+  name?: string;
   api_key?: string;
   apiKey?: string;
   enabled?: boolean;
 }
+
+
+/**
+ * Which opencode-backed provider this install is actually configured for, or
+ * null. Zen stays distinct from the plain opencode group — it is its own
+ * provider id with its own catalogue and its own (optional) credential.
+ *
+ * A row counts as configured on its own: Zen's free models run
+ * unauthenticated, so demanding a key here is exactly what made a fully
+ * working Zen install report "no AI provider".
+ */
+function opencodeProviderId(providers: ProviderRow[], settings?: Record<string, string>): string | null {
+  const rows = providers.filter((p) => isOpencodeProvider(p.id, p.name));
+  // A Zen row is an explicit, separately-configured provider with its own
+  // catalogue, so it outranks the generic opencode row when both are present.
+  const row = rows.find((p) => p.id === OPENCODE_ZEN_PROVIDER_ID && ((p.api_key || p.apiKey) ?? '').trim().length > 10)
+    ?? rows.find((p) => p.id === OPENCODE_ZEN_PROVIDER_ID && p.enabled !== false)
+    ?? rows.find((p) => ((p.api_key || p.apiKey) ?? '').trim().length > 10)
+    ?? rows.find((p) => p.enabled !== false);
+  if (row) return row.id === OPENCODE_ZEN_PROVIDER_ID ? OPENCODE_ZEN_PROVIDER_ID : OPENCODE_PROVIDER_ID;
+  if (settings) {
+    const selected = [settings.companion_provider, settings.worker_provider, settings.chat_fast_provider];
+    const id = OPENCODE_PROVIDER_IDS.find((c) => selected.includes(c));
+    if (id) return id;
+  }
+  return null;
+}
+
 
 function readProviders(): ProviderRow[] {
   try {
@@ -75,8 +120,16 @@ export function getBackendStatus(settings?: Record<string, string>): BackendStat
   const providers = readProviders();
   const kinds: BackendKind[] = [];
 
-  if (hasKey(providers, 'groq'))        kinds.push('groq');
-  if (ollamaConfigured(providers, settings))    kinds.push('ollama');
+  if (ollamaConfigured(providers, settings))   kinds.push('ollama');
+
+  // opencode / OpenCode Zen reach a real model through the local opencode
+  // bridge and need no Henry-side key — the free Zen models run
+  // unauthenticated. Not counting them here is what made a fully configured
+  // Zen install render the "no AI provider" setup card instead of answering.
+  const opencode = opencodeProviderId(providers, settings);
+  if (opencode === OPENCODE_ZEN_PROVIDER_ID) kinds.push('opencode-zen');
+  else if (opencode === OPENCODE_PROVIDER_ID) kinds.push('opencode');
+
   if (hasKey(providers, 'openai'))      kinds.push('openai');
   if (hasKey(providers, 'anthropic'))   kinds.push('anthropic');
   if (hasKey(providers, 'google'))      kinds.push('google');
@@ -87,8 +140,9 @@ export function getBackendStatus(settings?: Record<string, string>): BackendStat
   if (hasLicense())                     kinds.push('license');
 
   const labelMap: Record<BackendKind, string> = {
-    groq:       'Your Groq key',
     ollama:     'Local Ollama',
+    'opencode-zen': 'OpenCode Zen',
+    opencode:   'OpenCode',
     openai:     'Your OpenAI key',
     anthropic:  'Your Anthropic key',
     google:     'Your Google key',

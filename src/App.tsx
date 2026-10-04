@@ -27,6 +27,8 @@ import { syncOllamaDefaultsToBackendIfNeeded } from './henry/ollamaConfig';
 import { isMacOS, isLinux, isWindows } from './utils/platform';
 import { updateCapabilitySnapshot } from './henry/capabilityRegistry';
 import StartupFailureBanner from './components/health/StartupFailureBanner';
+import { hasUsableBackend } from './henry/backendStatus';
+import { isRetiredProvider, retiredProviderName } from './providers/models';
 
 // Check if companion mode is active
 // Logic: on native, default to companion mode if paired (unless user explicitly chose full mode)
@@ -67,7 +69,11 @@ export default function App() {
     window.addEventListener('henry_open_setup_wizard', onOpenWizard);
     return () => window.removeEventListener('henry_open_setup_wizard', onOpenWizard);
   }, []);
-  const [greetingDismissed, setGroqDismissed] = useState(() => !!sessionStorage.getItem('henry:groq_warn_dismissed'));
+  const [backendNoticeDismissed, setBackendNoticeDismissed] = useState(
+    () => !!sessionStorage.getItem('henry:backend_notice_dismissed'),
+  );
+  const companionProvider = useStore((s) => s.settings.companion_provider);
+  const retiredSelection = retiredProviderName(companionProvider);
   const [showSplash, setShowSplash] = useState(() => {
     // Only show splash on first launch of a session (not every time)
     const seen = sessionStorage.getItem('henry_splash_seen');
@@ -343,14 +349,13 @@ export default function App() {
       let content = getTodayBriefing()?.content ?? null;
 
       if (!content) {
-        // Build context from memory pipeline (structured facts)
+        // Build a simple non-streaming AI call using the companion provider
+        const st = useStore.getState();
+        const companionProvider = st.settings.companion_provider || '';
+        const companionModel = st.settings.companion_model || '';
         const memoryCtx = buildMemoryContext();
         const prompt = buildBriefingPrompt(memoryCtx);
 
-        // Build a simple non-streaming AI call using the companion provider
-        const st = useStore.getState();
-        const companionProvider = st.settings.companion_provider || 'groq';
-        const companionModel = st.settings.companion_model || 'llama-3.3-70b-versatile';
         const providerRecord = st.providers.find((p) => p.id === companionProvider);
         const apiKey = providerRecord?.apiKey || '';
 
@@ -460,35 +465,6 @@ export default function App() {
         history.replaceState(null, '', window.location.pathname);
       }
 
-      // ── Auto-bootstrap Groq from server env key (web/Replit preview mode) ──
-      // Always refresh the key from the env var so stale/empty localStorage
-      // entries never cause "Failed to fetch" errors.
-      const envGroqKey = typeof __GROQ_API_KEY__ !== 'undefined' ? __GROQ_API_KEY__ : '';
-      if (envGroqKey) {
-        const existingProviders: HenryProviderRecord[] = (() => {
-          try { return JSON.parse(localStorage.getItem('henry:providers') || '[]'); } catch { return []; }
-        })();
-        const savedGroq = existingProviders.find((p) => p.id === 'groq');
-        const savedKey = savedGroq?.api_key || savedGroq?.apiKey || '';
-
-        // Always upsert if the stored key differs from the env key (covers first-run
-        // AND any key rotation or storage corruption scenario)
-        if (savedKey !== envGroqKey) {
-          await window.henryAPI.saveProvider({
-            id: 'groq',
-            name: 'Groq',
-            api_key: envGroqKey,
-            enabled: 1,
-            models: JSON.stringify([]),
-          } as any);
-          await window.henryAPI.saveSetting('companion_provider', 'groq');
-          await window.henryAPI.saveSetting('companion_model', 'llama-3.3-70b-versatile');
-          await window.henryAPI.saveSetting('worker_provider', 'groq');
-          await window.henryAPI.saveSetting('worker_model', 'llama-3.3-70b-versatile');
-          await window.henryAPI.saveSetting('setup_complete', 'true');
-        }
-      }
-
       const settingsMap = (await window.henryAPI.getSettings()) as Record<string, string>;
 
       Object.entries(settingsMap).forEach(([key, value]) => {
@@ -540,22 +516,15 @@ export default function App() {
           await window.henryAPI.saveSetting('setup_complete', 'true');
         }
 
-        // Hardwire Groq as permanent default for both engines if not already set
-        const groqProvider = lsProviders.find((p: any) => p.id === 'groq');
-        if (groqProvider && groqProvider.enabled) {
-          const needsCompanion = !settingsMap.companion_provider;
-          const needsWorker = !settingsMap.worker_provider;
-          if (needsCompanion) {
-            await window.henryAPI.saveSetting('companion_provider', 'groq');
-            await window.henryAPI.saveSetting('companion_model', 'llama-3.3-70b-versatile');
-            useStore.getState().updateSetting('companion_provider', 'groq');
-            useStore.getState().updateSetting('companion_model', 'llama-3.3-70b-versatile');
-          }
-          if (needsWorker) {
-            await window.henryAPI.saveSetting('worker_provider', 'groq');
-            await window.henryAPI.saveSetting('worker_model', 'llama-3.3-70b-versatile');
-            useStore.getState().updateSetting('worker_provider', 'groq');
-            useStore.getState().updateSetting('worker_model', 'llama-3.3-70b-versatile');
+        // Retire any provider selection that no longer resolves to a supported
+        // provider. Leaving it in place is what produced a permanent fallback
+        // loop: the router could never resolve it, and the install looked like
+        // it had a backend while sending nothing. It is cleared here so the
+        // router reports the retired provider by name instead.
+        for (const key of ['companion_provider', 'worker_provider', 'chat_fast_provider', 'companion_provider_2']) {
+          if (isRetiredProvider(settingsMap[key])) {
+            await window.henryAPI.saveSetting(key, '');
+            useStore.getState().updateSetting(key, '');
           }
         }
 
@@ -712,14 +681,19 @@ export default function App() {
   return (
     <ErrorBoundary>
     <div className="h-screen w-screen flex flex-col overflow-hidden">
-      {/* Groq key warning — shown until key is added or dismissed */}
-      {!greetingDismissed && !(useStore.getState().providers || []).find((p: any) => p.id === 'groq' && p.apiKey?.startsWith('gsk_')) && (
+      {/* Backend notice — either "nothing configured" or "your selection was
+          retired". Both are stated explicitly; neither substitutes a provider. */}
+      {!backendNoticeDismissed && (retiredSelection || !hasUsableBackend()) && (
         <div className="flex items-center justify-between px-4 py-1.5 bg-yellow-500/10 border-b border-yellow-500/20 flex-shrink-0">
           <p className="text-[11px] text-yellow-400">
-            ⚠ No Groq API key — Henry AI won't respond without one.{' '}
-            <button onClick={() => useStore.getState().setCurrentView('settings' as any)} className="underline hover:text-yellow-300">Add free key in Settings →</button>
+            {retiredSelection
+              ? `⚠ ${retiredSelection} is no longer a supported provider — Henry can't use it. `
+              : '⚠ No AI provider configured — Henry AI won\'t respond without one. '}
+            <button onClick={() => useStore.getState().setCurrentView('settings')} className="underline hover:text-yellow-300">
+              {retiredSelection ? 'Pick a supported provider in Settings →' : 'Add a provider in Settings →'}
+            </button>
           </p>
-          <button onClick={() => { setGroqDismissed(true); sessionStorage.setItem('henry:groq_warn_dismissed','1'); }} className="text-yellow-400/50 hover:text-yellow-400 text-xs ml-3">✕</button>
+          <button onClick={() => { setBackendNoticeDismissed(true); sessionStorage.setItem('henry:backend_notice_dismissed','1'); }} className="text-yellow-400/50 hover:text-yellow-400 text-xs ml-3">✕</button>
         </div>
       )}
 

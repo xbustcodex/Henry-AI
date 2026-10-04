@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useStore } from '../../store';
-import { transcribeWithGroq } from '../../henry/ttsService';
 import { useAmbientStore } from '../../henry/ambientStateStore';
 import {
   useVoiceStore,
@@ -65,9 +64,8 @@ export default function ChatInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const speechRecRef = useRef<any>(null);
   const settings = useStore((s) => s.settings);
-  const providers = useStore((s) => s.providers);
 
-  // ── Voice stack (FREE local whisper.cpp preferred; Groq fallback) ─────────
+  // ── Voice stack (local whisper.cpp — free, offline) ─────────────────────
   const sttReady = useVoiceStore((s) => s.sttReady);
   const handsFree = useVoiceStore((s) => s.handsFree);
   const setHandsFree = useVoiceStore((s) => s.setHandsFree);
@@ -79,8 +77,6 @@ export default function ChatInput({
   const [recordSeconds, setRecordSeconds] = useState(0);
   const handsFreeRef = useRef(handsFree);
   handsFreeRef.current = handsFree;
-
-  const groqKeyPresent = providers.some((p) => p.id === 'groq' && p.apiKey);
 
   // Probe local whisper readiness once (Electron only).
   useEffect(() => {
@@ -169,14 +165,14 @@ export default function ChatInput({
     if (!ambientMode || !ttsEnabled) return;
     function onTtsDone() {
       if (!isStreaming) {
-        startGroqWhisper();
+        startVoiceCapture();
       }
     }
     window.addEventListener('henry_tts_done', onTtsDone);
     return () => window.removeEventListener('henry_tts_done', onTtsDone);
   }, [ambientMode, ttsEnabled, isStreaming]);
 
-  async function startGroqWhisper() {
+  async function startVoiceCapture() {
     useAmbientStore.getState().setState('listening');
     useAmbientStore.getState().startSession();
     try {
@@ -235,7 +231,7 @@ export default function ChatInput({
             }
             if (interim) setInterimTranscript(interim);
           };
-          rec.onerror = () => { /* ignore — Groq transcription is the source of truth */ };
+          rec.onerror = () => { /* ignore — the local transcript is the source of truth */ };
           rec.start();
           speechRecRef.current = rec;
         } catch { /* SpeechRecognition not available — graceful degrade */ }
@@ -253,7 +249,7 @@ export default function ChatInput({
     }
   }
 
-  async function stopGroqWhisper() {
+  async function stopVoiceCapture() {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     }
@@ -273,35 +269,14 @@ export default function ChatInput({
         return;
       }
 
-      const allProviders = await window.henryAPI.getProviders();
-      const s = useStore.getState().settings;
-
-      let transcript: string | undefined;
-
-      // 1. FREE local whisper.cpp — the default when set up (works offline).
-      // Don't gate on the sttReady store flag (it can lag the mount-time status
-      // fetch); transcribeLocal fails fast with a clear error if not set up.
-      if (voiceIpcAvailable()) {
-        try {
-          transcript = await transcribeLocal(blob);
-        } catch (err) {
-          console.warn('Local whisper failed, trying cloud fallback:', err);
-        }
+      // Local whisper.cpp is the only transcription path. It is free, offline,
+      // and runs on the user's own machine. There is no cloud STT fallback:
+      // routing audio to a third party the user never picked is exactly the
+      // substitution this must not do.
+      if (!voiceIpcAvailable()) {
+        throw new Error('Voice input needs the Henry desktop app — transcription runs locally and is not available in the browser.');
       }
-
-      // 2. Groq Whisper fallback (needs a key + internet).
-      if (!transcript && window.henryAPI.whisperTranscribe) {
-        const groqProvider = allProviders.find((p: any) => p.id === 'groq');
-        const apiKey = groqProvider?.api_key || groqProvider?.apiKey || '';
-        if (apiKey) {
-          transcript = await window.henryAPI.whisperTranscribe(blob, apiKey);
-        }
-      }
-
-      // 3. Web path — Groq Whisper via fetch.
-      if (!transcript) {
-        transcript = await transcribeWithGroq(blob, s, allProviders);
-      }
+      const transcript = await transcribeLocal(blob);
 
       const text = transcript?.trim();
       if (text) {
@@ -333,21 +308,21 @@ export default function ChatInput({
 
   function toggleVoice() {
     if (listening) {
-      stopGroqWhisper();
+      stopVoiceCapture();
       return;
     }
-    // No local whisper yet and no cloud key → offer the one-time free setup.
-    if (voiceIpcAvailable() && sttReady === false && !groqKeyPresent) {
+    // No local whisper yet → offer the one-time free setup.
+    if (voiceIpcAvailable() && sttReady === false) {
       setShowVoiceSetup(true);
       return;
     }
-    startGroqWhisper();
+    startVoiceCapture();
   }
 
   function handleSubmit() {
     const trimmed = input.trim();
     if (!trimmed || isStreaming) return;
-    if (listening) stopGroqWhisper();
+    if (listening) stopVoiceCapture();
     useVoiceStore.getState().setUserTyped(false);
     onSend(trimmed);
     setInput('');
@@ -473,7 +448,7 @@ export default function ChatInput({
         />
 
         <div className="flex items-center gap-1.5 shrink-0">
-          {/* Mic button — local whisper.cpp, Groq fallback — first and prominent */}
+          {/* Mic button — local whisper.cpp, first and prominent */}
           {micAvailable && (
             <button
               onClick={toggleVoice}
@@ -485,8 +460,6 @@ export default function ChatInput({
                   ? 'Transcribing…'
                   : sttReady
                   ? 'Voice input (free local Whisper)'
-                  : groqKeyPresent
-                  ? 'Voice input (Groq Whisper)'
                   : 'Voice input — one-time free setup'
               }
               className={`p-2.5 rounded-xl transition-all ${

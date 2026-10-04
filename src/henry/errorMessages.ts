@@ -41,7 +41,8 @@ function providerLabel(provider: string): string {
     openai: 'OpenAI',
     anthropic: 'Anthropic',
     google: 'Google AI',
-    groq: 'Groq',
+    opencode: 'OpenCode',
+    'opencode-zen': 'OpenCode Zen',
     ollama: 'Ollama',
   };
   return labels[provider] ?? provider;
@@ -133,17 +134,16 @@ export function buildStreamError(
     ].join('\n');
   }
 
-  // Groq token-per-minute rate limit (413 + "Limit NNNNN" pattern)
+  // Token-per-minute rate limit (413 + "Limit NNNNN" pattern)
   if (/tokens per minute|token.*limit|limit.*token|request too large|tpm.*limit|tokens.*min/i.test(error)) {
     return [
       `**${label}: message too long for free tier.**`,
       ``,
-      `Your conversation + Henry's context exceeded ${label}'s free tier limit (12,000 tokens/min).`,
+      `Your conversation + Henry's context exceeded ${label}'s per-minute token limit.`,
       ``,
       `**Quick fixes:**`,
       `→ Start a **New Chat** to clear history`,
-      `→ Or upgrade to a paid Groq plan at console.groq.com`,
-      `→ Or add an **OpenAI** or **Anthropic** key in Settings — they have higher limits`,
+      `→ Or switch to another provider in **Settings → AI Providers** — they have higher limits`,
     ].join('\n');
   }
 
@@ -194,7 +194,7 @@ export function buildStartError(err: unknown): string {
     return [
       `**No AI model is configured.**`,
       ``,
-      `→ Go to **Settings → AI Providers**, click **Auto-detect** if you have Ollama running, or add an API key for OpenAI, Anthropic, or Groq.`,
+      `→ Go to **Settings → Engines** and pick a provider and model — OpenCode Zen and Ollama are both free — or add an API key for OpenAI or Anthropic.`,
     ].join('\n');
   }
 

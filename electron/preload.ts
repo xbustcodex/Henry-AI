@@ -791,32 +791,6 @@ contextBridge.exposeInMainWorld('henryAPI', {
     return () => ipcRenderer.removeListener('worker:message', handler);
   },
 
-  // ── Whisper STT ───────────────────────────────────────────
-  // Implemented directly in the renderer since it's a plain HTTPS fetch to Groq.
-  // The renderer process in Electron has full network access.
-  whisperTranscribe: async (audioBlob: Blob, apiKey: string): Promise<string> => {
-    const MIME_TO_EXT: Record<string, string> = {
-      'audio/webm': 'webm', 'audio/mp4': 'mp4', 'audio/mpeg': 'mp3',
-      'audio/ogg': 'ogg', 'audio/wav': 'wav', 'audio/x-m4a': 'm4a',
-    };
-    const baseType = audioBlob.type.split(';')[0].trim();
-    const ext = MIME_TO_EXT[baseType] || 'webm';
-    const form = new FormData();
-    form.append('file', audioBlob, `recording.${ext}`);
-    form.append('model', 'whisper-large-v3');
-    form.append('response_format', 'text');
-    const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}` },
-      body: form,
-    });
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '');
-      throw new Error(`Whisper error ${res.status}${errText ? ': ' + errText.slice(0, 200) : ''}`);
-    }
-    return res.text();
-  },
-
   // ── Voice (local whisper.cpp STT + say/ElevenLabs TTS) ────
   runtimeGetError: () => ipcRenderer.invoke('runtime:get-error'),
   onRuntimeStatusChanged: (cb: (s: RuntimeStatus) => void) => {

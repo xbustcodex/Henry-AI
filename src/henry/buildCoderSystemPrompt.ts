@@ -1,5 +1,5 @@
 /**
- * Lean coder system prompt — sized for Groq's TPM budget.
+ * Lean coder system prompt — sized for a tight token-per-minute budget.
  */
 
 export interface CoderPromptOptions {

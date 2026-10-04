@@ -132,7 +132,7 @@ describe('registered channel schemas', () => {
   it('validates providers:save without rejecting the existing shape', () => {
     expect(() =>
       validateRequest('providers:save', {
-        id: 'groq', name: 'Groq', apiKey: 'gsk_x', enabled: 1, models: '[]',
+        id: 'acme-ai', name: 'Acme AI', apiKey: 'fake-test-key-000', enabled: 1, models: '[]',
       })
     ).not.toThrow();
   });

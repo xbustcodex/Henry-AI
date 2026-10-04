@@ -9,7 +9,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 // Manually proxies /proxy/{provider}/* → external API server-side.
 //
 // Only providers that BLOCK browser CORS are listed here — all others are
-// called directly from the browser (OpenAI, OpenRouter, Google, Groq all
+// called directly from the browser (OpenAI, OpenRouter, and Google all
 // support browser CORS natively and are fetched directly in webMock.ts).
 //
 // Active proxy routes (only services that BLOCK browser CORS remain here):
@@ -166,11 +166,6 @@ export default defineConfig({
         './src/stubs/barcodeScanning.ts'
       ),
     },
-  },
-  define: {
-    // Expose GROQ_API_KEY from server env into browser bundle so Henry can
-    // auto-bootstrap the Groq provider without the setup wizard.
-    __GROQ_API_KEY__: JSON.stringify(process.env.GROQ_API_KEY || ''),
   },
   // ── Native-only Capacitor plugins ─────────────────────────────────────────
   // These packages are native-only and are only dynamically imported by

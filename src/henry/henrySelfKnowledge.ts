@@ -272,13 +272,13 @@ export const PANELS: PanelInfo[] = [
     shortDesc: 'AI providers, brains, appearance, backup, smart routing.',
     whatItDoes: 'Configure Henry\'s AI models, add API keys, change accent colors, set up smart coder routing, export backups, manage memory.',
     howToUse: [
-      'AI Providers tab: add your Groq and Gemini keys',
+      'AI Providers tab: add your OpenRouter and Gemini keys',
       'AI Brains tab: choose which model handles conversations vs heavy tasks',
       'General tab: export a backup of all your data',
     ],
     tips: [
       'Smart code routing (AI Providers tab) auto-switches to Qwen Coder for code questions',
-      'Add a Cerebras key as a silent fallback when Groq rate-limits',
+      'Add an OpenCode Zen model — free ones need no key at all',
       'Export Backup saves everything to your Desktop as a zip',
     ],
     phoneAvailable: false,
@@ -301,7 +301,7 @@ export const POWER_TIPS = [
   { tip: 'Use ⌥Space constantly', detail: 'Select any text anywhere on your Mac — an email, article, contract — and press ⌥Space. Henry opens with that text already loaded. Ask him to summarize, reply, explain, or act on it.' },
   { tip: 'Talk to Henry like a person', detail: 'You don\'t need special commands. "Remind me to call Sarah on Friday" works. "What should I focus on today?" works. "Write a reply to this email" works.' },
   { tip: 'Install Henry on your phone', detail: 'Open your companion URL in Safari on iPhone/iPad. Tap Share → Add to Home Screen. Henry installs as a real app — log health, add tasks, write journal entries from anywhere.' },
-  { tip: 'Get unlimited free AI', detail: 'Go to aistudio.google.com and get a free Gemini key (no card). Then go to groq.com and get a free Groq key. Paste both in Settings → AI Providers. Unlimited responses.' },
+  { tip: 'Get unlimited free AI', detail: 'Go to aistudio.google.com and get a free Gemini key (no card), or aistudio-free alternatives like OpenRouter. Paste it in Settings → AI Providers. Unlimited responses.' },
   { tip: 'Ask Henry about his memory', detail: 'Say "what do you know about me?" and Henry shows his memory. Edit it in the Memory panel — delete wrong facts, add important ones.' },
 ];
 

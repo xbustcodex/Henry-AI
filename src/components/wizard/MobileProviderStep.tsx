@@ -11,7 +11,7 @@ type TopMode = 'cloud' | 'mac' | null;
 type MacPhase = 'input' | 'detecting' | 'found' | 'no_models' | 'not_found';
 
 interface FreeProvider {
-  id: 'groq' | 'openrouter' | 'google';
+  id: 'openrouter' | 'google';
   label: string;
   icon: string;
   tagline: string;
@@ -24,17 +24,6 @@ interface FreeProvider {
 
 const FREE_PROVIDERS: FreeProvider[] = [
   {
-    id: 'groq',
-    label: 'Groq',
-    icon: '⚡',
-    tagline: 'Completely free',
-    desc: 'Llama 3.3 70B & Mistral — fast, no credit card',
-    placeholder: 'gsk_…',
-    defaultModel: 'llama-3.3-70b-versatile',
-    keyUrl: 'https://console.groq.com/keys',
-    recommended: true,
-  },
-  {
     id: 'openrouter',
     label: 'OpenRouter',
     icon: '🔀',
@@ -43,6 +32,7 @@ const FREE_PROVIDERS: FreeProvider[] = [
     placeholder: 'sk-or-…',
     defaultModel: 'meta-llama/llama-3.3-70b-instruct:free',
     keyUrl: 'https://openrouter.ai/keys',
+    recommended: true,
   },
   {
     id: 'google',
@@ -243,7 +233,7 @@ export default function MobileProviderStep({ onNext, onBack }: Props) {
         <div className="absolute -top-3 left-6 text-xs font-medium text-henry-text-muted bg-henry-bg px-2">Henry</div>
         <p className="text-henry-text-dim leading-relaxed">
           Two options here.{' '}
-          <span className="text-henry-text font-medium">Groq is free and wired in — just grab a key.</span>
+          <span className="text-henry-text font-medium">OpenRouter has free models — just grab a key.</span>
           {' '}Or point me at Ollama on your Mac and I run fully local.
         </p>
       </div>
@@ -260,7 +250,7 @@ export default function MobileProviderStep({ onNext, onBack }: Props) {
         >
           <div className="text-2xl mb-2">☁️</div>
           <div className="text-sm font-semibold text-henry-text">Free Cloud AI</div>
-          <div className="text-[11px] text-henry-success font-medium mt-0.5">Groq · OpenRouter · Google</div>
+          <div className="text-[11px] text-henry-success font-medium mt-0.5">OpenRouter · Google</div>
           <div className="text-[11px] text-henry-text-muted mt-1 leading-snug">API key required — all have free tiers</div>
         </button>
 

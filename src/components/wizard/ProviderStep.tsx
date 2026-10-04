@@ -16,7 +16,7 @@ interface ProviderStepProps {
   onBack: () => void;
 }
 
-type ProviderId = 'groq' | 'openrouter' | 'openai' | 'anthropic' | 'google' | 'ollama';
+type ProviderId = 'openrouter' | 'openai' | 'anthropic' | 'google' | 'ollama';
 
 interface CloudOption {
   id: Exclude<ProviderId, 'ollama'>;
@@ -33,18 +33,6 @@ interface CloudOption {
 
 const CLOUD_OPTIONS: CloudOption[] = [
   {
-    id: 'groq',
-    label: 'Groq',
-    icon: '⚡',
-    free: true,
-    freeLabel: 'Completely free',
-    desc: 'LLaMA 3.1 8B everyday · 70B second brain — no credit card',
-    placeholder: 'gsk_…',
-    defaultModel: 'llama-3.3-70b-versatile',
-    keyUrl: 'https://console.groq.com/keys',
-    recommended: true,
-  },
-  {
     id: 'openrouter',
     label: 'OpenRouter',
     icon: '🔀',
@@ -52,6 +40,7 @@ const CLOUD_OPTIONS: CloudOption[] = [
     freeLabel: 'Free models available',
     desc: '50+ models including free Llama, Mistral, Gemma',
     placeholder: 'sk-or-…',
+    recommended: true,
     defaultModel: 'meta-llama/llama-3.3-70b-instruct:free',
     keyUrl: 'https://openrouter.ai/keys',
   },
@@ -129,7 +118,7 @@ function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
   // Top-level mode: cloud or ollama
   const [mode, setMode] = useState<'cloud' | 'ollama' | null>('cloud');
 
-  // Cloud state — default to Groq (free)
+  // Cloud state — default to the free OpenRouter option
   const [selectedCloud, setSelectedCloud] = useState<CloudOption>(CLOUD_OPTIONS[0]);
   const [apiKey, setApiKey] = useState('');
   const [keyPageOpened, setKeyPageOpened] = useState(false);
@@ -250,26 +239,10 @@ function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
         updateSetting('companion_model', selectedCloud.defaultModel);
         updateSetting('companion_provider', selectedCloud.id);
 
-        if (selectedCloud.id === 'groq') {
-          // 8B = everyday primary, 70B = deeper second brain / worker
-          await window.henryAPI.saveSetting('companion_model_2', 'llama-3.3-70b-versatile');
-          await window.henryAPI.saveSetting('companion_provider_2', 'groq');
-          await window.henryAPI.saveSetting('worker_model', 'llama-3.3-70b-versatile');
-          await window.henryAPI.saveSetting('worker_provider', 'groq');
-          await window.henryAPI.saveSetting('chat_fast_model', 'llama-3.3-70b-versatile');
-          await window.henryAPI.saveSetting('chat_fast_provider', 'groq');
-          updateSetting('companion_model_2', 'llama-3.3-70b-versatile');
-          updateSetting('companion_provider_2', 'groq');
-          updateSetting('worker_model', 'llama-3.3-70b-versatile');
-          updateSetting('worker_provider', 'groq');
-          updateSetting('chat_fast_model', 'llama-3.3-70b-versatile');
-          updateSetting('chat_fast_provider', 'groq');
-        } else {
-          await window.henryAPI.saveSetting('worker_model', selectedCloud.defaultModel);
-          await window.henryAPI.saveSetting('worker_provider', selectedCloud.id);
-          updateSetting('worker_model', selectedCloud.defaultModel);
-          updateSetting('worker_provider', selectedCloud.id);
-        }
+        await window.henryAPI.saveSetting('worker_model', selectedCloud.defaultModel);
+        await window.henryAPI.saveSetting('worker_provider', selectedCloud.id);
+        updateSetting('worker_model', selectedCloud.defaultModel);
+        updateSetting('worker_provider', selectedCloud.id);
       }
 
       if (mode === 'ollama') {
@@ -303,7 +276,7 @@ function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
         <div className="absolute -top-3 left-6 text-xs font-medium text-henry-text-muted bg-henry-bg px-2">Henry</div>
         <p className="text-henry-text-dim leading-relaxed">
           Two options.{' '}
-          <span className="text-henry-text font-medium">Groq is free and wired in — just grab a key in 60 seconds.</span>
+          <span className="text-henry-text font-medium">OpenRouter has free models — grab a key in 60 seconds.</span>
           {' '}Or run Ollama locally and nothing ever leaves your Mac.
         </p>
       </div>
@@ -320,7 +293,7 @@ function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
         >
           <div className="text-2xl mb-2">☁️</div>
           <div className="text-sm font-semibold text-henry-text">Cloud AI</div>
-          <div className="text-[11px] text-henry-success font-medium mt-0.5">Groq · OpenRouter · OpenAI · more</div>
+          <div className="text-[11px] text-henry-success font-medium mt-0.5">OpenRouter · OpenAI · Anthropic · more</div>
           <div className="text-[11px] text-henry-text-muted mt-1 leading-snug">Free options available — API key required</div>
         </button>
 
