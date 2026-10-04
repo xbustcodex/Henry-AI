@@ -183,6 +183,51 @@ Drive the app with:
 inference after onboarding, invalid-provider explicit error, scheduler/worker
 classification, `integration:list` through its correct preload signature.
 
+## 11b. Zen response-return seam — latest boundary finding (NEW, 2026-10-04)
+
+**Last confirmed-good boundary: the prompt is accepted and reaches the app, but no
+assistant chat message is ever produced.**
+
+Fresh-profile run on installed build `95795e79…` (HEAD `c3f833d`), provider **Ollama /
+`llama3.2:3b`** — i.e. NOT Zen-specific, which is new information. Prompt
+`OLLOK-9911` was typed into the Chat textarea and submitted. Observed:
+
+```
+stillThinking   : false
+replyAfterPrompt: '") | computer:pressEnter() | Done — typed the prompt in ChatGPT.
+                  | Summarize | → Tasks | Shorter | Simpler | Copy | 📌 | 08:42 PM | ...'
+tokenReturned   : false
+```
+
+**The text after the prompt is not a model completion.** It is an **agent/task card**
+(`computer:pressEnter()`, "Done — typed the prompt in ChatGPT", with Summarize / Tasks /
+Shorter / Simpler / Copy affordances). The send path is being routed into the
+**computer-agent / tool-calling route**, which performs an action and renders a task
+card, instead of producing a chat completion message.
+
+This reframes the bug. It is **not** Zen-specific and **not** a lost-stream/normalisation
+problem: the response is being diverted before a chat message is created. Investigate
+which of these selects the agent route on send:
+
+- `ChatView` send deciding agent-vs-chat (tool-capability detection on the selected model)
+- `callAIWithTools` being invoked where `callAI` was intended
+- `resolveChat` returning an agent/worker tier rather than the companion chat tier
+- the task/agent store appending a task card where an assistant message is expected
+
+**Reproduction (installed, isolated profile):**
+1. Launch with `--user-data-dir=<empty dir> --remote-debugging-port=9600`.
+2. Onboard choosing Local (Ollama) + a runtime-discovered model (e.g. `llama3.2:3b`).
+3. Reach Chat, send any short prompt via the textarea.
+4. Inspect: an agent/task card appears instead of an assistant reply.
+
+Drive with `node scripts/acceptance/drive.mjs eval '<js>'` against
+`http://127.0.0.1:9600/json`.
+
+**Note:** an earlier reproduction on Zen showed `🧠 Advisor | Thinking… | Responding…`
+then no text. That is very likely the same diversion surfacing differently — confirm
+whether Zen is also being routed to the agent path rather than assuming a Zen-specific
+stream defect.
+
 ## 12. Next recommended task, in priority order
 
 1. **Rebuild, package, install** from `9eb73af`; re-run the fresh-profile acceptance end
