@@ -119,6 +119,16 @@ import { exportConversation } from '@/henry/exportConversation';
 import { interceptAndExecute } from '@/henry/actionInterceptor';
 import { route as gatewayRoute, trackCost } from '@/henry/gateway';
 import {
+  applyActionResults,
+  applyAgentRoute,
+  resolveAgentRouting,
+  type ToolCapability,
+} from '@/henry/agentRouting';
+import {
+  cachedToolCapability,
+  loadToolCapability,
+} from '@/henry/modelCapability';
+import {
   checkSessionPathsStale,
   clearRecoveryBannerDismissedThisSession,
   clearSavedSessionResume,
@@ -371,22 +381,50 @@ export default function ChatView() {
   // Voice replies — persisted as the `voice_replies` setting (legacy key kept in sync).
   const [ttsEnabled, setTtsEnabled] = useState(() => useVoiceStore.getState().voiceReplies);
   const handsFreeVoice = useVoiceStore((s) => s.handsFree);
-  // Agent mode (off by default): when on, chat turns are routed through the
-  // agent ToolRunner so Henry can use his tools. Confirm-tier actions (send a
-  // message, create an event) still pause for approval.
-  const [agentMode, setAgentMode] = useState(() => {
-    // Default ON so Henry uses his tool crew (generate_video, calendar, web, …)
-    // out of the box. Only honor an explicit 'false' the user set via the toggle.
-    try { const v = localStorage.getItem('henry_agent_mode'); return v === null ? true : v === 'true'; }
-    catch { return true; }
+  // Agent mode: when on, chat turns are routed through the agent ToolRunner so
+  // Henry can use his tools. Confirm-tier actions (send a message, create an
+  // event) still pause for approval.
+  //
+  // The stored value is the user's explicit choice, kept as `null` until they
+  // use the toggle. The EFFECTIVE value is decided by `resolveAgentRouting`:
+  // with no explicit choice, agent mode defaults on only for a model the
+  // runtime reported as tool-capable. The old unconditional default-on meant
+  // ordinary chat on a model that cannot call tools was pushed down the agent
+  // route and answered in tool-call syntax.
+  const [agentModePreference, setAgentModePreference] = useState<boolean | null>(() => {
+    try {
+      const v = localStorage.getItem('henry_agent_mode');
+      return v === null ? null : v === 'true';
+    } catch { return null; }
   });
+  // What the runtime reports about the model this chat is pointed at. Loaded
+  // from the discovered-model catalogue, never from the model's name.
+  const [toolCapability, setToolCapability] = useState<ToolCapability>('unknown');
+  const agentMode = resolveAgentRouting({
+    agentModePreference,
+    capability: toolCapability,
+    mode: operatingMode,
+  }).agentMode;
   const toggleAgentMode = () => {
-    setAgentMode((prev) => {
-      const next = !prev;
+    setAgentModePreference((prev) => {
+      const next = !(prev ?? toolCapability === 'tool-capable');
       try { localStorage.setItem('henry_agent_mode', String(next)); } catch { /* ignore */ }
       return next;
     });
   };
+  // Ask the runtime what the selected companion model can do. Until this
+  // resolves the capability is `unknown`, which routes no tools by default —
+  // a first turn can never be the one that guesses.
+  const selectedProviderId = settings.companion_provider || '';
+  const selectedModelId = settings.companion_model || '';
+  const ollamaBaseUrl = settings.ollama_base_url || 'http://localhost:11434';
+  useEffect(() => {
+    let alive = true;
+    void loadToolCapability(selectedProviderId, selectedModelId, ollamaBaseUrl).then((found) => {
+      if (alive) setToolCapability(found);
+    });
+    return () => { alive = false; };
+  }, [selectedProviderId, selectedModelId, ollamaBaseUrl]);
   const lastSpokenMsgIdRef = useRef<string | null>(null);
   const [design3dRefPath, setDesign3dRefPath] = useState<string | null>(() =>
     readLastWorkspaceFilePath()
@@ -1709,6 +1747,24 @@ What do you want to tackle first?`);
       return;
     }
 
+    // ── Agent routing ───────────────────────────────────────────────────────
+    // One decision for this turn, made from what the runtime reported about the
+    // model this turn will actually use. It governs the request payload, the
+    // computer-action part of the system prompt, and the action interceptor, so
+    // those three can never disagree about whether this is an agent turn.
+    const routing = resolveAgentRouting({
+      agentModePreference,
+      capability:
+        cachedToolCapability(companionProvider, companionModel, ollamaBaseUrl) ?? toolCapability,
+      mode: effectiveMode,
+    });
+
+    // Real execution results appended to Henry's text. Gated by the router's own
+    // verdict: an ordinary turn on a model that cannot call tools never has its
+    // reply parsed for commands.
+    const withActionResults = (text: string): Promise<string> =>
+      applyActionResults(text, routing, interceptAndExecute);
+
     // Check for custom mode system prompt override
     const customModeRaw = (() => { try { return localStorage.getItem('henry_custom_mode_override'); } catch { return null; } })();
     const customModeOverride = customModeRaw ? (() => { try { return JSON.parse(customModeRaw) as { systemPrompt?: string; name?: string }; } catch { return null; } })() : null;
@@ -1844,7 +1900,12 @@ What do you want to tackle first?`);
     const useLeanPrompt = companionProvider === 'ollama' && effectiveMode !== 'computer';
 
     if (useLeanPrompt) {
-      const minimalSys = buildLeanSystemPrompt(effectiveMode);
+      // The computer-action block only appears when this turn may actually run
+      // actions. Teaching `computer:…` syntax to a turn that cannot execute it
+      // is what produced ordinary replies made entirely of tool calls.
+      const minimalSys = buildLeanSystemPrompt(effectiveMode, {
+        allowComputerActions: routing.runActionInterceptor,
+      });
       const leanMessages: HenryAIMessage[] = [
         { role: 'system', content: minimalSys },
         ...guardedHistory.map((m) => ({
@@ -1865,14 +1926,14 @@ What do you want to tackle first?`);
         }
         leanMessages.splice(0, leanMessages.length, sys0, ...kept, last);
       }
-      const leanStream = window.henryAPI.streamMessage({
+      const leanStream = window.henryAPI.streamMessage(applyAgentRoute({
         provider: companionProvider,
         model: companionModel,
         apiKey,
         messages: leanMessages,
         temperature: 0.7,
         maxTokens: 1024,
-      });
+      }, routing, activeConversationId || undefined));
       streamRef.current = leanStream;
       leanStream.onChunk((chunk: string) => { appendStreamingContent(chunk); });
       leanStream.onError((error: string) => {
@@ -1880,8 +1941,9 @@ What do you want to tackle first?`);
         addMessage({ id: crypto.randomUUID(), conversation_id: convId, role: 'assistant', content: errorContent, engine: 'companion', created_at: new Date().toISOString() });
         setStreamingContent(''); setIsStreaming(false); setCompanionStatus({ status: 'idle' });
       });
-      leanStream.onDone(async (fullText: string) => {
+      leanStream.onDone(async (rawFullText: string) => {
         setStreamingContent('');
+        const fullText = await withActionResults(rawFullText);
         if (!fullText?.trim()) {
           addMessage({ id: crypto.randomUUID(), conversation_id: convId, role: 'assistant' as const,
             content: "Henry didn't respond. The message may have been too long or the local model hit a limit. Try a **New Chat**.",
@@ -1962,7 +2024,7 @@ What do you want to tackle first?`);
         return;
       }
 
-      const stream = window.henryAPI.streamMessage({
+      const stream = window.henryAPI.streamMessage(applyAgentRoute({
         provider: companionProvider,
         model: companionModel,
         apiKey,
@@ -1972,14 +2034,7 @@ What do you want to tackle first?`);
         apiUrl: companionProvider === 'ollama'
           ? (s.ollama_base_url || 'http://localhost:11434')
           : undefined,
-        // Agent mode: a non-empty `tools` array tells the main process to route
-        // this turn through the agent ToolRunner. The real tool schemas come
-        // from the main-process registry, so the marker array is sufficient.
-        // `sessionId` ties the run's tool-call audit trail to this conversation.
-        ...(agentMode
-          ? { tools: [{ name: 'henry-agent' }], sessionId: activeConversationId || undefined }
-          : {}),
-      });
+      }, routing, activeConversationId || undefined));
 
       // Open the tool-stream turn now, immediately before the request that can
       // produce tool deltas. Opening it earlier would leave the turn open across
@@ -2030,24 +2085,11 @@ What do you want to tackle first?`);
           } catch { /* non-critical — never block chat */ }
         })();
 
-        // Action interceptor — detect and execute real computer actions from Henry's text
-        // This runs BEFORE saving the message so results can be appended
-        if (fullText && fullText.trim()) {
-          try {
-            const actionResults = await interceptAndExecute(fullText);
-            if (actionResults.length > 0) {
-              // Append real execution results to Henry's response
-              const resultLines = actionResults.map(r => {
-                let line = '\n\n**Execution result:** ' + r.output;
-                if (r.screenshotUrl) {
-                  line += '\n\n![Screenshot](' + r.screenshotUrl + ')';
-                }
-                return line;
-              });
-              fullText = fullText + resultLines.join('');
-            }
-          } catch { /* non-critical — continue without results */ }
-        }
+        // Action interceptor — detect and execute real computer actions from
+        // Henry's text. Runs BEFORE saving so results are part of the message,
+        // and only on a turn the router allowed to act: an ordinary turn on a
+        // model that cannot call tools never has its reply parsed for commands.
+        fullText = await withActionResults(fullText);
 
         // Empty response guard — the provider returned nothing (context too large,
         // rate limit, or network drop).

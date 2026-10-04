@@ -768,8 +768,17 @@ export function buildMediumSystemPrompt(
  * For tight budgets: small local models, and any provider whose throughput or
  * token-per-minute ceiling will not carry Henry's full 12,000-token charter.
  * This replaces the charter entirely so the turn is guaranteed to fit.
+ *
+ * `allowComputerActions` gates the `computer:` action-syntax block. That block
+ * was unconditional, so EVERY local-model chat — including "what's the
+ * weather" — was answered in `computer:runShell(…)` syntax, which the action
+ * interceptor then executed. A turn that may not act must not be taught the
+ * syntax; pass the router's own verdict so prompt and interceptor agree.
  */
-export function buildLeanSystemPrompt(mode: HenryOperatingMode): string {
+export function buildLeanSystemPrompt(
+  mode: HenryOperatingMode,
+  options?: { allowComputerActions?: boolean }
+): string {
   const ownerName = safeLocalGet('henry:owner_name')?.trim() || 'you';
   const macUsername = safeLocalGet('henry:mac_username')?.trim() || '';
   const macHome = safeLocalGet('henry:mac_home')?.trim() || '';
@@ -783,23 +792,31 @@ export function buildLeanSystemPrompt(mode: HenryOperatingMode): string {
     line2,
     '',
     'Be specific and actionable. Lead with the most useful thing; short by default, earn every extra sentence. Answer the real question under the question and match their tone. Never open with "Certainly," "Great question," "Of course," or "Absolutely."',
-    'Execute computer commands immediately when asked. One-line result report after.',
-    'CRITICAL: "tell ChatGPT/Claude/Siri/Slack/any app to X" means YOU operate that app. Emit computer: actions. Never do the task yourself.',
-    '',
-    'Computer action syntax (emit these patterns exactly — they execute automatically):',
-    '  computer:openApp(name="Google Chrome")',
-    '  computer:runShell(command="open https://chatgpt.com")',
-    '  computer:typeText(text="write me a poem about the ocean")',
-    '  computer:pressEnter()',
-    '  computer:osascript(script="tell application \\"System Events\\" to keystroke \\"v\\" using command down")',
-    '  computer:screenshot()',
-    '',
-    'Example — "tell ChatGPT to write a poem":',
-    '  computer:openApp(name="Google Chrome")',
-    '  computer:runShell(command="open https://chatgpt.com")',
-    '  computer:typeText(text="write a poem about the ocean")',
-    '  computer:pressEnter()',
-    'Then report: "Done — typed the prompt in ChatGPT."',
+    // Everything from here on is computer-action instruction. A turn the router
+    // did not allow to act gets a plain conversational prompt — otherwise the
+    // model answers an ordinary question with a command, and the interceptor
+    // runs it.
+    ...(options?.allowComputerActions ? [
+      'Execute computer commands immediately when asked. One-line result report after.',
+      'CRITICAL: "tell ChatGPT/Claude/Siri/Slack/any app to X" means YOU operate that app. Emit computer: actions. Never do the task yourself.',
+      '',
+      'Computer action syntax (emit these patterns exactly — they execute automatically):',
+      '  computer:openApp(name="Google Chrome")',
+      '  computer:runShell(command="open https://chatgpt.com")',
+      '  computer:typeText(text="write me a poem about the ocean")',
+      '  computer:pressEnter()',
+      '  computer:osascript(script="tell application \\"System Events\\" to keystroke \\"v\\" using command down")',
+      '  computer:screenshot()',
+      '',
+      'Example — "tell ChatGPT to write a poem":',
+      '  computer:openApp(name="Google Chrome")',
+      '  computer:runShell(command="open https://chatgpt.com")',
+      '  computer:typeText(text="write a poem about the ocean")',
+      '  computer:pressEnter()',
+      'Then report: "Done — typed the prompt in ChatGPT."',
+    ] : [
+      'Answer in plain prose. This turn has no tools: never emit a command, an action or tool-call syntax — say what you would do instead.',
+    ]),
   ];
 
   // Self-knowledge — Henry knows what he can do so he can help users use him

@@ -1,5 +1,32 @@
 # Changelog
 
+## Ordinary chat is no longer routed to the agent tool runner (2026-10-04)
+
+Every ordinary chat turn on a local model came back as tool-call syntax —
+`computer:openApp(name="Google Chrome")`, `computer:runShell(…)`,
+`computer:osascript(…)` — instead of prose, on the installed Windows app with
+Ollama.
+
+- The send path attached `tools: [{ name: 'henry-agent' }]` whenever agent mode
+  was on, and agent mode defaulted ON for every install. A user preference was
+  being used as a capability report: the model was asked to call tools it
+  cannot call, and `actionInterceptor` executed what came back.
+- Routing is now decided by what the runtime reported about the SELECTED model
+  (`/api/show` capabilities, via the discovered-model catalogue the app already
+  loads). A model the runtime says cannot call tools is never sent `tools`, and
+  its reply is never parsed for commands — whatever the toggle says. No model
+  name is ever read for this.
+- The toggle still works and still persists. With no explicit choice, agent mode
+  defaults on for a tool-capable model and off otherwise; a runtime-confirmed
+  "no tools" is the one thing no setting overrides.
+- `henry_agent_mode=false` did not stop this, and the reason was not another
+  tool-attaching path: every Ollama turn takes the lean-prompt branch, which
+  never attached tools at all, and `buildLeanSystemPrompt` taught the
+  `computer:` syntax unconditionally. That block is now gated by the same
+  routing decision, as is the action interceptor (which ran on every non-lean
+  turn regardless of agent mode). Computer mode is unchanged — it is an
+  explicit request to operate the machine.
+
 ## First launch asks for a brain once, and remembers what you told it (2026-10-04)
 
 Two defects, both seen on the installed app on a genuinely fresh profile.
