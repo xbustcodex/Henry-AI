@@ -709,3 +709,56 @@ four dead ends. Two of these are regressions this campaign introduced.
 - **`src/webMock.ts`** is a deliberate browser fallback, not an unreachable surface.
 - **`computer:*` file channels** have no named bridge by design; they are main-process
   surfaces reachable by the agent, not by the renderer.
+
+---
+
+## Zen installed-package live acceptance — **FAILED at step 5/6** (NOT closed)
+
+Run against the installed build (asar `f4c2c686`, byte-identical to `67ecda7`).
+
+### Proven working through the real UI
+- Real picker renders **781 options**; Zen models carry their own identity
+  (`OpenCode Zen — hy3-free`, `OpenCode Zen — deepseek-v4-flash-free`, ...).
+- Local models now show **runtime-reported** metadata — `Moondream - 1B .
+  completion, vision . 2k ctx`. The deleted hardcoded table claimed 128000 ctx
+  for every model, so this is positive proof the invented values are gone.
+- Selecting `hy3-free` through the `<select>` persisted the Zen provider row as
+  `opencode-zen` / "OpenCode Zen", `hasKey: true` (existing key carried, not
+  blanked), 108 models. `OpenCode (CLI)` remained a distinct `opencode` row.
+- **No API-key demand appeared anywhere in the DOM.** The
+  `Worker provider "OpenCode (CLI)" is missing an API key` misclassification
+  did not reproduce. This part of defect 3 holds in the installed runtime.
+- Chat surface attributed the turn to `Opencode-Zen . hy3-free`.
+
+### The failure
+The prompt reached the chat UI but **no Zen inference occurred**. Henry replied:
+
+> **Henry needs an AI provider to answer.** You have 6 options: 1. **Free Groq
+> key (60 seconds, recommended)** ...
+
+So selection is visible and persisted to the provider row, yet the **send path
+does not resolve it** and falls back to the `'groq'` default
+(`modelRouter.ts:154` — `settings.companion_provider || 'groq'`).
+
+### Correction to my own working note
+I briefly believed the cause was `onPick` writing a provider setting under a
+wrong key. **That attribution is wrong and is retracted.** `SettingsView.tsx:871`
+derives `engine` from `voice_tts_engine` and belongs to the **voice/TTS**
+sub-component (it sits with `englishVoices`, `testListening` and `endpoint`).
+The model picker's `onPick` has its own `engine` in a different scope. Two
+distinct `engine` bindings in one file; I conflated them. No speculative change
+was made on that basis.
+
+### Not yet executed (no budget)
+Restart -> Zen rehydration -> second prompt; scheduler/worker classification via
+the installed path; `integration:list` against the registered handler.
+
+### Reproduction
+Installed build + CDP. Settings -> Engines: `<select>` -> pick `hy3-free` ->
+back to chat -> send any prompt -> Henry answers with the Groq-key prompt.
+Settings show Zen correctly; the answer does not use it.
+
+### Next step
+Diff the settings key the model picker writes against the key
+`resolveChat`/`ChatView` reads at send time, using the real component scope.
+This is a read-and-compare, not a guess.
