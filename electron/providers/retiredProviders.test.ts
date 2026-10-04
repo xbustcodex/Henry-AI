@@ -174,6 +174,17 @@ describe('migrating a provider Henry no longer supports', () => {
     expect(report.removedProviderIds).toEqual([]);
     expect(report.clearedSettings).toEqual(['companion_provider']);
   });
+
+  it('is a no-op on a fresh install, which must arrive with no provider rows at all', () => {
+    // A brand-new profile has to survive this migration untouched and empty: a
+    // fresh database that arrives with a provider row would read, everywhere
+    // downstream, as "this user already configured a provider".
+    const { db, statements } = fakeDb();
+
+    expect(migrateRetiredProviders(db)).toEqual({ removedProviderIds: [], clearedSettings: [] });
+    expect(statements.some((sql) => /insert/i.test(sql))).toBe(false);
+  });
+
 });
 
 // ── The retirement boundary ─────────────────────────────────────────────

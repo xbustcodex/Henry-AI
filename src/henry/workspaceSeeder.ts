@@ -5,7 +5,12 @@
  * Each document has real headers, real sections, real starter content.
  */
 
-const MANIFEST_KEY = 'henry:workspace_manifest:v1';
+/**
+ * Where the seed manifest lives. Exported because the first-launch gate reads it
+ * to tell "this profile has a workspace" from "this profile is untouched", and a
+ * duplicated key string in the gate would drift silently.
+ */
+export const WORKSPACE_MANIFEST_KEY = 'henry:workspace_manifest:v1';
 const FILES_KEY = 'henry:files';
 const SEEDER_VERSION = '1.0.0';
 
@@ -23,13 +28,13 @@ interface WorkspaceManifest {
 
 function getManifest(): WorkspaceManifest | null {
   try {
-    const raw = localStorage.getItem(MANIFEST_KEY);
+    const raw = localStorage.getItem(WORKSPACE_MANIFEST_KEY);
     return raw ? (JSON.parse(raw) as WorkspaceManifest) : null;
   } catch { return null; }
 }
 
 function saveManifest(manifest: WorkspaceManifest): void {
-  localStorage.setItem(MANIFEST_KEY, JSON.stringify(manifest));
+  localStorage.setItem(WORKSPACE_MANIFEST_KEY, JSON.stringify(manifest));
 }
 
 function getFiles(): Record<string, string> {

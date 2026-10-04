@@ -1670,8 +1670,11 @@ self.addEventListener('fetch', (event) => {
     const dbSettings2 = dbGet<{key:string;value:string}>('SELECT key, value FROM settings');
     const settingsMap2: Record<string,string> = {};
     for (const {key,value} of dbSettings2) settingsMap2[key] = value;
-    const ollamaModel = settingsMap2['companion_model'] || 'llama3.2:latest';
-    const useOllama = settingsMap2['companion_provider'] === 'ollama';
+    // No default model: if Ollama is the companion provider but no model was
+    // chosen, extraction is skipped (the raw capture is still saved) rather
+    // than run against a model id the user never picked.
+    const ollamaModel = (settingsMap2['companion_model'] || '').trim();
+    const useOllama = settingsMap2['companion_provider'] === 'ollama' && !!ollamaModel;
 
     const extractionPrompt = 'You are Henry extraction engine. Analyze this text and extract EVERYTHING useful. Leave nothing out.\n\n' +
       'TEXT TO ANALYZE:\n' + text + (source ? '\nSource: ' + source : '') +

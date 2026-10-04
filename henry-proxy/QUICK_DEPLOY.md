@@ -2,7 +2,8 @@
 
 This deploys Henry AI's licensing and metering backend. It does not serve AI:
 the hosted chat route was retired with Groq and answers `503
-provider_not_configured`.
+provider_not_configured`. No plan includes hosted AI, and `GET /v1/pricing`
+reports `hostedAI.enabled: false` with no plans to say so.
 
 ## Prerequisites
 - Cloudflare account (free at cloudflare.com)

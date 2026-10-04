@@ -1,6 +1,164 @@
 # Changelog
 
+## First-launch setup is complete, and a fresh install is genuinely empty (2026-10-04)
+
+Setup used to be two wizards that disagreed: a three-step `SetupWizard`
+(hello → provider → done) for the first launch and a nine-step
+`OnboardingWizard` for the overlay, with no shared stage list and no shared
+idea of what "setup is done" meant. It was also gated by "does configuration
+already exist?", which is true on the machine that developed Henry and could be
+true on a brand-new install for the same reason — so a fresh user could be
+walked past setup entirely.
+
+There is now one stage plan (`src/components/onboarding/stages.ts`) and one
+machine (`SetupWizard`); `OnboardingWizard` is that machine presented as an
+overlay. The stages, in order: welcome · how it works · Accessibility and Screen
+Recording (macOS only) · AI provider · pick your brains · phone · sidebar tour ·
+memory · ready. The engine-assignment stage existed in the codebase and was
+unreachable from either wizard; it is back in the walk.
+
+Rules the flow now holds to:
+
+- First-run detection (`src/firstRun.ts`) is the absence of every real signal,
+  not the presence of configuration. A profile with any prior configuration is
+  never re-gated.
+- Exactly one stage is required — the AI provider — and it states why. It blocks
+  until the user has chosen a provider and a model, and where the provider needs
+  a credential, until they have entered their own. Every other stage carries an
+  explicit "Skip — set up later".
+- macOS permission stages are marked unavailable on other platforms, with the
+  reason, instead of being advanced past by index — which used to land on a
+  blank screen with no way forward.
+- The provider stage discovers this machine: local models come from the running
+  Ollama, and OpenCode Zen is offered only when opencode is actually installed,
+  with an optional key because free Zen models need none. No stage picks a
+  provider, a model, or a key on the user's behalf.
+- The closing step reports what this machine actually ended up with, including
+  what was deferred.
+
+`ElectronAutoSetup` is gone: it auto-completed first launch the moment a local
+model existed, and completed it with an empty cloud key labelled "optional".
+
+A brand-new database is now genuinely empty. `initDatabase` no longer seeds
+eight default settings rows (including `setup_complete` and an empty
+`companion_provider`) and no longer seeds the Project Vault with the
+developer's own projects — a seeded row is a seeded decision, and the
+first-launch gate reads exactly those rows. Defaults that used to be written at
+init are resolved where they are read. Existing profiles are untouched: their
+rows are still theirs on the next launch, and the retired-provider migration is
+still a no-op on a fresh install.
+
+The gate itself is wired in `src/App.tsx`, and the condition it replaced is
+worth naming, because it was the reason setup was skippable. App entered the
+app whenever `setup_complete === 'true'` **or any provider row existed**. A row
+is not a decision, and a developer machine has rows from its first launch, so
+that condition was true before the user had chosen anything — a fresh install
+reached the same answer for the same reason. The verdict now comes from
+`isFreshProfile` alone. Two supporting removals fell out of it:
+
+- The `?enter` / `#enter` / `#henry` URL bypass, which wrote
+  `setup_complete = 'true'` off a localStorage row count, is gone. Nothing in
+  the repo, docs, or scripts referenced it.
+- `ElectronAutoSetup` was the other branch of the same render, and is gone.
+
+`src/App.firstRunGate.test.ts` mounts App against a real profile and asserts
+which surface appears: a genuinely fresh profile lands on the setup flow; a
+profile holding only a **keyless** provider row still does, since that row is
+exactly what a dev machine and a fresh install both used to look like; and a
+configured profile is never re-gated, reloaded with its own conversations.
+Reinstating the old `|| providers.length > 0` condition fails the keyless-row
+case, and adding a `saveSetting('setup_complete', 'true')` back onto the fresh
+path fails the "writes nothing while gated" case — so neither half of the guard
+is vacuous.
+
+## Credential audit: nothing real is shipped, and now that is enforced (2026-10-04)
+
+A credential-shaped-literal scan over every tracked source file, every shipped
+config and resource, and the built bundles (`renderer/assets/*.js`,
+`dist-electron/*.js`, `dist/`) found **no real credential**. Every hit was a
+deliberate, obviously-fake test fixture. Classification:
+
+- **No real credentials.** The `providers` table defaults `api_key` to `''` and
+  `workspaceSeeder` seeds documents, not keys. No provider key, pairing token,
+  device id, or hosted-service secret exists in source or in any bundle.
+  `resources/bin/` holds two vendored upstream Mach-O binaries (`cloudflared`,
+  `openscad`) — not authored here and not scanned as source.
+- **Placeholders.** `electron/main.ts` decrypts keys at runtime via
+  `decryptKey(...)`, falling back to an empty string. There was no baked-in
+  default to replace with a prompt.
+- **Test fixtures.** Twelve values across `electron/agent/credentials.test.ts`,
+  `electron/agent/tools/github.test.ts`, `electron/ipc/appLog.test.ts` and
+  `src/henry/voiceDiagnostics.test.ts` — sequential alphabets, spelled-out
+  words, `aaaa…`, and the JWT published by jwt.io itself.
+- **Nothing inlined at build time.** Neither vite config has a `define:` block,
+  and no `import.meta.env.VITE_*` appears anywhere, so no `process.env.*` value
+  is baked into a bundle.
+
+`src/henry/secretScan.ts` is the matcher (thirteen provider shapes plus a PEM
+block and a JWT); `src/henry/secretScan.test.ts` drives it over the repo and
+the bundles. Two properties make it more than a grep:
+
+- **It cannot pass vacuously.** Every rule is proven against a declared
+  known-dummy, and adding a rule without one fails. Injecting a real-shaped
+  `gsk_…` key and a PEM header into a source file makes the repo scan fail with
+  file, line, and the rule that matched.
+- **The allowlist cannot silently widen.** Excuses are per-file and per-exact-
+  value — the same fake in production code is still a finding. An entry whose
+  fixture has been deleted fails as stale, and the two files the scanner exempts
+  from itself are audited by a separate raw scan, so an undeclared literal added
+  to either still fails.
+
+Run `npm run scan:secrets`, or `npm test`, which includes it.
+
+`vitest.config.ts` gained the `@` and `@capacitor-mlkit/barcode-scanning`
+aliases the renderer build already uses. Without them any test that transitively
+imported a component failed to resolve, which is why the component tests in this
+repo could previously only cover leaf modules.
+
+## No silent provider choice; hosted AI is unconfigured (2026-10-04)
+
+Henry no longer chooses an AI provider or model for the user. On a fresh
+install nothing is configured, and every surface says so and routes to provider
+setup instead of answering from somewhere the user never picked.
+
+- `src/henry/henryAI.ts` (the panel-level router behind ~15 panels) scanned for
+  "any provider with a key", filled in a default model, picked the first model a
+  running Ollama happened to report, and could fall through to a license-gated
+  hosted proxy. It now uses only the configured companion engine — resolved
+  through the same `resolveChat` router Chat uses — and throws a message naming
+  what is missing otherwise. With no engine configured it makes no request at
+  all.
+- `src/henry/ollamaConfig.ts` no longer writes `companion_provider`,
+  `companion_model` or `worker_*`, and no longer fabricates a provider row with
+  a static local-model list (`llama3.2`, `llama3.1`, `mistral`). That
+  fabrication also made a fresh install look configured to the first-launch
+  gate. Local models stay runtime-discovered; the static catalogue
+  (`modelPriority.ts`) is deleted, and the remaining Ollama code paths report
+  "no model selected" instead of running `llama3.2`.
+- `src/components/chat/ChatView.tsx` no longer auto-selects an Ollama model at
+  startup. The send-time decision moved to `src/henry/chatPreflight.ts`: one
+  seam returning either a route or a terminal message — retired provider,
+  setup-required, or an unresolvable selection named exactly. No terminal
+  outcome carries a route, so nothing can dispatch.
+- A license key no longer counts as an AI backend (`backendStatus`,
+  `AutoSetupPanel`, the Chat setup card). No hosted AI backend is enabled in
+  Henry, so a license backs nothing. `henry-proxy`'s `PRICING` payload no longer
+  advertises "Hosted AI included — no API key needed": it reports
+  `hostedAI.enabled: false` with no plans, and the licence email, `README.md`,
+  `DEPLOY.md`, `QUICK_DEPLOY.md` and `proxy/README.md` say the same.
+  `src/henry/proxyUsage.ts` — the client-side licence key and usage meters for
+  a service that serves no model — is deleted.
+
+Pairing and phone-link tokens are unaffected and verified empty on a fresh
+install: the pair token starts `null` and is minted per machine with
+`crypto.randomBytes` on demand, the companion JWT secret is generated per
+machine on first use, and `pairing.json` starts with no paired devices and no
+PIN.
+
+Seam coverage: `src/henry/chatPreflight.test.ts`.
+
 ## Groq removed (2026-10-04)
+
 
 Groq is no longer a supported provider. It is not merely deprioritised: it is
 gone from every provider list, the sync bridge's model tables, onboarding,

@@ -2,11 +2,22 @@ import { useState, useEffect } from 'react';
 import { useStore } from '../../store';
 import { loadProjects } from '../../henry/richMemory';
 
-interface CompleteStepProps {
-  onBack: () => void;
+/** What this machine actually ended up with, read from real state. */
+export interface SetupOutcome {
+  provider: string;
+  model: string;
+  hasCredential: boolean;
+  localModels: number;
+  opencodeInstalled: boolean;
+  skipped: string[];
 }
 
-export default function CompleteStep({ onBack }: CompleteStepProps) {
+interface CompleteStepProps {
+  onBack: () => void;
+  onDone?: () => void;
+  outcome?: SetupOutcome;
+}
+export default function CompleteStep({ onBack, onDone, outcome }: CompleteStepProps) {
   const { settings, providers, updateSetting, setSetupComplete } = useStore();
   const [completing, setCompleting] = useState(false);
   const [visible, setVisible] = useState(false);
@@ -39,6 +50,7 @@ export default function CompleteStep({ onBack }: CompleteStepProps) {
       updateSetting('setup_complete', 'true');
       updateSetting('henry_first_launch', 'true');
       setSetupComplete(true);
+      onDone?.();
     } catch (err) {
       console.error('Failed to complete setup:', err);
       setCompleting(false);
@@ -67,6 +79,31 @@ export default function CompleteStep({ onBack }: CompleteStepProps) {
           ? `${provider.charAt(0).toUpperCase() + provider.slice(1)} is selected — just add your API key to unlock it.`
           : 'You can add more providers or change settings anytime.'}
       </p>
+
+      {/* What this machine actually ended up with — never a generic claim */}
+      {outcome && (
+        <div className="max-w-lg mx-auto mb-8 text-left bg-henry-surface/40 border border-henry-border/30 rounded-2xl p-4 space-y-2">
+          <p className="text-[10px] uppercase tracking-widest text-henry-text-muted">On this computer</p>
+          <p className="text-sm text-henry-text">
+            {outcome.provider ? `${brainDescription ?? outcome.provider} ` : 'No provider selected'}
+          </p>
+          <p className="text-[11px] text-henry-text-muted">
+            {outcome.provider === 'ollama'
+              ? `Running locally — ${outcome.localModels} model${outcome.localModels === 1 ? '' : 's'} found on this machine, nothing sent anywhere.`
+              : outcome.hasCredential
+              ? 'Using your own key, stored on this machine.'
+              : 'Running without a key.'}
+          </p>
+          {outcome.opencodeInstalled && (
+            <p className="text-[11px] text-henry-text-muted">OpenCode was detected on this machine.</p>
+          )}
+          {outcome.skipped.length > 0 && (
+            <p className="text-[11px] text-henry-text-muted">
+              Deferred: {outcome.skipped.join(', ')} — every one of them is in Settings whenever you want it.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Henry's first words — shown when fully configured */}
       {!showKeyNudge && !noModelAtAll && (

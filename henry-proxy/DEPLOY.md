@@ -1,9 +1,11 @@
 # Henry AI Cloud Proxy — Deploy Guide
 
-This Cloudflare Worker handles Henry's licensing, billing and metering. The
-hosted chat route is disabled: it used to forward to Groq, and Groq is no longer
-a supported provider anywhere in Henry, so `POST /v1/chat` answers `503
-provider_not_configured` rather than forwarding to something else.
+This Cloudflare Worker handles Henry's licensing, billing and metering. **No
+plan includes hosted AI**: the chat route is disabled because it used to forward
+to Groq, and Groq is no longer a supported provider anywhere in Henry, so
+`POST /v1/chat` answers `503 provider_not_configured` rather than forwarding to
+something else. `GET /v1/pricing` reports `hostedAI.enabled: false` with no
+plans, for the same reason.
 
 KV rate limit: 50 requests/day per device. Pro tier: 2000/day with license key.
 
@@ -46,6 +48,7 @@ wrangler kv:key put "license:LICENSE-KEY-HERE" '{"active":true,"tier":"pro","own
 ## Endpoints
 - GET  /health              → status check
 - POST /v1/chat             → 503 provider_not_configured (no hosted provider)
+- GET  /v1/pricing          → hostedAI.enabled: false, plans: []
 - GET  /v1/license          → validate license key
 - GET  /v1/usage            → check daily usage
 

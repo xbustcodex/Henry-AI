@@ -150,18 +150,15 @@ export function initDatabase(dataDir: string): Database.Database {
       last_indexed TEXT NOT NULL,
       size_bytes INTEGER DEFAULT 0
     );
-
-    -- Initialize default settings if empty
-    INSERT OR IGNORE INTO settings (key, value) VALUES
-      ('setup_complete', 'false'),
-      ('theme', 'dark'),
-      ('companion_model', ''),
-      ('companion_provider', ''),
-      ('worker_model', ''),
-      ('worker_provider', ''),
-      ('default_temperature', '0.7'),
-      ('workspace_path', '');
   `);
+
+  // A brand-new database holds no settings rows at all. It used to be seeded
+  // with eight of them — including `setup_complete` and empty
+  // `companion_provider` / `companion_model` values — which made a profile
+  // that had never been configured look like one that had. Every default that
+  // was written here is resolved where it is read instead: an absent key means
+  // the same thing as the empty value it used to hold. Nothing here touches a
+  // row the user already has.
 
   migrateDatabaseSchema(db);
   migrateAttachmentsSchema(db);
@@ -223,9 +220,9 @@ function migrateDatabaseSchema(db: Database.Database) {
   // Agent layer — Sprint 4 QuickBooks invoice cache.
   migrateInvoicesSchema(db);
 
-  // Project Vault — rich project fields + seed Topher's real projects.
+  // Project Vault — rich project fields. Nothing is seeded: a fresh install
+  // belongs to whoever installed it, not to the machine that developed Henry.
   migrateProjectVaultSchema(db);
-  seedProjectVault(db);
 
   // Book Engine — captured life material for Topher's book.
   migrateBookSchema(db);
@@ -243,12 +240,9 @@ function migrateDatabaseSchema(db: Database.Database) {
   // Lessons / Curriculum — AI-generated courses ("teach me anything" + Bible).
   migrateLessonsSchema(db);
 
-  // Render daemon endpoint for Henry's direct video generation.
-  try {
-    db.prepare(
-      `INSERT OR IGNORE INTO settings (key, value) VALUES ('render_endpoint', 'http://localhost:8799')`,
-    ).run();
-  } catch { /* ignore on unusual DB states */ }
+  // `render_endpoint` is deliberately NOT seeded. `resolveRenderConfig` already
+  // falls back to http://localhost:8799 when the row is absent, so the setting
+  // only exists once somebody actually changes it.
 }
 
 /**
@@ -406,39 +400,6 @@ function migrateProjectVaultSchema(db: Database.Database) {
   add('last_worked_at', 'TEXT');
 }
 
-/**
- * Seed Topher's real projects once. Idempotent by name: a project is only
- * inserted if no project with that name already exists, so user edits and
- * deletions are never clobbered on a later launch.
- */
-function seedProjectVault(db: Database.Database) {
-  const SEED: Array<{ name: string; type: string; description: string; money_angle?: string; next_action?: string }> = [
-    { name: 'MixedMakerShop', type: 'business', description: 'Maker shop + web-design services. Henry\'s money engine for local website leads.', money_angle: 'Local website builds + audits + retainers', next_action: 'Find and audit 5 local leads' },
-    { name: 'Henry AI', type: 'software', description: 'Topher\'s personal AI operating system / command center.', money_angle: 'Paid product / personal leverage', next_action: 'Phase 1: Project Vault + Approval Queue' },
-    { name: 'What Do I Say?', type: 'product', description: 'Conversation / communication helper app.', money_angle: 'App revenue' },
-    { name: 'StrainSpotter', type: 'product', description: 'Strain identification / tracking product.', money_angle: 'App or affiliate revenue' },
-    { name: 'GiGi\'s Print Shop', type: 'business', description: '3D-print shop project.', money_angle: 'Print sales + custom jobs' },
-    { name: 'Tap Hub / iTap Ring', type: 'product', description: 'NFC tap hub + ring product and dashboard.', money_angle: 'Hardware + dashboard subscription' },
-    { name: 'FreshCut Property Care', type: 'business', description: 'Property care / lawn service business.', money_angle: 'Local service revenue' },
-    { name: 'Topher\'s Web Design', type: 'business', description: 'Web design service brand.', money_angle: 'Client website builds' },
-    { name: 'Book / Life Story', type: 'writing', description: 'Memoir / life story — MS journey, fatherhood, rebuilding, faith.', money_angle: 'Book sales / legacy' },
-    { name: 'Facebook Lead System', type: 'system', description: 'Facebook-based lead generation + tracking system.', money_angle: 'Lead pipeline for the service businesses' },
-  ];
-
-  const exists = db.prepare('SELECT 1 FROM projects WHERE name = ? LIMIT 1');
-  const insert = db.prepare(
-    `INSERT INTO projects (id, name, type, status, description, summary, money_angle, next_action, last_worked_at)
-     VALUES (?, ?, ?, 'active', ?, ?, ?, ?, datetime('now'))`,
-  );
-  const seed = db.transaction(() => {
-    for (const p of SEED) {
-      if (exists.get(p.name)) continue;
-      const id = `proj_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
-      insert.run(id, p.name, p.type, p.description, p.description, p.money_angle ?? null, p.next_action ?? null);
-    }
-  });
-  try { seed(); } catch { /* ignore seed errors on unusual DB states */ }
-}
 
 /**
  * Approval Queue (build plan, Phase 2). Durable record of every confirm-tier

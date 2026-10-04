@@ -1,5 +1,5 @@
 
-import { getOllamaBaseUrl, OLLAMA_DEFAULT_MODEL } from './ollamaConfig';
+import { getOllamaBaseUrl } from './ollamaConfig';
 import { ollamaChatAdapter } from './ollamaProviderAdapter';
 
 const OUTPUT_PREVIEW_MAX = 280;
@@ -71,7 +71,7 @@ export async function runOllamaLocalCheck(): Promise<OllamaLocalCheckResult> {
 
   const companion = (settings.companion_provider || '').trim();
   const host = getOllamaBaseUrl(settings);
-  const model = (settings.companion_model || '').trim() || OLLAMA_DEFAULT_MODEL;
+  const model = (settings.companion_model || '').trim();
 
   if (companion !== 'ollama') {
     return {
@@ -81,6 +81,21 @@ export async function runOllamaLocalCheck(): Promise<OllamaLocalCheckResult> {
       provider: companion || '(unset)',
       host,
       model,
+    };
+  }
+
+  // Ollama selected but no model chosen: report it instead of running a model
+  // the user never picked.
+  if (!model) {
+    return {
+      ok: false,
+      skipped: true,
+      reason:
+        'Ollama is the companion provider but no model is selected. Pick a model ' +
+        'the running Ollama reports in Settings → Engines.',
+      provider: 'ollama',
+      host,
+      model: '',
     };
   }
 

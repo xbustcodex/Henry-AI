@@ -3,6 +3,11 @@ import { useState, useEffect, useRef } from 'react';
 import { useStore } from '../../store';
 import OllamaElectronSetup from './OllamaElectronSetup';
 import MobileProviderStep from './MobileProviderStep';
+import type { OpencodeModelInfo } from '../../types';
+import { OPENCODE_ZEN_PROVIDER_ID, opencodeProviderIdForModel } from '../../../electron/providers/classification';
+
+/** Cloud is BYOK; Zen is credential-optional; Ollama needs no credential. */
+type ProviderMode = 'cloud' | 'zen' | 'ollama';
 
 function isNativeMobile(): boolean {
   try {
@@ -115,14 +120,53 @@ export default function ProviderStep({ onNext, onBack }: ProviderStepProps) {
 function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
   const { setProviders, updateSetting } = useStore();
 
-  // Top-level mode: cloud or ollama
-  const [mode, setMode] = useState<'cloud' | 'ollama' | null>('cloud');
+  // Top-level mode: a BYOK cloud provider, the OpenCode Zen bridge (only when
+  // opencode is genuinely installed on this machine), or local Ollama.
+  const [mode, setMode] = useState<ProviderMode | null>('cloud');
 
   // Cloud state — default to the free OpenRouter option
   const [selectedCloud, setSelectedCloud] = useState<CloudOption>(CLOUD_OPTIONS[0]);
   const [apiKey, setApiKey] = useState('');
   const [keyPageOpened, setKeyPageOpened] = useState(false);
   const keyInputRef = useRef<HTMLInputElement>(null);
+
+  // ── OpenCode Zen ────────────────────────────────────────────────────────
+  // Zen is only offered when the opencode CLI answered on this machine. Its
+  // models are discovered at runtime, and its credential is OPTIONAL: free Zen
+  // models run unauthenticated, so no key is ever demanded for them.
+  const [zenAvailable, setZenAvailable] = useState(false);
+  const [zenModels, setZenModels] = useState<OpencodeModelInfo[]>([]);
+  const [zenModel, setZenModel] = useState('');
+  const [zenKey, setZenKey] = useState('');
+  const [zenNotice, setZenNotice] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const status = await window.henryAPI.opencodeStatus?.();
+        if (cancelled) return;
+        if (!status?.available) {
+          setZenAvailable(false);
+          return;
+        }
+        setZenAvailable(true);
+        const models = await window.henryAPI.opencodeModels?.();
+        if (cancelled) return;
+        if (!models?.ok) {
+          setZenNotice(models?.error ?? 'The OpenCode bridge reported no models.');
+          return;
+        }
+        setZenModels(models.models);
+      } catch (err: unknown) {
+        if (cancelled) return;
+        setZenAvailable(false);
+        setZenNotice(err instanceof Error ? err.message : 'OpenCode could not be reached.');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
 
   // Ollama state
   const [ollamaPhase, setOllamaPhase] = useState<'detecting' | 'found' | 'no_models' | 'not_found'>('detecting');
@@ -133,6 +177,7 @@ function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
   const [copiedCmd, setCopiedCmd] = useState('');
   const probeRunning = useRef(false);
   const [forceWebMode, setForceWebMode] = useState(false);
+
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -188,12 +233,20 @@ function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
     setKeyPageOpened(true);
   }
 
+  // A BYOK provider needs the user's own key. Continuing without one used to
+  // write a provider row with an empty credential and mark the provider
+  // selected — which reads, everywhere downstream, as "configured" while
+  // nothing can actually answer. Zen is offered without a key because its free
+  // models genuinely do not need one.
   const canContinue =
     mode === 'cloud'
-      ? true  // key is optional — can add in Settings
+      ? apiKey.trim().length > 0
+      : mode === 'zen'
+      ? zenModel.trim().length > 0
       : mode === 'ollama'
       ? selectedModel.trim().length > 0
       : false;
+
 
   async function handleElectronModelReady(model: string) {
     setSaving(true);
@@ -245,6 +298,28 @@ function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
         updateSetting('worker_provider', selectedCloud.id);
       }
 
+      if (mode === 'zen') {
+        const model = zenModel.trim();
+        const zenIds = zenModels
+          .filter((m) => opencodeProviderIdForModel(m) === OPENCODE_ZEN_PROVIDER_ID)
+          .map((m) => m.id);
+        await window.henryAPI.saveProvider({
+          id: OPENCODE_ZEN_PROVIDER_ID,
+          name: 'OpenCode Zen',
+          apiKey: zenKey.trim(),
+          enabled: true,
+          models: JSON.stringify(zenIds),
+        });
+        await window.henryAPI.saveSetting('companion_model', model);
+        await window.henryAPI.saveSetting('companion_provider', OPENCODE_ZEN_PROVIDER_ID);
+        await window.henryAPI.saveSetting('worker_model', model);
+        await window.henryAPI.saveSetting('worker_provider', OPENCODE_ZEN_PROVIDER_ID);
+        updateSetting('companion_model', model);
+        updateSetting('companion_provider', OPENCODE_ZEN_PROVIDER_ID);
+        updateSetting('worker_model', model);
+        updateSetting('worker_provider', OPENCODE_ZEN_PROVIDER_ID);
+      }
+
       if (mode === 'ollama') {
         await window.henryAPI.saveProvider({ id: 'ollama', name: 'Ollama', apiKey: '', enabled: true, models: JSON.stringify([selectedModel.trim()]) });
         await window.henryAPI.saveSetting('ollama_base_url', ollamaUrl);
@@ -281,6 +356,7 @@ function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
         </p>
       </div>
 
+
       {/* Mode cards — same layout as mobile */}
       <div className="grid grid-cols-2 gap-3 mb-5">
         <button
@@ -296,6 +372,27 @@ function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
           <div className="text-[11px] text-henry-success font-medium mt-0.5">OpenRouter · OpenAI · Anthropic · more</div>
           <div className="text-[11px] text-henry-text-muted mt-1 leading-snug">Free options available — API key required</div>
         </button>
+
+        {/* Zen is offered only when opencode answered on this machine — never
+            as a promise that it might be there later. */}
+        {zenAvailable && (
+          <button
+            onClick={() => { setMode('zen'); setKeyPageOpened(false); }}
+            className={`rounded-2xl border-2 p-4 text-left transition-all ${
+              mode === 'zen'
+                ? 'border-henry-accent bg-henry-accent/8'
+                : 'border-henry-border/30 bg-henry-surface/20 hover:border-henry-border'
+            }`}
+          >
+            <div className="text-2xl mb-2">✨</div>
+            <div className="text-sm font-semibold text-henry-text">OpenCode Zen</div>
+            <div className="text-[11px] text-henry-success font-medium mt-0.5">Free models need no key</div>
+            <div className="text-[11px] text-henry-text-muted mt-1 leading-snug">
+              Detected on this computer — add a key only if you want paid Zen models
+            </div>
+          </button>
+        )}
+
 
         <button
           onClick={() => { setMode('ollama'); setKeyPageOpened(false); }}
@@ -409,15 +506,63 @@ function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
                     className="text-xs text-henry-text-muted hover:text-henry-text transition-colors">
                     ← Reopen {selectedCloud.label}
                   </button>
-                  {!apiKey.trim() && (
-                    <button onClick={() => void handleNext()}
-                      className="text-[11px] text-henry-text-muted hover:text-henry-accent transition-colors">
-                      Skip for now →
-                    </button>
-                  )}
+                  <span className="text-[11px] text-henry-text-muted">
+                    {apiKey.trim() ? 'Key ready to save' : 'Paste your key to continue'}
+                  </span>
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── ZEN MODE ── */}
+      {mode === 'zen' && (
+        <div className="animate-fade-in space-y-3 mb-5">
+          <div className="bg-henry-surface/40 border border-henry-border/30 rounded-2xl p-5 space-y-4">
+            <p className="text-sm text-henry-text-dim leading-relaxed">
+              OpenCode Zen was found on this computer. Its models come from the
+              bridge itself, and the free ones answer without a key.
+            </p>
+
+            {zenModels.length > 0 ? (
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-henry-text-muted block mb-1.5">
+                  Model
+                </label>
+                <select
+                  value={zenModel}
+                  onChange={(e) => setZenModel(e.target.value)}
+                  className="w-full bg-henry-bg border border-henry-border rounded-xl px-4 py-3 text-sm text-henry-text outline-none focus:border-henry-accent/60 transition-all"
+                >
+                  <option value="">Pick a model…</option>
+                  {zenModels
+                    .filter((m) => opencodeProviderIdForModel(m) === OPENCODE_ZEN_PROVIDER_ID)
+                    .map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}{m.isFree ? ' · free' : ''}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            ) : (
+              <p className="text-xs text-henry-text-muted">
+                {zenNotice || 'The bridge reported no Zen models right now.'}
+              </p>
+            )}
+
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-henry-text-muted block mb-1.5">
+                OpenCode key <span className="normal-case">(optional — only paid Zen models need one)</span>
+              </label>
+              <input
+                type="password"
+                value={zenKey}
+                onChange={(e) => setZenKey(e.target.value)}
+                placeholder="Leave empty to use free Zen models"
+                className="w-full bg-henry-bg border border-henry-border rounded-xl px-4 py-3 text-sm text-henry-text font-mono outline-none focus:border-henry-accent/60 transition-all"
+              />
+            </div>
           </div>
         </div>
       )}

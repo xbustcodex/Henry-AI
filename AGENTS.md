@@ -159,6 +159,34 @@ Onboarding flow uses platform detection from `src/utils/platform.ts`:
 
 Onboarding complete step shows platform-appropriate status summary.
 
+FIRST-LAUNCH SETUP
+------------------
+
+There is one stage plan and one machine:
+
+- `src/components/onboarding/stages.ts` — the ordered stage list, which stage
+  is required, and which stage a given machine has at all. Pure data.
+- `src/components/wizard/SetupWizard.tsx` — the machine that walks it.
+  `src/components/onboarding/OnboardingWizard.tsx` is that machine shown as an
+  overlay, not a second wizard.
+
+Rules that must keep holding:
+
+- The AI provider stage is the only required stage, and it blocks until the user
+  has chosen a provider and a model — and, where the provider needs one, until
+  they have entered their own credential. Every other stage carries an explicit
+  "Skip — set up later".
+- A stage the machine does not need is marked unavailable WITH A REASON. Do not
+  advance past it by index: that is what used to land on a blank screen off
+  macOS.
+- No stage picks a provider, a model, or a key for the user. Local models come
+  from the running Ollama, and OpenCode Zen is offered only when opencode is
+  actually installed. Zen's credential stays optional.
+- First-run detection lives in `src/firstRun.ts` and is the ABSENCE of every
+  real signal. Never re-gate a profile that has any configuration.
+- A brand-new database must contain no settings rows, no provider rows and no
+  credentials. If something needs a default, resolve it where it is read.
+
 Health panel uses platform-aware checks:
 - Linux: capability checks (screen capture, clipboard, automation) instead of macOS permission names
 - macOS: preserves existing Accessibility/Screen Recording permission checks

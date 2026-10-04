@@ -259,9 +259,12 @@ export const PROVIDERS = {
   },
   relay: {
     id: 'relay',
-    name: 'Hosted Relay (optional)',
+    name: 'Your Own Relay (optional)',
     icon: '🔗',
-    description: 'Route requests through any OpenAI-compatible endpoint you control — a self-hosted gateway, a corporate proxy, or a hosted service. Off unless you configure a relay URL.',
+    description:
+      'Route requests through an OpenAI-compatible endpoint you control and pay for yourself — ' +
+      'a self-hosted gateway or a corporate proxy. Henry hosts nothing here: this stays off ' +
+      'until you set a relay URL and select it, and no plan includes hosted AI.',
     keyUrl: '',
     keyPrefix: '',
     optional: true,

@@ -1,37 +1,46 @@
 /**
  * Henry AI Cloud Proxy — Cloudflare Worker
  *
- * Hosted licensing, billing and metering for Henry. Deploy: wrangler deploy,
+ * Licensing, billing and metering for Henry. Deploy: wrangler deploy,
  * test: wrangler dev.
  *
- * The hosted chat tier (`POST /v1/chat`) used to forward every request to
- * Groq. Groq is no longer a supported provider anywhere in Henry, and this
- * worker will not quietly forward to some other provider instead — see
- * `handleChat` below. Every other route (pricing, license, usage, Stripe
- * webhook, health) is provider-independent and still serves.
+ * **No plan includes hosted AI.** The hosted chat route (`POST /v1/chat`) used
+ * to forward every request to Groq; Groq is no longer a supported provider
+ * anywhere in Henry, and this worker will not forward to some other provider
+ * instead — see `handleChat` below. Until an owner supplies and enables a real
+ * backend here, `/v1/chat` answers `503 provider_not_configured`, and every
+ * other route (license, usage, Stripe webhook, health) is provider-independent
+ * and still serves.
  */
 
 const FREE_DAILY_LIMIT = 50;
 
-// Pricing — single source of truth. Surfaced at GET /v1/pricing so the desktop
-// app and the website can read one canonical set of numbers instead of drifting.
-// The hosted AI tier is currently unavailable (see handleChat), so these plans
-// describe the commercial offer only; bring-your-own-key and local use is the
-// way Henry runs today.
+// Pricing — single source of truth, surfaced at GET /v1/pricing so the app and
+// the website read one canonical payload instead of drifting.
+//
+// There is deliberately no hosted-AI plan to sell: no AI backend is enabled in
+// this worker, so no amount would buy "hosted AI included". The endpoint
+// answers with that truth rather than a price list for a service that does not
+// run. Bring-your-own-key and local Ollama are how Henry runs today, and they
+// cost the user nothing but their own provider.
 const PRICING = {
   currency: 'USD',
-  plans: {
-    free:     { price: 0,     period: 'forever',  label: 'Free (BYOK / Local)', note: 'Bring your own OpenAI/OpenRouter key, or run Ollama locally. Unlimited, fully local.' },
-    monthly:  { price: 14.99, period: 'month',    label: 'Henry Pro',           note: 'Hosted AI included — no API key needed.' },
-    annual:   { price: 149,   period: 'year',     label: 'Henry Pro (Annual)',  note: '~2 months free vs monthly.' },
-    lifetime: { price: 299,   period: 'one-time', label: 'Henry Pro Lifetime',  note: 'Never pay again.' },
-    setup:    { price: 129,   period: 'one-time', label: 'Setup Help',          note: '30-minute white-glove setup call.' },
+  hostedAI: {
+    enabled: false,
+    includedInAnyPlan: false,
+    reason: 'provider_not_configured',
+    message:
+      'Henry runs on your own provider key (OpenAI, Anthropic, Google, ' +
+      'OpenRouter), on free OpenCode Zen models through the local opencode ' +
+      'bridge, or on Ollama on your own machine. No plan includes hosted AI.',
   },
+  plans: [],
 };
 
 // KV namespace bound as HENRY_KV in wrangler.toml
 // License keys stored as KV entries: license:KEY → { tier, owner, created }
 // Rate counts stored as: rate:DEVICE:DATE → count
+
 
 export default {
   async fetch(request, env) {
@@ -300,7 +309,7 @@ async function sendLicenseEmail(env, to, licenseKey, plan, expires) {
       <h2 style="color:#6d4aff">Welcome to ${planLabel} 🎉</h2>
       <p>Thanks for your purchase! Here's your Henry license key:</p>
       <p style="font-size:20px;font-weight:700;letter-spacing:1px;background:#f4f2ff;border:1px solid #d8d0ff;border-radius:10px;padding:14px 18px;text-align:center;color:#3a2b7a">${licenseKey}</p>
-      <p><strong>To activate:</strong> open Henry → <strong>Settings → License</strong> → paste the key. Hosted AI turns on immediately — no API key needed.</p>
+      <p><strong>To activate:</strong> open Henry → <strong>Settings → License</strong> → paste the key. Your license covers Henry itself — AI still runs on your own provider key, on free OpenCode Zen models through the local opencode bridge, or on Ollama on your own machine. No plan includes hosted AI.</p>
       ${expires ? `<p style="color:#666;font-size:13px">Your subscription renews automatically. This key stays active as long as your subscription is current.</p>` : `<p style="color:#666;font-size:13px">This is a lifetime key — it never expires.</p>`}
       <p style="color:#888;font-size:12px;margin-top:24px">Questions? Just reply to this email.</p>
     </div>`;

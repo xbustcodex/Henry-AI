@@ -9,9 +9,10 @@ import type { LocalModelInfo } from '../../../electron/ipc/ollamaCapabilities';
 interface EngineAssignStepProps {
   onNext: () => void;
   onBack: () => void;
+  /** This stage is optional, so leaving it must be a choice, not a dead end. */
+  onSkip?: () => void;
 }
-
-export default function EngineAssignStep({ onNext, onBack }: EngineAssignStepProps) {
+export default function EngineAssignStep({ onNext, onBack, onSkip }: EngineAssignStepProps) {
   const { providers, settings, updateSetting } = useStore();
   const [localModel, setLocalModel] = useState(settings.companion_model || '');
   const [cloudModel, setCloudModel] = useState(settings.worker_model || '');
@@ -206,6 +207,14 @@ export default function EngineAssignStep({ onNext, onBack }: EngineAssignStepPro
           Continue →
         </button>
       </div>
+
+      {onSkip && (
+        <p className="text-center mt-4">
+          <button onClick={onSkip} className="text-xs text-henry-text-muted hover:text-henry-text transition-colors underline underline-offset-4">
+            Skip — use one model for everything for now
+          </button>
+        </p>
+      )}
     </div>
   );
 }

@@ -1,32 +1,39 @@
 /**
- * Henry Proxy Shim — single-file global cost protection.
+ * Henry Proxy Shim — one place that decides where a panel's AI call goes.
  *
  * What it does:
- *   Monkey-patches window.fetch on app start. Any fetch to the Henry Cloud
- *   Proxy is intercepted and re-routed through `callHenryAI()`, which only
- *   uses the real proxy when the user has a license key. Free users get
- *   transparently served by their OWN provider key, OR Ollama, OR (if neither
- *   exists) a friendly error message that points them at setup.
+ *   Monkey-patches window.fetch on app start. Any panel call aimed at the
+ *   hosted proxy endpoint is intercepted and answered from the engine the user
+ *   configured (`callHenryAI`). There is no hosted tier to fall through to: a
+ *   panel with no configured engine gets the setup-path message back, not an
+ *   answer from somewhere the user never chose.
  *
  * Why a shim instead of refactoring every panel:
- *   ~15 panels each call the proxy directly (e.g. JournalPanel reflections,
- *   TodayPanel "Henry's word", goal nudges, weekly review summaries, etc.).
+ *   ~15 panels each call the proxy URL directly (JournalPanel reflections,
+ *   TodayPanel "Henry's word", goal nudges, weekly review summaries, …).
  *   Refactoring all of them is risky and expands the diff. A single shim
  *   gives exhaustive coverage with one source of truth.
  *
  * What it does NOT touch:
- *   - Streaming proxy calls (ChatView's main chat loop) — those have their
- *     own license gate inside ChatView. The shim only intercepts non-stream
- *     POSTs because that's what every panel uses.
  *   - Direct API calls to OpenAI / Anthropic / Ollama — those go
  *     straight through to the real provider with the user's own key.
+ *   - Streaming requests: they are answered through the same configured
+ *     engine (non-streaming) so a panel can never reach the hosted proxy by
+ *     setting `stream: true`.
  *
  * How to use:
  *   Call `installProxyShim()` once in main.tsx, before React renders.
  */
 
-import { canUseHenryProxy, HENRY_PROXY_URL } from './proxyUsage';
 import { callHenryAI, NoBackendAvailableError, type HenryAIMessage } from './henryAI';
+
+/**
+ * The hosted proxy endpoint panels still address. Henry itself never calls it
+ * for a model: the shim intercepts these requests and answers them from the
+ * engine the user configured. Kept as one constant so the match below cannot
+ * drift from the URL panels use.
+ */
+const HENRY_PROXY_URL = 'https://henry-proxy.henryai.workers.dev';
 
 let installed = false;
 
@@ -56,35 +63,27 @@ export function installProxyShim(): void {
       return originalFetch(input, init);
     }
 
-    // Step 3 — if user has a valid license, let the real proxy serve them
-    if (canUseHenryProxy()) {
-      return originalFetch(input, init);
-    }
-
-    // Step 4 — parse the body and re-route through callHenryAI
+    // Step 3 — parse the body. The panel's `model` is deliberately ignored:
+    // the engine and model are the user's configured ones, so no panel can
+    // route a call to a model the user never chose. `stream` is ignored too —
+    // the reply comes back whole, so a panel cannot reach the hosted proxy by
+    // asking to stream.
     let body: {
-      model?: string;
       messages?: HenryAIMessage[];
       max_tokens?: number;
       temperature?: number;
-      stream?: boolean;
     } = {};
     try {
       const raw = init?.body;
       if (typeof raw === 'string') body = JSON.parse(raw);
     } catch { /* malformed body — fall through to error response */ }
 
-    // Streaming proxy calls: don't intercept. ChatView is the only stream
-    // caller and it has its own license gate that already handles this.
-    if (body.stream === true) return originalFetch(input, init);
-
-    // Step 5 — route through the smart resolver
+    // Step 4 — answer from the engine the user configured
     try {
       const reply = await callHenryAI({
         messages: body.messages ?? [],
         maxTokens: body.max_tokens ?? 500,
         temperature: body.temperature ?? 0.7,
-        preferredModel: body.model,
         signal: init?.signal ?? undefined,
       });
 

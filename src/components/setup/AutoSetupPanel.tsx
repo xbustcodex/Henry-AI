@@ -77,8 +77,10 @@ export default function AutoSetupPanel() {
       }
     } catch { patch('screen', { status:'missing' }); }
 
-    // AI provider — any supported backend counts: a BYOK key, OpenCode Zen
-    // (credential-optional), local Ollama, or a paid license.
+    // AI provider — any REAL backend counts: a BYOK key, OpenCode Zen
+    // (credential-optional), or local Ollama. A license key does not: no
+    // hosted AI backend is enabled in Henry, so a license backs nothing and
+    // must never report this install as ready to answer.
     const hasKey = (id: string) => (providers||[]).some((p:any) => p.id===id && (p.apiKey||p.api_key||'').length > 10);
     const isOllama = settings?.companion_provider === 'ollama';
     const hasOpenRouter = hasKey('openrouter');
@@ -86,8 +88,7 @@ export default function AutoSetupPanel() {
     const hasAnthropic = hasKey('anthropic');
     const hasGoogle = hasKey('google');
     const hasZen = (providers||[]).some((p:any) => isOpencodeProvider(p.id) && p.enabled !== false);
-    const hasLicense = ((localStorage.getItem('henry:license_key') || '').trim()).length > 0;
-    const hasAnyBackend = hasOpenRouter || isOllama || hasZen || hasOpenAI || hasAnthropic || hasGoogle || hasLicense;
+    const hasAnyBackend = hasOpenRouter || isOllama || hasZen || hasOpenAI || hasAnthropic || hasGoogle;
     patch('ai', {
       status: hasAnyBackend ? 'ok' : 'missing',
       description: isOllama ? 'Ollama connected — local, private, free ✓' :
@@ -96,7 +97,6 @@ export default function AutoSetupPanel() {
                    hasAnthropic ? 'Anthropic key connected ✓' :
                    hasOpenAI ? 'OpenAI key connected ✓' :
                    hasGoogle ? 'Google key connected ✓' :
-                   hasLicense ? 'Henry license active ✓' :
                    'Add an AI provider or install Ollama — Settings → AI Providers',
     });
 

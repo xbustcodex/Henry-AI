@@ -1,9 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { matchesTriggerPhrase, launchDemo } from '../../henry/creatorsActivation';
 import { buildModelMessages, toPlainText } from '../../henry/messageBuilder';
-import { getTodayUsage, getRemainingRequests, isNearLimit } from '../../henry/proxyUsage';
-import { hasUsableBackend, getBackendStatus } from '../../henry/backendStatus';
-import { retiredProviderName } from '@/providers/models';
+import { chatPreflight } from '@/henry/chatPreflight';
 import { toast, promptDialog } from '../ui/Toast';
 import { useStore } from '../../store';
 import { useAmbientStore } from '../../henry/ambientStateStore';
@@ -54,8 +52,7 @@ import {
   buildBinaryContentError,
   isBinaryContent,
 } from '@/henry/errorMessages';
-import { resolveChat, requiresQualityModel, modelShortName, isProviderRoutingError } from '@/henry/modelRouter';
-import type { ModelRoute } from '@/henry/modelRouter';
+import { requiresQualityModel, modelShortName } from '@/henry/modelRouter';
 import { cancelTTS } from '@/henry/ttsService';
 import {
   useVoiceStore,
@@ -538,46 +535,6 @@ export default function ChatView() {
     return unsub;
   }, [activeConversationId]);
 
-  // Startup: auto-detect best Ollama models if none are set yet
-  useEffect(() => {
-    void (async () => {
-      try {
-        const s = useStore.getState().settings;
-        const provs = await window.henryAPI.getProviders();
-        const ollamaEnabled = provs.some((p: any) => p.id === 'ollama' && p.enabled);
-        if (!ollamaEnabled) return;
-        if (s.companion_model) return; // already configured, don't override
-
-        const { autoSelectModels } = await import('@/henry/modelPriority');
-        const ollamaUrl = s.ollama_base_url || 'http://localhost:11434';
-        const raw = await window.henryAPI.ollamaModels(ollamaUrl);
-        const installed: string[] = (raw?.models ?? []).map((m) => m.id);
-        if (!installed.length) return;
-
-        const best = autoSelectModels(installed);
-        if (best.companion) {
-          await window.henryAPI.saveSetting('companion_model', best.companion.id);
-          await window.henryAPI.saveSetting('companion_provider', 'ollama');
-          useStore.getState().updateSetting('companion_model', best.companion.id);
-          useStore.getState().updateSetting('companion_provider', 'ollama');
-        }
-        if (best.companionFallback) {
-          await window.henryAPI.saveSetting('companion_model_2', best.companionFallback.id);
-          await window.henryAPI.saveSetting('companion_provider_2', 'ollama');
-          useStore.getState().updateSetting('companion_model_2', best.companionFallback.id);
-          useStore.getState().updateSetting('companion_provider_2', 'ollama');
-        }
-        if (best.worker) {
-          await window.henryAPI.saveSetting('worker_model', best.worker.id);
-          await window.henryAPI.saveSetting('worker_provider', 'ollama');
-          useStore.getState().updateSetting('worker_model', best.worker.id);
-          useStore.getState().updateSetting('worker_provider', 'ollama');
-        }
-      } catch {
-        // Auto-detect is best-effort — silently skip if Ollama isn't reachable
-      }
-    })();
-  }, []);
 
   // Voice replies: speak Henry's completed response when streaming ends
   // (never token-by-token). Hands-free mode always speaks; the persisted
@@ -1508,24 +1465,30 @@ What do you want to tackle first?`);
       console.warn('[Henry] localRouter error, falling through to AI:', e);
     }
 
-    // ── Backend gate (cost protection) ────────────────────────────────────
-    // Never spend anyone's bill on a guess: if nothing at all is configured,
-    // attempt no AI call — render an inline setup card instead.
+    // ── Preflight: may this message be dispatched at all? ─────────────────
+    // One decision, one place (`chatPreflight`): a retired provider, an
+    // unconfigured install and an unresolvable selection each stop here with
+    // the setup path. Nothing downstream substitutes a provider or fills in a
+    // model — `route` only exists when the user configured that exact engine.
     //
-    // This gate must only fire when there is genuinely no provider. It used to
+    // The gate must only fire when there is genuinely no provider. It used to
     // be the reason a fully configured OpenCode Zen install could never send:
-    // it ran BEFORE resolveChat and short-circuited on a status check that did
-    // not count opencode at all, so the router was never reached.
-    const selectedProviderId = (settings.companion_provider || '').trim();
-    const retiredSelection = retiredProviderName(selectedProviderId);
-    if (retiredSelection) {
+    // it short-circuited on a status check that did not count opencode at all,
+    // so the router was never reached.
+    // One settings snapshot for the whole turn: the preflight, the gateway
+    // prompt, the Ollama base URL and the error copy below all read this object,
+    // so a send can never mix two configurations.
+    const s = useStore.getState().settings;
+    const providers = await window.henryAPI.getProviders();
+    const preflight = chatPreflight({ content, settings: s, providers });
+    if (preflight.kind !== 'ready') {
       addMessage({
         id: crypto.randomUUID(),
         role: 'assistant',
-        content: `⚠️ **${retiredSelection} is no longer a supported provider.** Henry will not route to another provider in its place. Pick a supported provider in **Settings → AI Providers** and set it as your companion engine.`,
+        content: preflight.message,
         conversation_id: convId,
         created_at: new Date().toISOString(),
-        model: 'provider-unavailable',
+        model: preflight.kind,
         provider: 'henry',
       });
       setIsStreaming(false);
@@ -1533,70 +1496,7 @@ What do you want to tackle first?`);
       setCompanionStatus({ status: 'idle' });
       return;
     }
-    if (!hasUsableBackend(settings) && !selectedProviderId) {
-      const backendStatus = getBackendStatus(settings);
-      const availableOptions: string[] = [];
-      if (!backendStatus.kinds.includes('ollama')) {
-        availableOptions.push(
-          '**Local Ollama (fully private, fully free)** — Install from [ollama.com](https://ollama.com/download), then Henry connects automatically.'
-        );
-      }
-      if (!backendStatus.kinds.includes('openrouter')) {
-        availableOptions.push(
-          '**OpenRouter (free models available)** — Get a key at [openrouter.ai/keys](https://openrouter.ai/keys), then paste it in **Settings → AI Providers**.'
-        );
-      }
-      if (!backendStatus.kinds.includes('opencode-zen')) {
-        availableOptions.push(
-          '**OpenCode Zen** — Free Zen models run through the local opencode bridge with no key at all. Add **Settings → AI Providers → OpenCode Zen** to pick one.'
-        );
-      }
-      if (!backendStatus.kinds.includes('openai')) {
-        availableOptions.push(
-          '**OpenAI API key** — Add in **Settings → AI Providers → OpenAI**.'
-        );
-      }
-      if (!backendStatus.kinds.includes('anthropic')) {
-        availableOptions.push(
-          '**Anthropic API key** — Add in **Settings → AI Providers → Anthropic**.'
-        );
-      }
-      if (!backendStatus.kinds.includes('google')) {
-        availableOptions.push(
-          '**Google Gemini API key (free tier available)** — Get one at [aistudio.google.com](https://aistudio.google.com), then paste it in **Settings → AI Providers → Google**.'
-        );
-      }
-      if (!backendStatus.kinds.includes('license')) {
-        availableOptions.push(
-          '**Henry license** — If you bought one, paste it in **Settings → License**.'
-        );
-      }
-
-      const setupMessage = [
-        '**Henry needs an AI provider to answer.**',
-        '',
-        availableOptions.length > 0
-          ? `You have ${availableOptions.length} option${availableOptions.length === 1 ? '' : 's'}:`
-          : 'No providers configured.',
-        '',
-        ...availableOptions.map((opt, i) => `${i + 1}. ${opt}`),
-        '',
-        '_Henry will never charge you for AI use. Your keys stay local — cloud providers\' free tiers are generous enough that most people never pay anything._',
-      ].join('\n');
-      addMessage({
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: setupMessage,
-        conversation_id: convId,
-        created_at: new Date().toISOString(),
-        model: 'setup-required',
-        provider: 'henry',
-      });
-      setIsStreaming(false);
-      setStreamingContent('');
-      setCompanionStatus({ status: 'idle' });
-      return;
-    }
+    const route = preflight.route;
 
     // Detect tier before resolving model (for presence phrase and status label)
     const presenceTier = detectPresenceTier(content, settings);
@@ -1790,34 +1690,6 @@ What do you want to tackle first?`);
       })),
       tierHistoryCaps.maxMessages
     );
-
-    // Get companion engine settings — use model router to pick the right provider/model
-    const providers = await window.henryAPI.getProviders();
-    const s = useStore.getState().settings;
-
-    // An unresolvable provider is an explicit error naming that provider.
-    // It is never swapped for a different one: the silent substitution that
-    // used to live here is how a retired selection kept answering from
-    // somewhere the user never chose.
-    let route: ModelRoute;
-    try {
-      route = resolveChat(content, s, providers);
-    } catch (err) {
-      const detail = isProviderRoutingError(err)
-        ? err.detail
-        : err instanceof Error ? err.message : String(err);
-      addMessage({
-        id: crypto.randomUUID(),
-        conversation_id: convId,
-        role: 'assistant',
-        content: `⚠️ ${detail}`,
-        engine: 'companion',
-        created_at: new Date().toISOString(),
-      });
-      setIsStreaming(false);
-      setCompanionStatus({ status: 'idle' });
-      return;
-    }
 
     const companionProvider = route.provider;
     const companionModel = route.model;

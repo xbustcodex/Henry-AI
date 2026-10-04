@@ -1,21 +1,8 @@
-import { useStore } from '../../store';
-
 interface WelcomeStepProps {
   onNext: () => void;
 }
 
 export default function WelcomeStep({ onNext }: WelcomeStepProps) {
-  const { setSetupComplete, updateSetting } = useStore();
-
-  async function handleSkip() {
-    try {
-      await window.henryAPI.saveSetting('setup_complete', 'true');
-      updateSetting('setup_complete', 'true');
-    } catch {
-      /* ignore — still enter */
-    }
-    setSetupComplete(true);
-  }
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] animate-fade-in text-center px-4">
@@ -54,17 +41,8 @@ export default function WelcomeStep({ onNext }: WelcomeStepProps) {
       </button>
 
       <p className="text-xs text-henry-text-muted mt-3">
-        Free options available · Works offline with Ollama · No account needed
+        Takes about a minute · You choose the AI · Nothing leaves your computer unless you send it
       </p>
-
-      {/* Secondary — skip for technically confident users who'll configure manually */}
-      <button
-        onClick={handleSkip}
-        onTouchEnd={(e) => { e.preventDefault(); void handleSkip(); }}
-        className="mt-4 text-xs text-henry-text-muted hover:text-henry-text transition-colors underline underline-offset-4 touch-manipulation"
-      >
-        I'll set this up later
-      </button>
     </div>
   );
 }

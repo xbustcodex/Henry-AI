@@ -97,7 +97,7 @@ Open `http://[your-computer-ip]:4242` on any phone or tablet: full chat with voi
 
 ## The Iron Gateway
 
-Every chat request routes to the cheapest capable AI:
+Every chat request goes to the provider and model you chose in Settings → Engines. Henry never picks one for you: with no engine configured it says so and shows the setup path instead of answering.
 
 | What you say | How it's handled | Cost |
 |---|---|---|
@@ -106,6 +106,8 @@ Every chat request routes to the cheapest capable AI:
 | Coding | Claude Code (your subscription) or local | **$0 marginal** |
 | Voice in/out | whisper.cpp + system voice | **$0.00** |
 | Image generation | DALL-E 3 (optional key) | $0.04/image |
+
+No plan includes hosted AI. Nothing in Henry, paid or free, serves a model on your behalf — a license covers Henry itself, and the AI always runs on your own key, on free OpenCode Zen models through the local opencode bridge, or on Ollama on your own machine.
 
 ## Self-Repair
 

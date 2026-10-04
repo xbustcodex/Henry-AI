@@ -152,12 +152,16 @@ export default function MobileProviderStep({ onNext, onBack }: Props) {
     }
   }
 
+  // Cloud needs the user's own key. Continuing without one wrote a provider row
+  // with an empty credential and marked the provider selected, which reads
+  // everywhere downstream as "configured" while nothing can answer.
   const canContinue =
     topMode === 'cloud'
-      ? true
+      ? apiKey.trim().length > 0
       : topMode === 'mac'
       ? selectedModel.trim().length > 0
       : false;
+
 
   async function handleNext() {
     if (!canContinue) return;
@@ -364,12 +368,9 @@ export default function MobileProviderStep({ onNext, onBack }: Props) {
                   >
                     ← Reopen {selectedProvider.label}
                   </button>
-                  {!apiKey.trim() && (
-                    <button onClick={() => void handleNext()}
-                      className="text-[11px] text-henry-text-muted hover:text-henry-accent transition-colors">
-                      Skip for now →
-                    </button>
-                  )}
+                  <span className="text-[11px] text-henry-text-muted">
+                    {apiKey.trim() ? 'Key ready to save' : 'Paste your key to continue'}
+                  </span>
                 </div>
               </>
             )}

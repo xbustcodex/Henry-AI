@@ -1,10 +1,12 @@
 # Henry Proxy — Cloudflare Worker
 
-Licensing, billing and metering for Henry. **The hosted chat route is currently
-disabled** — it used to front a Groq API key, and Groq is no longer a supported
-provider anywhere in Henry, so `POST /v1/chat` answers `503
-provider_not_configured` instead of quietly forwarding to a different provider.
-Pricing, `/v1/license`, `/v1/usage` and the Stripe webhook are unaffected.
+Licensing, billing and metering for Henry. **No plan includes hosted AI.** The
+hosted chat route used to front a Groq API key; Groq is no longer a supported
+provider anywhere in Henry, and this worker will not quietly forward to a
+different provider, so `POST /v1/chat` answers `503 provider_not_configured`.
+`GET /v1/pricing` says the same thing in its payload (`hostedAI.enabled: false`,
+no plans) instead of quoting a price for a service that does not run.
+`/v1/license`, `/v1/usage` and the Stripe webhook are unaffected.
 
 ## What changed (v2.0 — Groq era)
 
@@ -17,9 +19,10 @@ Pricing, `/v1/license`, `/v1/usage` and the Stripe webhook are unaffected.
 - **Hard caps** on `max_tokens`, request body size, and history depth.
 - `/v1/license` and `/v1/usage` reflect license-based state.
 
-The desktop client also gates the proxy behind a license key
-(`canUseHenryProxy()` in `src/henry/proxyUsage.ts`), but the worker is the
-authoritative check. Don't soften it.
+A license key enables no AI anywhere in Henry: the desktop client never routes
+a model call to this worker, and an install whose only "backend" is a license
+reads as unconfigured throughout the UI. The worker is the authoritative check
+for its own endpoints. Don't soften it.
 
 ## Deploy
 

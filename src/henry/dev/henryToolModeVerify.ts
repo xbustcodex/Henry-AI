@@ -3,7 +3,7 @@
  * Never auto-runs; attach to `window` from `main.tsx` only when `import.meta.env.DEV`.
  */
 
-import { getOllamaBaseUrl, OLLAMA_DEFAULT_MODEL } from '../ollamaConfig';
+import { getOllamaBaseUrl } from '../ollamaConfig';
 import { runOllamaLocalCheck } from '../runOllamaLocalCheck';
 import type { HenryToolExecutionResult } from '../localAgent/henryToolResult';
 import {
@@ -245,7 +245,7 @@ export async function runHenryToolCheck(): Promise<HenryToolCheckReport> {
 
   const companion = (settings.companion_provider || '').trim();
   const host = getOllamaBaseUrl(settings);
-  const model = (settings.companion_model || '').trim() || OLLAMA_DEFAULT_MODEL;
+  const model = (settings.companion_model || '').trim();
 
   if (companion !== 'ollama') {
     return {
@@ -254,6 +254,21 @@ export async function runHenryToolCheck(): Promise<HenryToolCheckReport> {
       reason: `Companion provider is "${companion || '(unset)'}", not ollama.`,
       host,
       model,
+      cases: [],
+    };
+  }
+
+  // Ollama selected but no model chosen: report it instead of running a model
+  // the user never picked.
+  if (!model) {
+    return {
+      ok: false,
+      skipped: true,
+      reason:
+        'Ollama is the companion provider but no model is selected. Pick a model ' +
+        'the running Ollama reports in Settings → Engines.',
+      host,
+      model: '',
       cases: [],
     };
   }

@@ -99,10 +99,19 @@ describe('getBackendStatus — local and cloud still work', () => {
     expect(status.primaryLabel).toBe('No AI provider');
   });
 
-  it('never reports a license alone as a usable free backend', () => {
+  it('never counts a license key as an AI backend — no hosted AI is enabled', () => {
     localStorage.setItem('henry:license_key', 'lic_abc');
     const status = getBackendStatus();
-    expect(status.kinds).toEqual(['license']);
-    expect(status.proxyOnly).toBe(true);
+    expect(status.hasAny).toBe(false);
+    expect(status.kinds).toEqual([]);
+    expect(status.primaryLabel).toBe('No AI provider');
+    expect(hasUsableBackend()).toBe(false);
+  });
+
+  it('never counts a relay URL as an AI backend — it is not an engine selection', () => {
+    localStorage.setItem('henry:providers', JSON.stringify([]));
+    const status = getBackendStatus({ relay_base_url: 'https://relay.example.com/v1' });
+    expect(status.hasAny).toBe(false);
+    expect(status.kinds).toEqual([]);
   });
 });

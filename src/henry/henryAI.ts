@@ -4,19 +4,25 @@
  * Every panel that does AI work (journal reflection, task suggestions, etc.)
  * should call `callHenryAI()` instead of hitting providers directly.
  *
- * Routing chain (in priority order):
- *   1. User's local Ollama — if it's running, use it. Free, private, offline.
- *   2. User's own OpenAI / Anthropic / Google / OpenRouter key — BYOK.
- *   3. Henry Cloud Proxy — ONLY if the user has a license key. This is the
- *      paid path that the developer pre-pays for. Without a license, this
- *      branch is skipped entirely so the developer never pays for free users.
- *   4. Throw `NoBackendAvailableError` pointing at the supported providers.
+ * Routing rule — there is exactly one, and it is the user's own:
  *
- * This is the cost protection: users with NO setup get a friendly nudge to
- * configure a provider, NOT a free ride on the developer's dime.
+ *   Use the companion engine they configured (`companion_provider` +
+ *   `companion_model`) and nothing else. If it is unset, or cannot be
+ *   resolved, say so and stop. Henry does not scan for "some provider that
+ *   happens to have a key", does not fill in a default model, does not fall
+ *   through to the next provider, and has no hosted tier to fall back to.
+ *
+ * A panel that cannot be answered shows the setup path instead of answering
+ * from somewhere the user never chose.
  */
 
-import { canUseHenryProxy, getDeviceId, getLicenseKey, HENRY_PROXY_URL, incrementUsage } from './proxyUsage';
+import {
+  isProviderRoutingError,
+  resolveChat,
+  CHAT_PROVIDER_SETTING,
+  CHAT_MODEL_SETTING,
+} from './modelRouter';
+import type { ModelRoute } from './modelRouter';
 
 export interface HenryAIMessage {
   role: 'system' | 'user' | 'assistant';
@@ -29,8 +35,6 @@ export interface CallHenryAIOptions {
   maxTokens?: number;
   /** Temperature. 0.7 is the default; lower for factual, higher for creative. */
   temperature?: number;
-  /** Preferred model on the resolved backend. Defaults to the backend's own choice. */
-  preferredModel?: string;
   /** AbortSignal for cancellation. */
   signal?: AbortSignal;
   /** Whether the panel is OK with no backend (returns null instead of throwing). */
@@ -39,99 +43,134 @@ export interface CallHenryAIOptions {
 
 export class NoBackendAvailableError extends Error {
   readonly userFacingMessage: string;
-  constructor() {
-    super('No AI backend available. User needs to configure a supported provider.');
+  constructor(detail?: string) {
+    super(detail || 'No AI backend available. User needs to configure a supported provider.');
     this.name = 'NoBackendAvailableError';
-    this.userFacingMessage =
-      "Henry needs an AI provider to answer that. Open **Settings → AI Providers** and add one — " +
-      "OpenRouter and Google have free tiers, OpenCode Zen runs through the opencode bridge, " +
-      "and **Ollama** runs fully local and fully free.";
+    this.userFacingMessage = detail
+      ? detail
+      : "Henry needs an AI provider to answer that. Open **Settings → AI Providers** and add one — " +
+        "OpenRouter and Google have free tiers, OpenCode Zen runs through the opencode bridge, " +
+        "and **Ollama** runs fully local and fully free.";
   }
 }
 
 interface ResolvedBackend {
-  kind: 'ollama' | 'openai' | 'anthropic' | 'google' | 'proxy';
+  kind: 'ollama' | 'openai' | 'anthropic' | 'google';
   apiKey?: string;
   baseUrl?: string;
   model: string;
 }
 
-/** Look at user-configured providers and decide which (if any) we can use. */
-async function resolveBackend(preferredModel?: string): Promise<ResolvedBackend | null> {
-  const apiObj = (typeof window !== 'undefined' ? (window as { henryAPI?: { getProviders?: () => Promise<unknown[]> } }).henryAPI : null);
-  let providers: Array<{ id: string; api_key?: string; apiKey?: string; enabled?: boolean }> = [];
-  try {
-    if (apiObj?.getProviders) {
-      providers = (await apiObj.getProviders()) as typeof providers;
-    }
-  } catch { /* fall through to proxy/local */ }
+interface HenryApi {
+  getSettings?: () => Promise<Record<string, string>>;
+  getProviders?: () => Promise<unknown[]>;
+}
 
-  const findKey = (id: string): string => {
-    const p = providers.find((p) => p.id === id);
-    return ((p?.api_key || p?.apiKey || '') as string).trim();
-  };
+function henryApi(): HenryApi | null {
+  return typeof window !== 'undefined'
+    ? ((window as unknown as { henryAPI?: HenryApi }).henryAPI ?? null)
+    : null;
+}
 
-  // 1. Local Ollama
-  const ollamaProvider = providers.find((p) => p.id === 'ollama' && p.enabled);
-  if (ollamaProvider) {
-    // Quick liveness check — don't return ollama if the daemon isn't running
-    const baseUrl = (() => {
-      try {
-        const raw = localStorage.getItem('henry:settings');
-        if (raw) {
-          const s = JSON.parse(raw) as Record<string, string>;
-          return s.ollama_base_url || 'http://localhost:11434';
-        }
-      } catch { /* ignore */ }
-      return 'http://localhost:11434';
-    })();
+async function readSettings(): Promise<Record<string, string>> {
+  const api = henryApi();
+  if (api?.getSettings) {
     try {
-      const ping = await fetch(baseUrl + '/api/tags', { signal: AbortSignal.timeout(800) });
-      if (ping.ok) {
-        // Pick the first installed model — caller can override
-        const data = await ping.json() as { models?: Array<{ name: string }> };
-        const firstModel = data.models?.[0]?.name;
-        if (firstModel) {
-          return { kind: 'ollama', baseUrl, model: preferredModel || firstModel };
-        }
-      }
-    } catch { /* ollama not running — try other backends */ }
-  }
-
-  // 3. OpenAI / Anthropic / Google (BYOK)
-  for (const id of ['openai', 'anthropic', 'google'] as const) {
-    const key = findKey(id);
-    if (key.length > 10) {
-      const defaultModels: Record<string, string> = {
-        openai: 'gpt-4o-mini',
-        anthropic: 'claude-haiku-4-5-20251001',
-        google: 'gemini-2.0-flash',
-      };
-      return { kind: id, apiKey: key, model: preferredModel || defaultModels[id] };
+      return (await api.getSettings()) as Record<string, string>;
+    } catch {
+      /* fall through to the renderer mirror */
     }
   }
-
-  // 4. Henry Cloud Proxy — gated by license key
-  if (canUseHenryProxy()) {
-    return { kind: 'proxy', model: preferredModel || 'llama-3.3-70b-versatile' };
+  try {
+    return JSON.parse(localStorage.getItem('henry:settings') || '{}') as Record<string, string>;
+  } catch {
+    return {};
   }
-
-  // 5. No backend
-  return null;
 }
 
 /**
- * Call an LLM, routing through the best available backend.
+ * Resolve the engine the user configured — or report exactly what is missing.
  *
- * Returns the text response, or `null` when `allowNoBackend: true` and there's
- * no path. Throws `NoBackendAvailableError` otherwise. Throws on network/HTTP
- * errors after attempting the chosen backend.
+ * Deliberately absent: any "first provider with a key wins" scan, any default
+ * model, any local-runtime first-model pick, any license-gated hosted tier.
+ * Those are the silent substitutions this module used to perform.
+ */
+async function resolveBackend(opts: CallHenryAIOptions): Promise<ResolvedBackend> {
+  const settings = await readSettings();
+  const providerId = (settings[CHAT_PROVIDER_SETTING] ?? '').trim();
+  const model = (settings[CHAT_MODEL_SETTING] ?? '').trim();
+
+  if (!providerId || !model) {
+    throw new NoBackendAvailableError(
+      'No AI engine is selected. Pick a provider and model in **Settings → AI Providers** — ' +
+      'Henry will not choose one for you.',
+    );
+  }
+
+  const api = henryApi();
+  let rows: unknown[] = [];
+  if (api?.getProviders) {
+    try {
+      rows = await api.getProviders();
+    } catch {
+      rows = [];
+    }
+  }
+
+  // Same router Chat uses, so a panel and the chat surface can never disagree
+  // about whether the selected engine is usable. It throws naming the exact
+  // unresolved setting; it never resolves to a substitute.
+  let route: ModelRoute;
+  try {
+    route = resolveChat(opts.messages.map((m) => m.content).join('\n'), settings, rows as never);
+  } catch (err) {
+    if (isProviderRoutingError(err)) throw new NoBackendAvailableError(err.detail);
+    throw err;
+  }
+
+  const row = rows.find((p) => (p as { id?: string })?.id === route.provider) as
+    | { id: string; name?: string; api_key?: string; apiKey?: string }
+    | undefined;
+
+  const apiKey = (row?.api_key || row?.apiKey || '').trim();
+
+  switch (route.provider) {
+    case 'ollama':
+      return { kind: 'ollama', baseUrl: (settings.ollama_base_url || '').trim() || 'http://localhost:11434', model: route.model };
+    case 'openai':
+      return { kind: 'openai', apiKey, model: route.model };
+    case 'anthropic':
+      return { kind: 'anthropic', apiKey, model: route.model };
+    case 'google':
+      return { kind: 'google', apiKey, model: route.model };
+    default:
+      // Every other supported engine (the opencode bridge, Zen, a user's own
+      // relay) is reached through Chat's own transport, not through this
+      // panel-level HTTP path. Saying so is the honest answer; answering from
+      // a different engine would be the silent substitution.
+      throw new NoBackendAvailableError(
+        `Provider \`${route.provider}\` is selected, but panels cannot reach it over this path. ` +
+        'Ask Henry in Chat, or choose a provider with its own API key in **Settings → AI Providers**.',
+      );
+  }
+}
+
+
+/**
+ * Call an LLM using the engine the user configured.
+ *
+ * Returns the text response, or `null` when `allowNoBackend: true` and no
+ * engine is configured. Throws `NoBackendAvailableError` — carrying the
+ * setup-path message — otherwise. Throws on network/HTTP errors after
+ * attempting the configured engine.
  */
 export async function callHenryAI(opts: CallHenryAIOptions): Promise<string | null> {
-  const backend = await resolveBackend(opts.preferredModel);
-  if (!backend) {
-    if (opts.allowNoBackend) return null;
-    throw new NoBackendAvailableError();
+  let backend: ResolvedBackend;
+  try {
+    backend = await resolveBackend(opts);
+  } catch (err) {
+    if (opts.allowNoBackend && err instanceof NoBackendAvailableError) return null;
+    throw err;
   }
 
   const maxTokens = opts.maxTokens ?? 500;
@@ -209,55 +248,41 @@ export async function callHenryAI(opts: CallHenryAIOptions): Promise<string | nu
     return data.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('').trim() ?? '';
   }
 
-  // ── Henry Cloud Proxy (license required) ────────────────────────────────
-  if (backend.kind === 'proxy') {
-    const r = await fetch(HENRY_PROXY_URL + '/v1/chat', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Henry-Device': getDeviceId(),
-        'X-Henry-License': getLicenseKey(),
-      },
-      body: JSON.stringify({ model: backend.model, messages: opts.messages, max_tokens: maxTokens, temperature, stream: false }),
-      signal,
-    });
-    if (!r.ok) {
-      if (r.status === 401 || r.status === 403) {
-        throw new Error('Henry license expired or invalid — check Settings → License.');
-      }
-      if (r.status === 429) {
-        throw new Error('Henry proxy daily limit reached. Add your own provider key in Settings for unlimited use.');
-      }
-      throw new Error(`Henry proxy error ${r.status}`);
-    }
-    try { incrementUsage(); } catch { /* non-critical */ }
-    const data = await r.json() as { choices?: Array<{ message?: { content?: string } }> };
-    return data.choices?.[0]?.message?.content?.trim() ?? '';
-  }
-
+  // Unreachable: `resolveBackend` throws naming the provider for every engine
+  // without a branch above, instead of letting the caller get `null`.
   return null;
 }
 
 /**
- * Convenience: check whether ANY AI backend is available right now.
- * Useful for panels that want to disable an AI button when nothing is configured.
+ * Convenience: is the configured engine usable right now? Panels use this to
+ * disable an AI button and show the setup path instead of calling.
  */
 export async function hasAIBackend(): Promise<boolean> {
-  return (await resolveBackend()) !== null;
+  try {
+    await resolveBackend({ messages: [] });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
- * Returns a friendly description of which backend would be used, for diagnostic
- * UI. Examples: "Local Ollama", "Your OpenAI key", "Henry license proxy", "None".
+ * A one-line description of the engine that would be used, for diagnostic UI.
+ * Never guesses: an unconfigured install reads "None — set up an AI provider".
  */
 export async function describeActiveBackend(): Promise<string> {
-  const b = await resolveBackend();
-  if (!b) return 'None — set up an AI provider';
+  let b: ResolvedBackend;
+  try {
+    b = await resolveBackend({ messages: [] });
+  } catch (err) {
+    return err instanceof NoBackendAvailableError
+      ? `None — ${err.userFacingMessage}`
+      : 'None — set up an AI provider';
+  }
   switch (b.kind) {
     case 'ollama':    return `Local Ollama (${b.model})`;
     case 'openai':    return `Your OpenAI key (${b.model})`;
     case 'anthropic': return `Your Anthropic key (${b.model})`;
     case 'google':    return `Your Google key (${b.model})`;
-    case 'proxy':     return `Henry license proxy (${b.model})`;
   }
 }

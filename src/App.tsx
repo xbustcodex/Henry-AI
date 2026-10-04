@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import Layout from './components/layout/Layout';
 import SetupWizard from './components/wizard/SetupWizard';
-import ElectronAutoSetup from './components/wizard/ElectronAutoSetup';
 import ClipboardAIToast from './components/ClipboardAIToast';
 import ToastHost, { toast } from './components/ui/Toast';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -23,7 +22,13 @@ import { useCapturesStore } from './ambient/capturesStore';
 import { registerShortcuts, buildShortcuts } from './henry/keyboardShortcuts';
 import CompanionApp from './components/mobile/CompanionApp';
 import ConfirmToolModal from './components/agent/ConfirmToolModal';
-import { syncOllamaDefaultsToBackendIfNeeded } from './henry/ollamaConfig';
+import {
+  isFreshProfile,
+  shouldGateOnSetup,
+  clearFirstRunMarker,
+  FIRST_RUN_KEY,
+} from './firstRun';
+import { WORKSPACE_MANIFEST_KEY } from './henry/workspaceSeeder';
 import { isMacOS, isLinux, isWindows } from './utils/platform';
 import { updateCapabilitySnapshot } from './henry/capabilityRegistry';
 import StartupFailureBanner from './components/health/StartupFailureBanner';
@@ -60,9 +65,18 @@ export default function App() {
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(() => shouldShowOnboarding());
 
+  // True once the first-launch flow finishes in this session. Without it,
+  // completing setup would leave the profile reading as fresh (it was fresh when
+  // the app booted) and the next render would put the wizard straight back in
+  // front of the user — a gate that never lets go.
+  const firstRunDone = useRef(false);
+
   // Global event for re-launching the wizard from anywhere (Setup panel, etc.)
   useEffect(() => {
     const onOpenWizard = () => {
+      // Both markers are cleared so the reopened flow is a full run, not one that
+      // reads "already configured" from the first-run state it just completed.
+      clearFirstRunMarker();
       try { localStorage.removeItem('henry:onboarding_v1_complete'); } catch { /* */ }
       setShowOnboarding(true);
     };
@@ -448,22 +462,12 @@ export default function App() {
 
   async function initApp() {
     try {
-      // URL bypass: ?enter or #enter skips wizard immediately
-      // Only allowed if at least one provider is already configured
-      const urlBypass =
-        window.location.search.includes('enter') ||
-        window.location.hash === '#enter' ||
-        window.location.hash === '#henry';
-      if (urlBypass) {
-        const earlyProviders: Array<{ id: string }> = (() => {
-          try { return JSON.parse(localStorage.getItem('henry:providers') || '[]'); } catch { return []; }
-        })();
-        if (earlyProviders.length > 0) {
-          await window.henryAPI.saveSetting('setup_complete', 'true');
-        }
-        // Clean the URL without reload
-        history.replaceState(null, '', window.location.pathname);
-      }
+      // There used to be a `?enter` / `#enter` / `#henry` URL bypass here that
+      // wrote `setup_complete = 'true'` whenever localStorage held any provider
+      // row. It was two failures at once: a row count is not a decision, and a
+      // developer machine has rows from the first launch, so the bypass marked
+      // an untouched profile as configured. Removing it is what makes the gate
+      // below mean anything on a fresh install.
 
       const settingsMap = (await window.henryAPI.getSettings()) as Record<string, string>;
 
@@ -481,19 +485,24 @@ export default function App() {
         } catch { /* ignore */ }
       }
 
-      // Check setup_complete from API result OR directly from localStorage as fallback
+      // Existing-profile detection.
+      //
+      // The old test was `setup_complete === 'true' || providers.length > 0`,
+      // which meant "a config already exists, so setup must have happened". On a
+      // developer machine that is true from the first launch, and on a customer's
+      // machine any leftover row is enough. The verdict now comes from
+      // isFreshProfile, which asks whether anything in this profile is a decision
+      // the user actually made — a credential, a conversation, a completed setup,
+      // first contact — rather than whether a row exists.
       const lsSettings = (() => {
         try { return JSON.parse(localStorage.getItem('henry:settings') || '{}'); } catch { return {}; }
       })();
 
-      const isComplete =
-        settingsMap.setup_complete === 'true' ||
-        lsSettings.setup_complete === 'true';
-
-      // Always load providers from SQLite and sync to localStorage at startup
-      // This fixes: key saved in Settings, but chat still fails until restart
+      // Providers are needed for the freshness verdict, so they are loaded before
+      // it rather than inside the already-configured branch.
+      let sqliteProviders: HenryProviderRecord[] = [];
       try {
-        const sqliteProviders = await window.henryAPI.getProviders().catch(() => []);
+        sqliteProviders = await window.henryAPI.getProviders().catch(() => []);
         if (sqliteProviders.length > 0) {
           const syncData = sqliteProviders.map((p: HenryProviderRecord) => ({
             id: p.id, name: p.name,
@@ -505,88 +514,103 @@ export default function App() {
         }
       } catch { /* non-critical */ }
 
-      const lsProviders: HenryProviderRecord[] = (() => {
-        try { return JSON.parse(localStorage.getItem('henry:providers') || '[]'); } catch { return []; }
-      })();
-      const hasProviders = lsProviders.length > 0;
+      // Conversations are a "this profile has been used" signal, so they are read
+      // on the fresh path too. A failure here means "cannot prove it was used",
+      // which must not be read as proof that it was never used.
+      const existingConversations = await window.henryAPI.getConversations().catch(() => {
+        return [] as Awaited<ReturnType<typeof window.henryAPI.getConversations>>;
+      });
 
-      if (isComplete || hasProviders) {
-        // Mark complete if only providers existed without the flag
-        if (!isComplete && hasProviders) {
-          await window.henryAPI.saveSetting('setup_complete', 'true');
-        }
+      const fresh = isFreshProfile({
+        marker: localStorage.getItem(FIRST_RUN_KEY),
+        settings: { ...lsSettings, ...settingsMap },
+        providers: sqliteProviders,
+        conversations: existingConversations,
+        workspacePresent: !!localStorage.getItem(WORKSPACE_MANIFEST_KEY),
+      });
 
-        // Retire any provider selection that no longer resolves to a supported
-        // provider. Leaving it in place is what produced a permanent fallback
-        // loop: the router could never resolve it, and the install looked like
-        // it had a backend while sending nothing. It is cleared here so the
-        // router reports the retired provider by name instead.
-        for (const key of ['companion_provider', 'worker_provider', 'chat_fast_provider', 'companion_provider_2']) {
-          if (isRetiredProvider(settingsMap[key])) {
-            await window.henryAPI.saveSetting(key, '');
-            useStore.getState().updateSetting(key, '');
-          }
-        }
-
-        setSetupComplete(true);
-
-        // Seed workspace on first run (idempotent — safe to call every launch)
-        try { seedWorkspace(); } catch { /* non-critical */ }
-        // Background workspace indexing (non-blocking)
-        setTimeout(() => { indexWorkspace().catch(() => {}); }, 5000);
-
-        const [convos, providers] = await Promise.all([
-          window.henryAPI.getConversations().catch((e: unknown) => {
-            console.error('[Henry] Failed to load conversations:', e);
-            return [] as Awaited<ReturnType<typeof window.henryAPI.getConversations>>;
-          }),
-          window.henryAPI.getProviders().catch((e: unknown) => {
-            console.error('[Henry] Failed to load providers:', e);
-            return [] as Awaited<ReturnType<typeof window.henryAPI.getProviders>>;
-          }),
-        ]);
-        setConversations(convos);
-        // Sync providers from SQLite → localStorage so webMock reads correct API keys
-        try {
-          const lsProviders = providers.map((p: HenryProviderRecord) => ({
-            id: p.id,
-            name: p.name,
-            api_key: p.api_key || p.apiKey || '',
-            apiKey: p.api_key || p.apiKey || '',
-            enabled: Boolean(p.enabled),
-            models: p.models || '[]',
-          }));
-          localStorage.setItem('henry:providers', JSON.stringify(lsProviders));
-        } catch { /* ignore */ }
-
-      // Ensure Ollama defaults are synced to backend (idempotent)
-      try { await syncOllamaDefaultsToBackendIfNeeded(); } catch { /* non-critical */ }
-
-        setProviders(
-          providers.map((p: HenryProviderRecord) => ({
-            id: p.id,
-            name: p.name,
-            apiKey: p.api_key || p.apiKey || '',
-            enabled: Boolean(p.enabled),
-            models: (() => {
-              try {
-                const m = p.models;
-                if (Array.isArray(m)) return m;
-                if (typeof m === 'string' && m) return JSON.parse(m);
-                return [];
-              } catch (e) {
-                console.error('[Henry] Failed to parse models for provider', p.id, e);
-                return [];
-              }
-            })(),
-          }))
-        );
+      if (!shouldGateOnSetup({ fresh, completedThisSession: firstRunDone.current })) {
+        await enterApp({ providers: sqliteProviders, conversations: existingConversations });
       }
     } catch (err) {
       console.error('Failed to init app:', err);
     } finally {
       setLoading(false);
     }
+  }
+
+  /**
+   * Move the app out of setup and populate it with the profile's real state.
+   *
+   * Both the already-configured path and the wizard's completion path land here.
+   * `prefetched` is the boot load, supplied only when the profile was already
+   * configured. The wizard's provider step writes rows to SQLite while the gate
+   * is on screen, so its path omits `prefetched` and re-reads — the boot load
+   * cannot know about choices the user has not made yet.
+   */
+  async function enterApp(prefetched?: {
+    providers: HenryProviderRecord[];
+    conversations: Awaited<ReturnType<typeof window.henryAPI.getConversations>>;
+  }) {
+    // Retire any provider selection that no longer resolves to a supported
+    // provider. Leaving one in place produced a permanent fallback loop: the
+    // router could never resolve it, and the install looked like it had a
+    // backend while sending nothing. It is cleared here so the router reports
+    // the retired provider by name instead.
+    const providerKeys = ['companion_provider', 'worker_provider', 'chat_fast_provider', 'companion_provider_2'];
+    for (const key of providerKeys) {
+      const current = useStore.getState().settings[key];
+      if (!isRetiredProvider(current)) continue;
+      await window.henryAPI.saveSetting(key, '');
+      useStore.getState().updateSetting(key, '');
+    }
+
+    const providers = prefetched?.providers
+      ?? await window.henryAPI.getProviders().catch(() => [] as HenryProviderRecord[]);
+    const conversations = prefetched?.conversations
+      ?? await window.henryAPI.getConversations().catch(
+        () => [] as Awaited<ReturnType<typeof window.henryAPI.getConversations>>,
+      );
+
+    setSetupComplete(true);
+
+    // Seed workspace on first run (idempotent — safe to call every launch)
+    try { seedWorkspace(); } catch { /* non-critical */ }
+    // Background workspace indexing (non-blocking)
+    setTimeout(() => { indexWorkspace().catch(() => {}); }, 5000);
+
+    setConversations(conversations);
+
+    // Sync providers from SQLite → localStorage so webMock reads correct API keys
+    const toLocalStorage = providers.map((p: HenryProviderRecord) => ({
+      id: p.id,
+      name: p.name,
+      api_key: p.api_key || p.apiKey || '',
+      apiKey: p.api_key || p.apiKey || '',
+      enabled: Boolean(p.enabled),
+      models: p.models || '[]',
+    }));
+    try { localStorage.setItem('henry:providers', JSON.stringify(toLocalStorage)); } catch { /* ignore */ }
+
+    setProviders(
+      providers.map((p: HenryProviderRecord) => ({
+        id: p.id,
+        name: p.name,
+        apiKey: p.api_key || p.apiKey || '',
+        enabled: Boolean(p.enabled),
+        models: (() => {
+          try {
+            const m = p.models;
+            if (Array.isArray(m)) return m;
+            if (typeof m === 'string' && m) return JSON.parse(m);
+            return [];
+          } catch (e) {
+            console.error('[Henry] Failed to parse models for provider', p.id, e);
+            return [];
+          }
+        })(),
+      }))
+    );
   }
 
   function setupEventListeners() {
@@ -657,13 +681,24 @@ export default function App() {
 
   // Splash is overlaid — no early return, layout always renders behind
 
+  // The first-launch gate. Every surface — Electron, web, mobile — gets the full
+  // setup experience here. There is deliberately no shorter path: the Electron
+  // auto-setup that used to branch below detected a local model and completed
+  // setup without a single click, which is indistinguishable from having
+  // fabricated the user's configuration.
   if (!setupComplete) {
-    // In Electron: skip the wizard entirely — run auto-setup immediately
-    const isElectron = typeof window.henryAPI?.ollamaIsInstalled === 'function';
-    if (isElectron) {
-      return <ElectronAutoSetup onComplete={() => setSetupComplete(true)} />;
-    }
-    return <SetupWizard />;
+    return (
+      <ErrorBoundary>
+        <SetupWizard onComplete={() => {
+          // Latch before anything else: the gate reads the profile as still fresh
+          // otherwise, and puts the wizard straight back up.
+          firstRunDone.current = true;
+          // No prefetch: the provider rows the wizard wrote are read fresh, since
+          // the boot load happened before the user made any of these choices.
+          void enterApp();
+        }} />
+      </ErrorBoundary>
+    );
   }
 
   // Companion mode: render the lightweight companion shell on iPhone/iPad

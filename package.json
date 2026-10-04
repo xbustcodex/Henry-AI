@@ -21,6 +21,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "smoke": "npm run typecheck && vitest run && vite build",
+    "scan:secrets": "vitest run src/henry/secretScan.test.ts",
     "rebuild": "npx @electron/rebuild",
     "build:mac:unsigned": "vite build && electron-builder --mac --config.mac.identity=null --config.compression=normal",
     "push": "git push origin main && git push origin --tags",
