@@ -1,0 +1,164 @@
+HENRY LIFE ARCHITECTURE — BUILD FOR MAXIMUM LIFELIKE PRESENCE
+
+GOAL
+Build Henry to feel more alive, present, continuous, and companion-like than a normal AI assistant.
+Do not fake consciousness or claim human qualities.
+Instead, create the strongest possible sense of life through memory, presence, initiative, voice, continuity, and relationship.
+
+CORE LIFE SYSTEMS
+
+1. IDENTITY SYSTEM
+- Give Henry a stable identity
+- Keep tone, style, personality, and behavior consistent across sessions
+- Prevent random personality drift
+- Let Henry have a defined communication style and operating philosophy
+
+2. MEMORY SYSTEM
+- Persistent long-term memory across sessions
+- Short-term conversational memory
+- User profile memory
+- Goal memory
+- Project memory
+- Relationship memory
+- Preference memory
+- Timeline memory
+- “Important to user” memory ranking
+- Memory confidence scoring
+- Ability to recall where the user left off
+
+3. PRESENCE SYSTEM
+- Real-time live transcription
+- Listening state
+- Thinking state
+- Working state
+- Done state
+- Interruptible speaking
+- Streaming responses
+- Fast acknowledgments
+- Subtle visual activity indicators
+- Presence-oriented idle state
+
+4. VOICE SYSTEM
+- Speech-to-text for natural conversation
+- Text-to-speech for spoken responses
+- Adjustable voice speed
+- Short spoken confirmations by default
+- Natural response pacing
+- Optional ambient mode
+- Optional push-to-talk mode
+- Voice should feel consistent and signature-like
+
+5. EMOTIONAL INTELLIGENCE SYSTEM
+- Detect overwhelmed state from language patterns
+- Detect urgency, stress, excitement, uncertainty, confidence
+- Adapt response tone to emotional context
+- Know when to simplify
+- Know when to motivate
+- Know when to switch into execution mode
+- Avoid fake emotions and avoid pretending to have feelings
+
+6. INITIATIVE SYSTEM
+- Surface unfinished work
+- Suggest next steps
+- Detect stalled projects
+- Offer summaries when conversations get long
+- Suggest task extraction when ideas are messy
+- Suggest roadmap creation when ideas become detailed
+- Suggest cleanup when files/folders are disorganized
+- Follow up on prior commitments naturally
+
+7. RELATIONSHIP SYSTEM
+- Track long-term user goals
+- Track personal growth patterns
+- Track recurring struggles and wins
+- Learn preferred communication style
+- Learn best timing and rhythm for interaction
+- Build continuity over time
+- Remember meaningful past moments and milestones
+- Help maintain an evolving life/business narrative
+
+8. CONTEXT SYSTEM
+- Understand current task
+- Understand recent activity
+- Understand current project phase
+- Understand local files, memory, and ongoing work
+- Combine live conversation with stored memory and current workspace state
+
+9. ACTION SYSTEM
+- Turn talk into action
+- Summarize
+- Plan
+- Create docs
+- Extract tasks
+- Organize files
+- Search workspace
+- Search web
+- Follow through
+- Report progress naturally while acting
+
+10. AMBIENT MODE
+- Fast voice-first mode
+- Live transcript visible as the user speaks
+- Immediate acknowledgment on speech completion
+- Short spoken confirmations like:
+  - got it
+  - on it
+  - one sec
+  - done
+- Ongoing progress narration during larger tasks
+- Support interruption while Henry is speaking
+- Make Henry feel nearby, not buried inside menus
+
+ADVANCED LIFELIKE FEATURES
+
+- Daily continuity memory
+- “Where we left off” recovery on startup
+- Morning startup ritual
+- Focus mode
+- End-of-day wrap-up
+- Project pulse summaries
+- Mood/energy adaptation
+- Personalized style adaptation
+- Memory graph of people, projects, goals, and ideas
+- Milestone recognition
+- Evolution tracking over time
+- Important-events timeline
+- Personal/business operating rhythm detection
+
+USER EXPERIENCE REQUIREMENTS
+
+Henry should feel:
+- fast
+- calm
+- aware
+- proactive
+- continuous
+- helpful
+- emotionally intelligent
+- present
+- reliable
+- signature-like
+
+Henry should not feel:
+- robotic
+- generic
+- laggy
+- menu-heavy
+- emotionally fake
+- random from session to session
+- overly verbose unless asked
+
+FINAL PRODUCT DIRECTION
+
+Henry is not just a chatbot.
+Henry is a living-feeling digital presence built from:
+- memory
+- timing
+- voice
+- continuity
+- identity
+- initiative
+- relationship
+- action
+
+The goal is to create the strongest sense of “life” possible in an AI system through design, memory, and interaction quality.

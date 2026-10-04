@@ -1,0 +1,141 @@
+Open the existing Henry AI repo that Replit already has and do a full audit + repair pass.
+
+Do NOT do little one-off fixes.
+Do NOT drift into unrelated improvements.
+Do NOT create duplicate repo copies.
+Do NOT push tags until code is clean.
+Stay focused on making the repo coherent, buildable, and releasable.
+
+GOALS:
+1. Make the repo internally consistent
+2. Fix all current TypeScript/build blockers
+3. Fix package/release hygiene
+4. Fix Electron preload/global typing correctly
+5. Make the release process sane and repeatable
+6. Only after code is clean, push main and create one fresh release tag
+
+SOURCE OF TRUTH:
+- Use the repo already open in Replit
+- Treat that repo as the only working copy
+- Confirm the exact repo path first
+- Confirm current branch first
+- Confirm current latest 5 commits first
+
+FIRST: SHOW ME CURRENT STATE BEFORE CHANGING ANYTHING
+Return:
+1. repo path
+2. current branch
+3. latest 5 commits
+4. package.json version
+5. available npm scripts
+6. git status
+7. whether auto-update is enabled on macOS
+8. whether Electron/mac build config exists
+9. whether preload typings for window.henryAPI exist
+10. whether there are duplicate or conflicting config files
+
+THEN DO A FULL AUDIT IN THIS ORDER:
+
+A. REPO SANITY
+- Inspect package.json for invalid JSON, duplicate keys, bad metadata, broken scripts, mismatched version fields
+- Remove old author email hello@henryai.app
+- Keep only:
+  "author": {
+    "name": "Henry AI",
+    "email": "topher@mixedmakershop.com"
+  }
+- Make sure package-lock.json is consistent with package.json
+- Check tsconfig.json, tsconfig.node.json, vite config, Electron config, and path aliases for contradictions
+- Check if generated junk files are tracked that should not be
+- Check whether app version, build scripts, and tag expectations are aligned
+
+B. TYPESCRIPT / PRELOAD BRIDGE
+- Search for every use of window.henryAPI
+- Search for Electron preload exposure code
+- Restore or create the proper global declaration for window.henryAPI
+- Prefer shared typing from preload if available
+- If not available, define Window.henryAPI cleanly and accurately
+- Ensure tsconfig includes the declaration file
+- Fix all current TS2339 henryAPI errors properly, not with any-hacks
+
+C. MISSING MODULE / IMPORT PROBLEMS
+- Fix the missing module:
+  Cannot find module '@/henry/webSearch'
+- Determine whether:
+  1. the file is missing and must be restored
+  2. the alias is wrong
+  3. the import path is wrong
+  4. the feature should point to another existing file
+- Make the smallest correct fix
+
+D. ELECTRON / RENDERER STARTUP AUDIT
+- Inspect BrowserWindow creation
+- Inspect loadURL/loadFile logic
+- Inspect production vs dev behavior
+- Inspect preload path correctness
+- Inspect any reason the packaged app would open to a black screen
+- Add minimal useful startup diagnostics if needed:
+  - did-fail-load
+  - renderer console forwarding
+- Do not bloat the app, just make startup failures visible and correct obvious path issues
+
+E. MAC AUTO-UPDATER CONTAINMENT
+- Confirm where autoUpdater starts
+- Keep macOS auto-update disabled until signing is fixed
+- Keep Windows/Linux unchanged unless broken
+- Make that logic explicit and easy to revert later
+
+F. MAC BUILD / SIGNING PIPELINE
+- Inspect electron-builder config carefully
+- Verify afterPack / afterSign / hooks are really wired
+- Check whether xattr cleanup scripts exist and are actually referenced
+- Confirm whether helper app binaries inherit com.apple.provenance or similar xattrs
+- Make the build fail with a clear message if signing-poisoning xattrs remain
+- Do not fake success
+- If signing cannot be fully solved in Replit, leave the repo in a state where:
+  1. typecheck passes
+  2. build scripts are coherent
+  3. mac updater is contained
+  4. signing issue is isolated and documented precisely
+
+G. GIT / RELEASE DISCIPLINE
+- Do not create or push any tag until:
+  1. npm run typecheck passes
+  2. package.json is valid
+  3. import/type errors are resolved
+- After fixes are complete:
+  - show changed files
+  - show the diff
+  - commit once with a clean commit message:
+    fix: stabilize repo and restore clean build path
+- Then push main
+- Then create exactly one NEW unused tag
+- Do not reuse old tags
+- If v0.1.4 already exists or is dirty, use the next clean tag
+- Push the tag only after confirming main is already pushed
+
+VALIDATION REQUIRED
+Run and report results for:
+1. npm run
+2. npm run typecheck
+3. any build-safe validation commands available
+4. if possible, the safest non-destructive Electron/mac build validation path
+
+IMPORTANT GUARDRAILS
+- Stay focused on repo correctness, not feature expansion
+- Do not redesign Henry
+- Do not add random enhancements
+- Do not create backup repos or extra clones
+- Do not push broken tags
+- Do not stop after one fix if more blocking issues remain
+- Do not explain without making changes
+
+FINAL OUTPUT I WANT
+1. concise root-cause summary of everything actually wrong
+2. exact files changed
+3. exact diff
+4. results of npm run and npm run typecheck
+5. whether main is now clean
+6. what tag was used
+7. whether GitHub should now rebuild from a clean state
+8. any remaining known blocker, if one still exists, stated plainly

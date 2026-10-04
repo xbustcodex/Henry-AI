@@ -1,0 +1,88 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-electron/
+release/
+
+# Vite / test / lint caches (local only)
+.vite/
+coverage/
+.eslintcache
+
+# macOS duplicate-drop folder name (never commit)
+scripts 2/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Database (user data, not committed)
+*.db
+*.db-journal
+*.db-wal
+
+# TypeScript incremental / project-info caches (never commit)
+*.tsbuildinfo
+tsconfig.node.tsbuildinfo
+
+# macOS Finder duplicates (space + number copies)
+*\ 2.ts
+*\ 2.tsx
+*\ 2.css
+*\ 2.js
+.DS_Store
+
+
+# Build outputs — generated on every build, do not track
+renderer/index.html
+renderer/assets/
+dist/
+dist-electron/
+
+
+# macOS Finder / iCloud copy artifacts (e.g. "file 2.tsx", "file 4.tsx")
+*\ [0-9]*\.*
+henry-proxy/.wrangler/
+release2/
+
+# Local archive of byte-identical numbered duplicates (created 2026-05-26)
+.archive-*/
+
+# Backups created by editing sessions (`*.before-*`, `*.backup-*`, and
+# iCloud-numbered duplicates) moved here by tooling so they stay out of
+# git and the typecheck globs.
+_backups/
+
+# Python bytecode (session_store.py bridge)
+__pycache__/
+*.pyc
+
+# Local editor/repair backups
+*.bak
+*.backup
+*.backup[0-9]*
+
+# Extracted AppImage mount point — build artifact, 173 MB, must never be committed.
+# It was committed in b9f6fad/fa9a9d9 and purged from history before the first push.
+squashfs-root/
+
+# Local build output
+release2/

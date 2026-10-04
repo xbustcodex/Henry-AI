@@ -1,0 +1,119 @@
+Redesign all integrations in Henry around guided onboarding and useful connected states.
+
+Problem:
+Right now integrations like Slack can open to an empty shell with no clear next step. That is confusing and unfinished. Every integration should guide the user from “not connected” to “connected and useful” in a simple, human way.
+
+Goal:
+For every integration, implement a full lifecycle:
+1. Not connected
+2. Connecting / setup
+3. Connected with live feed or useful actions
+
+Global product rule:
+No integration panel should ever open to a dead empty state without telling the user what to do next.
+
+What I want across all integrations:
+
+A. Standard integration state model
+Every integration should support these UI states:
+
+1. Not connected
+- show service name
+- short plain-English explanation
+- what connecting unlocks
+- one obvious Connect button
+
+2. Connecting
+- guided setup flow
+- progress state
+- plain language instructions
+- no developer jargon unless hidden in Advanced
+
+3. Connected
+- real feed, real data, or real utility
+- recent activity
+- search
+- quick actions
+
+B. Integration-specific expectations
+
+Slack
+- if not connected: show Connect Slack button
+- after connect: load workspace, channels, messages, mentions
+- show recent feed and channel list
+- allow search
+- no dead “No channels found” shell without onboarding
+
+GitHub
+- connect flow
+- recent repos / issues / PRs / activity
+- search
+- quick actions
+
+Notion
+- connect flow
+- recent pages / databases
+- search
+- useful empty state if no content loaded yet
+
+Google Drive
+- connect flow
+- recent files and search
+- file-focused actions
+
+Calendar
+- connect flow
+- upcoming events
+- useful day/agenda actions
+
+Email
+- connect flow
+- inbox/recent thread feed
+- search and draft actions
+
+Any other supported integrations
+- same lifecycle pattern:
+  not connected → connecting → connected/live
+
+C. Empty states
+Every integration panel must have a meaningful empty state.
+
+Examples:
+- “Connect Slack to load your channels and recent messages.”
+- “No recent GitHub activity yet. Connect a repo or refresh.”
+- “Connect Google Drive to browse recent files.”
+
+D. Entry points
+Users should be able to start connection from:
+1. Integrations home
+2. the specific integration panel itself
+
+If a user opens Slack directly and it is not connected, show:
+- explanation
+- Connect Slack button
+- what happens after connecting
+
+E. Advanced settings
+- keep raw token/manual config only in Advanced
+- default UX should be guided and human
+- do not lead with OAuth token boxes
+
+F. Keep implementation practical
+- improve front-end lifecycle UX first
+- wire real data where backend logic already exists
+- if some integrations still need backend work, surface that clearly in UI instead of leaving blank shells
+
+G. Focus
+Do not redesign the entire app.
+Do not drift into unrelated features.
+Stay focused on integrations lifecycle UX and onboarding.
+
+After changes:
+- show which files changed
+- show the diff
+- summarize the onboarding flow for each integration
+- clearly list which integrations now have:
+  1. not-connected state
+  2. connecting state
+  3. connected feed/useful state
+- clearly call out any integration that still needs backend work

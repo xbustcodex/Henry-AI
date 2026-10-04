@@ -1,0 +1,48 @@
+
+> henry-ai-desktop@0.1.0 dev:electron
+> vite
+
+The CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.
+vite v5.4.21 building for development...
+
+watching for file changes...
+vite v5.4.21 building for development...
+
+watching for file changes...
+
+build started...
+
+build started... (x2)
+
+  VITE v5.4.21  ready in 589 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+  ➜  press h + enter to show help
+(node:4973) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/christophercook/Desktop/henry-ai-desktop/postcss.config.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/christophercook/Desktop/henry-ai-desktop/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✓ 1 modules transformed.
+dist-electron/preload.js  6.47 kB │ gzip: 1.44 kB
+built in 164ms.
+✓ 22 modules transformed.
+dist-electron/main.js  81.69 kB │ gzip: 19.73 kB
+built in 245ms.
+(node:4989) UnhandledPromiseRejectionWarning: Error: The module '/Users/christophercook/Desktop/henry-ai-desktop/node_modules/better-sqlite3/build/Release/better_sqlite3.node'
+was compiled against a different Node.js version using
+NODE_MODULE_VERSION 137. This version of Node.js requires
+NODE_MODULE_VERSION 125. Please try re-compiling or re-installing
+the module (for instance, using `npm rebuild` or `npm install`).
+    at process.func [as dlopen] (node:electron/js2c/node_init:2:2559)
+    at Module._extensions..node (node:internal/modules/cjs/loader:1602:18)
+    at Object.func [as .node] (node:electron/js2c/node_init:2:2559)
+    at Module.load (node:internal/modules/cjs/loader:1295:32)
+    at Module._load (node:internal/modules/cjs/loader:1111:12)
+    at c._load (node:electron/js2c/node_init:2:16955)
+    at Module.require (node:internal/modules/cjs/loader:1318:19)
+    at require (node:internal/modules/helpers:179:18)
+    at bindings (/Users/christophercook/Desktop/henry-ai-desktop/node_modules/bindings/bindings.js:112:48)
+    at new Database (/Users/christophercook/Desktop/henry-ai-desktop/node_modules/better-sqlite3/lib/database.js:48:64)
+(Use `Electron --trace-warnings ...` to show where the warning was created)
+(node:4989) UnhandledPromiseRejectionWarning: Unhandled promise rejection. This error originated either by throwing inside of an async function without a catch block, or by rejecting a promise which was not handled with .catch(). To terminate the node process on unhandled promise rejection, use the CLI flag `--unhandled-rejections=strict` (see https://nodejs.org/api/cli.html#cli_unhandled_rejections_mode). (rejection id: 1)

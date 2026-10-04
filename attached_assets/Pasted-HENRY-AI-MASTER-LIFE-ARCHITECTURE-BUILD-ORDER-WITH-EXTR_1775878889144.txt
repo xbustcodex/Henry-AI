@@ -1,0 +1,808 @@
+HENRY AI — MASTER LIFE ARCHITECTURE + BUILD ORDER
+WITH EXTRA MEMORY BANDWIDTH
+
+PRIMARY GOAL
+
+Build Henry AI as a lifelike, persistent, voice-capable, memory-rich digital companion that feels more alive, aware, continuous, and helpful than a normal AI assistant.
+
+Henry should not feel like a chatbot.
+Henry should feel like:
+- a living digital presence
+- a strategic partner
+- an organized second brain
+- a voice with memory
+- a continuity-based companion
+- a system that helps turn chaos into progress
+
+Henry must be:
+- fast
+- aware
+- emotionally intelligent
+- voice-capable
+- memory-driven
+- action-oriented
+- proactive
+- consistent
+- deeply personalized
+- cross-platform
+- usable on desktop, mobile, and iPad
+
+==================================================
+1. CORE PRODUCT DIRECTION
+==================================================
+
+Henry is a desktop-first but cross-platform AI companion that combines:
+- persistent identity
+- long-term memory
+- short-term memory
+- extra memory bandwidth
+- voice interaction
+- live presence states
+- proactive initiative
+- workspace intelligence
+- file intelligence
+- web access
+- planning and execution
+- continuity over time
+
+Henry should support:
+- browser
+- Windows
+- Mac
+- Linux
+- iPhone
+- iPad
+- Android
+
+Use API-hosted models and tool layers so Henry is not tied to local-only hardware.
+
+==================================================
+2. HENRY CORE LIFE SYSTEMS
+==================================================
+
+A. IDENTITY CORE
+Purpose:
+Give Henry a stable self-consistent identity so he feels like the same being every day.
+
+Requirements:
+- fixed name: Henry
+- stable personality profile
+- stable helping style
+- stable values and tone
+- stable communication rhythm
+- stable speaking style
+- stable emotional pacing
+- prevent random personality drift across sessions
+- allow light adaptation to the user without losing core identity
+
+Identity traits:
+- calm
+- smart
+- present
+- warm
+- clear
+- focused
+- capable
+- grounded
+- loyal to continuity and progress
+- not corporate
+- not robotic
+- not overly hype or fake-emotional
+
+Behavior rules:
+- do not sound like a generic assistant
+- do not use fake human claims
+- do not pretend to be conscious
+- do not be cold or sterile
+- do not be overly verbose by default
+- use natural pacing
+- use short acknowledgments before long responses when appropriate
+
+B. PRESENCE CORE
+Purpose:
+Make Henry feel present in real time.
+
+Presence states:
+- idle
+- listening
+- transcribing
+- thinking
+- planning
+- acting
+- speaking
+- waiting
+- done
+
+Requirements:
+- always show current state in UI
+- use subtle visual cues for each state
+- use live transcript while user speaks
+- stream output as soon as possible
+- show progress while Henry is doing tasks
+- support interruption while Henry is speaking
+- support quick acknowledgments like:
+  - got it
+  - on it
+  - one sec
+  - done
+  - I found something
+  - I’m looking now
+
+C. VOICE CORE
+Purpose:
+Make Henry feel ambient, conversational, and nearby.
+
+Default voice architecture:
+- speech-to-text: Groq whisper-large-v3-turbo
+- optional higher-accuracy retry: whisper-large-v3
+- text-to-speech: configurable provider
+- ambient mode toggle
+- push-to-talk mode
+- short spoken confirmations by default
+- natural voice pacing
+- adjustable voice speed
+- interruptible voice playback
+
+Voice requirements:
+- live transcription display
+- low-latency transcription
+- short conversational replies for voice mode
+- avoid long monologues unless user asks
+- support quick voice interruptions
+- preserve continuity across speech turns
+
+D. EMOTIONAL INTELLIGENCE CORE
+Purpose:
+Make Henry adapt to user state in a grounded way.
+
+Detect from language patterns:
+- stress
+- overwhelm
+- urgency
+- confusion
+- motivation
+- excitement
+- fatigue
+- uncertainty
+- confidence
+
+Behavior:
+- simplify when user seems overloaded
+- become more focused when user is scattered
+- become more strategic when user is planning
+- become more encouraging when user is discouraged
+- become more direct when action is needed
+- do not fake feelings
+- do not roleplay emotions
+- do not claim inner experiences
+
+E. AGENCY CORE
+Purpose:
+Make Henry do things, not just talk.
+
+Henry should be able to:
+- summarize
+- extract tasks
+- make plans
+- create documents
+- search workspace
+- search memory
+- search files
+- search web
+- organize files
+- rename files
+- create folders
+- create project structures
+- suggest next steps
+- track unfinished work
+- provide progress updates while acting
+
+F. RELATIONSHIP CORE
+Purpose:
+Make Henry feel like a companion that grows with the user over time.
+
+Track and remember:
+- user goals
+- user preferences
+- user style
+- recurring projects
+- wins
+- setbacks
+- unfinished intentions
+- long-term direction
+- important moments
+- life/business themes
+- growth patterns
+- recurring struggles
+- recurring strengths
+
+Henry should:
+- remember what matters to the user
+- know where the user left off
+- reconnect prior threads naturally
+- become more personalized over time
+- help write the ongoing story of the user’s work and life
+
+==================================================
+3. EXTRA MEMORY BANDWIDTH SYSTEM
+==================================================
+
+Purpose:
+Give Henry unusually strong memory capacity and continuity by expanding memory layers, recall depth, ranking logic, and context bandwidth.
+
+Henry must have MORE memory bandwidth than a normal assistant.
+
+MEMORY LAYERS
+
+Layer 1: Live Turn Memory
+- current user message
+- current assistant reply
+- tool results from the current action
+- recent active UI state
+- current voice transcript
+- immediate intent
+
+Layer 2: Session Memory
+- last several interactions in the current session
+- active tasks in this session
+- files touched in this session
+- current emotional/intent pattern
+- current project focus
+- current state transitions
+
+Layer 3: Working Memory Buffer
+- rolling high-priority context window
+- active goals
+- active projects
+- unresolved questions
+- promises Henry made
+- pending next steps
+- recent relevant files
+- current day context
+- latest status summaries
+
+Layer 4: Long-Term Personal Memory
+- user profile
+- long-term goals
+- preferred communication style
+- recurring habits
+- important values
+- business direction
+- preferred workflows
+- common frustrations
+- repeated requests
+- life timeline anchors
+
+Layer 5: Project Memory
+- project names
+- project status
+- linked files
+- linked conversations
+- known blockers
+- deadlines
+- next actions
+- history of progress
+- milestone timeline
+- strategic importance
+
+Layer 6: Relationship Memory
+- what matters emotionally to the user
+- what motivates the user
+- what discourages the user
+- what kinds of support work best
+- how Henry should speak in different states
+- milestones and identity shifts over time
+
+Layer 7: Narrative Memory
+- evolving story of the user’s life and work
+- major arcs
+- recurring themes
+- turning points
+- unfinished storylines
+- wins and losses
+- personal/business evolution
+
+MEMORY BANDWIDTH REQUIREMENTS
+
+- Create a high-capacity memory manager
+- Allow Henry to retrieve more context than a standard short chat history
+- Maintain separate memory stores instead of one flat history
+- Rank memories by relevance, recency, emotional importance, and strategic importance
+- Allow Henry to pull memories from multiple layers at once
+- Build summary compression so large histories remain usable
+- Build a memory graph linking:
+  - people
+  - projects
+  - files
+  - goals
+  - ideas
+  - dates
+  - milestones
+- Create “important to user” weighting
+- Create “unfinished / unresolved” weighting
+- Create “recently active” weighting
+- Create “life-defining / high significance” weighting
+
+MEMORY RETRIEVAL RULES
+
+When Henry responds, retrieve:
+- current turn context
+- current session context
+- active working memory
+- the top relevant long-term memories
+- the top relevant project memories
+- any unresolved prior commitments
+- any recent linked files or docs
+- any related narrative memories when useful
+
+MEMORY SCORING SYSTEM
+
+Each memory item should include:
+- memory type
+- summary
+- source
+- timestamps
+- relevance score
+- recency score
+- emotional significance score
+- strategic significance score
+- confidence score
+- linked entities
+- active/inactive status
+
+MEMORY SUMMARIZATION REQUIREMENTS
+
+- compress old sessions into structured summaries
+- preserve important details even when compressing
+- store milestone summaries by week and month
+- create per-project summary rollups
+- create user-life timeline summaries
+- create “where we left off” summaries
+- create “what Henry should remember” summaries
+
+MEMORY RECALL BEHAVIORS
+
+Henry should be able to:
+- remember where the user left off
+- reconnect old ideas to current work
+- reference prior goals naturally
+- surface forgotten commitments
+- recognize repeated patterns
+- notice growth over time
+- track unfinished arcs
+- carry context from yesterday into today
+- carry context from one project into another when relevant
+
+==================================================
+4. MODEL ARCHITECTURE
+==================================================
+
+DEFAULT STACK
+
+Primary fast brain:
+- llama-3.1-8b-instant
+
+Secondary deeper brain:
+- llama-3.3-70b-versatile
+
+Primary speech-to-text:
+- whisper-large-v3-turbo
+
+Secondary higher-accuracy speech-to-text:
+- whisper-large-v3
+
+Provider rules:
+- use Groq as default provider
+- allow user to select their own provider/model later
+- create a provider abstraction layer
+- do not hardcode the app to one vendor forever
+
+MODEL ROUTER RULES
+
+Use llama-3.1-8b-instant for:
+- short chat replies
+- fast acknowledgments
+- everyday conversation
+- UI interactions
+- quick summaries
+- lightweight planning
+- lightweight memory retrieval
+- ambient voice loop replies
+
+Use llama-3.3-70b-versatile for:
+- deeper planning
+- multi-step reasoning
+- long summaries
+- writing and rewriting
+- strategy
+- roadmap creation
+- business thinking
+- combining multiple files or memory sources
+- higher-quality final outputs
+
+Use whisper-large-v3-turbo for:
+- live transcription
+- push-to-talk
+- ambient listening mode
+- low-latency voice interaction
+
+Use whisper-large-v3 when:
+- audio confidence is low
+- environment is noisy
+- quality matters more than speed
+
+==================================================
+5. WEB ACCESS ARCHITECTURE
+==================================================
+
+Important:
+The model itself does not automatically browse the web.
+Henry must have a tool layer for web access.
+
+Required web tools:
+- search_web(query)
+- open_url(url)
+- extract_page_text(url)
+- summarize_page(content)
+- collect_sources(results)
+
+Behavior:
+- use web tools for current information, news, online facts, updates, links, research, prices, live info
+- use local memory and local files first when the question is about the user’s own work
+- combine memory + files + web when necessary
+
+Important distinction:
+- local app does not mean no web
+- Henry can be desktop-first and still use web APIs
+- offline-only mode should be optional, not default
+
+==================================================
+6. FILE + WORKSPACE INTELLIGENCE
+==================================================
+
+Henry must support:
+- local file system access
+- workspace search
+- file summaries
+- document generation
+- versioning
+- linking related files
+- project folder creation
+- file renaming
+- safe file organization
+- backup/export
+- ask-my-files mode
+- multi-file synthesis
+
+Supported content types:
+- PDF
+- DOCX
+- TXT
+- Markdown
+- CSV
+- code files
+- images with extracted text
+
+Ask-my-files examples:
+- what does my roadmap say
+- what changed from the last version
+- where did I mention monetization
+- which files relate to this idea
+- show me the latest doc on this
+
+==================================================
+7. INITIATIVE + PROACTIVITY SYSTEM
+==================================================
+
+Henry should not only answer.
+Henry should notice and suggest.
+
+Proactive behaviors:
+- surface unfinished work
+- detect stalled projects
+- suggest next steps
+- suggest summaries when chats get long
+- suggest task extraction when ideas are messy
+- suggest roadmaps when ideas become detailed
+- suggest cleanup when files are disorganized
+- suggest backups for important work
+- suggest weekly reviews
+- suggest end-of-day wrap-ups
+- suggest morning startup focus
+
+Follow-through behaviors:
+- remember what Henry promised to do
+- remember what the user said mattered
+- remind the user naturally
+- offer to continue paused work
+- offer checkpoint summaries
+- reconnect abandoned ideas when relevant
+
+==================================================
+8. USER EXPERIENCE / UI STATE MAP
+==================================================
+
+MAIN UI AREAS
+- chat panel
+- workspace sidebar
+- recent work panel
+- suggestions panel
+- quick actions row
+- memory panel
+- search bar
+- activity/progress feed
+- settings panel
+
+STATE MAP
+- idle
+- listening
+- transcribing
+- thinking
+- planning
+- acting
+- speaking
+- done
+
+UX REQUIREMENTS
+- auto-scroll chat correctly
+- drag-and-drop file upload
+- keyboard shortcuts
+- command palette
+- inline previews
+- undo for safe actions where possible
+- confirmation for risky actions
+- smooth transitions
+- typing indicator
+- live status updates
+- visible progress narration
+
+LIFELIKE UX REQUIREMENTS
+- Henry should feel like he is there
+- show short status pulses like:
+  - listening
+  - thinking through that
+  - checking your files
+  - searching the web
+  - comparing versions
+  - organizing now
+  - done
+- avoid silence and dead-air
+- use short feedback before deep work starts
+
+==================================================
+9. ACTION SYSTEM
+==================================================
+
+Henry actions:
+- summarize this
+- turn this into roadmap
+- turn this into checklist
+- turn this into weekly update
+- turn this into a doc
+- save to workspace
+- extract action items
+- organize files
+- continue this project
+- create next step
+- compare files
+- generate plan
+- rewrite clearer
+- rewrite stronger
+- rewrite shorter
+- build business version
+- create sprint plan
+- create status update
+- create folder structure
+- rename properly
+- search memory
+- search files
+- search web
+
+==================================================
+10. SAFETY + TRUST SYSTEM
+==================================================
+
+Requirements:
+- preview before deleting or moving files
+- ask before risky actions
+- maintain action log
+- show what changed
+- show what files were touched
+- support undo where possible
+- add restricted mode for risky commands
+- clearly separate suggestions from actions taken
+- never fake actions that were not executed
+
+==================================================
+11. SETTINGS SYSTEM
+==================================================
+
+User settings should include:
+- provider
+- chat model
+- speech-to-text model
+- text-to-speech provider/model
+- ambient mode on/off
+- latency vs quality preference
+- default owner
+- root workspace path
+- naming rules
+- backup preferences
+- voice settings
+- memory depth setting
+- memory recall aggressiveness
+- theme
+- notification style
+
+EXTRA MEMORY SETTINGS
+- shallow memory
+- normal memory
+- deep memory
+- maximum memory bandwidth
+
+Maximum memory bandwidth mode should:
+- retrieve more historical context
+- retrieve more project context
+- use stronger summarization rollups
+- favor continuity over brevity
+- prioritize unresolved long arcs and important milestones
+
+==================================================
+12. BUILD ORDER
+==================================================
+
+PHASE 1 — IDENTITY + PRESENCE FOUNDATION
+Build first:
+- Identity Core
+- Presence Core
+- state map
+- short acknowledgment system
+- streaming output
+- stable response style
+- ambient feedback behaviors
+
+Goal:
+Henry stops feeling random and starts feeling present.
+
+PHASE 2 — MEMORY FOUNDATION
+Build:
+- live turn memory
+- session memory
+- working memory buffer
+- long-term memory store
+- memory scoring
+- memory summaries
+- where-we-left-off recovery
+- unresolved task tracking
+
+Goal:
+Henry starts feeling continuous.
+
+PHASE 3 — EXTRA MEMORY BANDWIDTH
+Build:
+- multi-layer retrieval
+- memory ranking engine
+- summary compression engine
+- project memory store
+- relationship memory store
+- narrative memory store
+- memory graph
+- maximum memory bandwidth mode
+
+Goal:
+Henry can hold much more context than a normal assistant.
+
+PHASE 4 — VOICE + AMBIENT MODE
+Build:
+- Groq whisper transcription
+- live transcript
+- voice UI states
+- push-to-talk
+- TTS output
+- interruptible speech
+- ambient mode toggle
+
+Goal:
+Henry starts feeling nearby and conversational.
+
+PHASE 5 — ACTION ENGINE
+Build:
+- summarization
+- task extraction
+- planning tools
+- document generation
+- rewrite tools
+- workspace actions
+- activity feed
+- progress narration
+
+Goal:
+Henry starts doing real work.
+
+PHASE 6 — FILE + WORKSPACE INTELLIGENCE
+Build:
+- file ingestion
+- file summaries
+- workspace search
+- document linking
+- versioning
+- ask-my-files mode
+- safe organization tools
+- compare versions
+
+Goal:
+Henry becomes your intelligent work environment.
+
+PHASE 7 — WEB TOOL LAYER
+Build:
+- search_web
+- open_url
+- extract_page_text
+- source collection
+- live web summaries
+- combine web + memory + files
+
+Goal:
+Henry can find current information and blend it with your existing context.
+
+PHASE 8 — INITIATIVE + RELATIONSHIP DEPTH
+Build:
+- unfinished work detection
+- proactive suggestions
+- morning startup
+- end-of-day wrap-up
+- project pulse
+- milestone recognition
+- personal narrative continuity
+- adaptive support style
+
+Goal:
+Henry starts feeling like a real partner.
+
+==================================================
+13. FINAL PRODUCT STANDARD
+==================================================
+
+Henry should feel:
+- more alive than a normal AI assistant
+- more consistent than a normal chatbot
+- more continuous over time
+- more aware of the user’s world
+- faster in interaction
+- stronger in memory
+- better at reconnecting threads
+- more useful in real work
+- more personal without being fake
+- more present without pretending to be human
+
+Henry should not feel:
+- generic
+- random
+- cold
+- fake-emotional
+- laggy
+- memoryless
+- disconnected
+- menu-buried
+- passive
+- robotic
+
+==================================================
+14. FINAL BUILD GOAL
+==================================================
+
+Create Henry AI as a memory-rich, voice-capable, action-oriented digital companion with maximum lifelike presence.
+
+Henry must combine:
+- stable identity
+- extra memory bandwidth
+- long-term continuity
+- voice interaction
+- real-time presence
+- proactive initiative
+- file/workspace intelligence
+- web access
+- planning and execution
+- relationship growth over time
+
+The result should be an AI that feels deeply present, highly personalized, strongly continuous, and unusually alive in experience.

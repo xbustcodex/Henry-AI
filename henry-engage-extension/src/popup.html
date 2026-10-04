@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Henry Engage</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 320px;
+    min-height: 200px;
+    background: #08080e;
+    color: #e8e8f0;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    padding: 16px;
+  }
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .logo { font-size: 20px; }
+  .title { font-size: 15px; font-weight: 700; color: #e8e8f0; }
+  .status { font-size: 11px; color: #7c3aed; font-weight: 500; }
+  .status.ok { color: #4ade80; }
+  .status.err { color: #f87171; }
+
+  textarea {
+    width: 100%;
+    height: 80px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    color: #e8e8f0;
+    padding: 10px 12px;
+    font-size: 13px;
+    font-family: inherit;
+    resize: none;
+    outline: none;
+    margin-bottom: 10px;
+    line-height: 1.4;
+  }
+  textarea:focus { border-color: #7c3aed; }
+  textarea::placeholder { color: #5a5a7a; }
+
+  .row { display: flex; gap: 8px; margin-bottom: 8px; }
+  select {
+    flex: 1;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    color: #e8e8f0;
+    padding: 7px 10px;
+    font-size: 12px;
+    outline: none;
+    cursor: pointer;
+  }
+  select option { background: #1a1a2e; }
+
+  .btn {
+    flex: 1;
+    background: #7c3aed;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn:hover { background: #6d28d9; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn.success { background: #16a34a; }
+  .btn.error { background: #dc2626; }
+
+  .quick-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .quick-btn {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    color: #a0a0c0;
+    font-size: 11px;
+    padding: 7px 10px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s;
+  }
+  .quick-btn:hover { border-color: #7c3aed; color: #e8e8f0; background: rgba(124,58,237,0.1); }
+
+  .footer {
+    font-size: 10px;
+    color: #3a3a5a;
+    text-align: center;
+    margin-top: 12px;
+  }
+</style>
+</head>
+<body>
+<div class="header">
+  <span class="logo">◉</span>
+  <div>
+    <div class="title">Henry Engage</div>
+    <div class="status" id="status">Checking Henry…</div>
+  </div>
+</div>
+
+<div class="quick-actions" id="quick-actions">
+  <button class="quick-btn" data-action="selection">📋 Selected text</button>
+  <button class="quick-btn" data-action="page">📄 This page</button>
+  <button class="quick-btn" data-action="url">🔗 Page URL</button>
+  <button class="quick-btn" data-action="note">💬 Quick note</button>
+</div>
+
+<textarea id="text-input" placeholder="Type a note or paste content to send to Henry…"></textarea>
+
+<div class="row">
+  <select id="category">
+    <option value="note">📝 Note</option>
+    <option value="quote">💬 Quote</option>
+    <option value="task">✅ Task</option>
+    <option value="idea">💡 Idea</option>
+    <option value="web_clip">📎 Web clip</option>
+    <option value="link">🔗 Link</option>
+    <option value="reminder">🔔 Reminder</option>
+  </select>
+  <button class="btn" id="send-btn">⚡ Send + Process</button>
+</div>
+
+<div class="footer">Henry AI running locally · <span id="version">–</span></div>
+<div style="font-size:10px;color:#3a3a6a;text-align:center;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.06)">
+  <strong style="color:#6644aa">⌘⇧Space</strong> = capture+process selected text anywhere
+</div>
+
+<script src="popup.js"></script>
+</body>
+</html>

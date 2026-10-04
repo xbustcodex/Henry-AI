@@ -1,0 +1,101 @@
+Do a focused UX/functionality pass on Henry AI around 6 specific areas. Stay narrow. Do not redesign the whole app. Do not drift into unrelated features.
+
+Goal:
+Make these sections immediately useful and easy to navigate, not half-finished or overly technical.
+
+Priority areas:
+
+1. Left sidebar scrolling
+Problem:
+The left sidebar does not scroll reliably in all windows, so lower items become inaccessible unless the window is maximized.
+
+Fix:
+- Make the left sidebar scroll consistently in every screen/layout
+- Keep it usable in smaller window sizes
+- Make lower nav items easy to reach
+- Do not break existing layout structure
+
+2. 3D printer section
+Problem:
+The printer area needs to find printers and auto-connect instead of feeling manual/technical.
+
+Fix:
+- Add printer discovery/search flow
+- Show available printers clearly
+- Add auto-connect behavior where possible
+- Show connected printer status
+- Make the first-run experience wizard-like and simple
+- Prefer plain language over technical setup
+
+3. Recorder
+Problem:
+User cannot access recordings after recording.
+
+Fix:
+- Add a recordings library/list view
+- Show recent recordings
+- Allow opening/viewing recordings and transcripts
+- Add useful actions:
+  - rename
+  - summarize
+  - export
+  - send to workspace
+- Make recorder feel complete, not just capture-only
+
+4. Integrations feed
+Problem:
+Slack and other integrations need an actual feed from the connected source, not just connection status/settings.
+
+Fix:
+- For connected integrations, show a useful source feed or recent activity view
+- Examples:
+  - Slack: recent channels/messages/mentions
+  - GitHub: PRs/issues/activity
+  - Notion: recent pages
+  - Drive: recent files
+- Keep the existing simplified connection UX
+- Make integrations feel alive immediately after connection
+
+5. Workspace tightening
+Problem:
+Workspace needs to feel tighter and more useful.
+
+Fix:
+- Make workspace more focused around:
+  - recent items
+  - active projects
+  - quick create
+  - summaries
+  - next actions
+- Reduce loose or dead-feeling space
+- Make the workspace feel like a real control center
+
+6. Computer control
+Problem:
+Computer control should feel much more wizard-like and simple, with clearer access to what Henry can do on the computer.
+
+Fix:
+- Rework computer control UX into guided actions
+- Surface permissions clearly
+- Group actions in plain language
+- Examples:
+  - organize files
+  - open apps
+  - clean desktop
+  - run command
+  - check permissions
+- Make it obvious and friendly, not like raw system tooling
+
+Implementation rules:
+- Stay focused only on these 6 areas
+- Improve front-end usability first
+- Keep existing backend logic where possible
+- Use plain human wording, not technical wording
+- Do not redesign unrelated panels
+- Do not break working startup/build behavior
+
+After changes:
+- show exactly which files changed
+- show the diff
+- summarize what improved in each of the 6 areas
+- call out any area that still needs backend work beyond the UI

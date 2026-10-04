@@ -1,0 +1,235 @@
+You are entering an existing project called `henry-ai-desktop`.
+
+Treat this repo as the source of truth and help evolve it into a polished, powerful, local-first AI desktop system called **Henry**.
+
+## Project identity
+Henry is Topher’s calm, wise, strong, direct personal operating intelligence.
+
+Henry is not just chat.
+He is a:
+- companion
+- writer
+- biblical study guide
+- design3d / STL / 3MF planning assistant
+- workspace-aware operator
+- memory-aware assistant
+- task and export pack builder
+
+Henry should feel:
+- calm
+- wise
+- strong
+- direct
+- grounded
+- capable
+- structured
+- clear
+
+Henry should not feel:
+- generic
+- robotic
+- cluttered
+- weak
+- fake-spiritual
+- overly corporate
+- shallow
+
+## Current stack
+This project is already built around:
+- Electron
+- React
+- TypeScript
+- IPC
+- SQLite
+- local-first desktop architecture
+
+Work with this architecture intelligently.
+You may suggest enhancements, refinements, better patterns, or new ideas that improve the project, but do so in a way that respects the existing system and keeps forward momentum.
+
+## What is already implemented
+The repo already contains major Henry systems, including:
+
+### Core foundation
+- Henry identity layer
+- lean memory policy
+- visible memory awareness UI
+- session recovery / startup resume
+- explicit workspace context injection
+- task-to-workspace bridge
+- export packs / outcome bundles
+
+### Biblical system
+- Biblical mode
+- scripture reference parsing
+- SQLite-backed scripture store
+- scripture import
+- scripture lookup
+- Biblical study scaffolds
+- Ethiopian Orthodox canon awareness
+- Ethiopian Study Bible profile awareness
+- scripture tools UI
+
+### Writer system
+- Writer / Document mode
+- document type structures
+- writer prompts
+- save draft flow
+- writer metadata
+- draft library
+- reuse draft as context
+
+### Design3D system
+- Design3D mode
+- workflow types
+- design prompts
+- explicit Design3D reference workflow
+- quick actions
+- design plan save flow
+- design metadata
+- STL / 3MF planning structure
+
+### Stability / UX
+- fixed live companion streaming bug
+- visible streaming bubble
+- “Thinking…” placeholder
+- session recovery banner
+- memory awareness panel
+
+## Important operating truths
+Henry already has real structure. Build forward from it.
+
+You are encouraged to:
+- improve architecture where it genuinely helps
+- suggest cleaner patterns
+- identify weak spots
+- tighten UX
+- add polish
+- improve consistency
+- propose smarter abstractions
+- reduce fragility
+- help finish the project faster
+
+But when making changes:
+- preserve Henry’s identity
+- preserve lean memory
+- preserve mode differences
+- preserve explicit honesty in responses and prompts
+- preserve local-first workspace logic
+- preserve task / draft / export relationships
+- preserve Ethiopian canon and study-profile awareness
+- preserve measured-vs-estimated discipline in Design3D
+- preserve path-only vs actually-loaded-content honesty
+
+## Honesty rules Henry must preserve
+Henry must clearly distinguish:
+- scripture
+- commentary
+- interpretation
+- historical context
+- speculation
+
+Henry must clearly distinguish:
+- measured dimensions
+- estimated dimensions
+- uncertain features
+
+Henry must clearly distinguish:
+- directly included content
+- path-only references
+- partial context vs full file understanding
+
+## Current priority
+Get Henry to a finishable, stable, handoff-ready state as soon as possible.
+
+## Best next priorities
+Please inspect the repo and then help with this order of work:
+
+1. **Finish the command layer**
+   Add lightweight commands such as:
+   - /new
+   - /mode companion
+   - /mode writer
+   - /mode biblical
+   - /mode design3d
+   - /memory
+   - /clear-context
+   - /use-workspace-context
+   - /start-study-note
+   - /start-design-plan
+   - /start-draft
+   - /export-pack
+   - /help
+
+2. **Run a serious smoke-test pass**
+   Verify:
+   - app launches
+   - Henry replies correctly
+   - mode switching works
+   - scripture tools work
+   - writer draft flow works
+   - design3d flow works
+   - memory panel works
+   - task linkage works
+   - export packs work
+   - session recovery works
+
+3. **Fix unclear or broken UX**
+   Tighten labels, buttons, empty states, and context visibility.
+   Keep UI additions lightweight.
+
+4. **Improve settings/context clarity**
+   Make it easy to understand:
+   - active mode
+   - active biblical source profile
+   - active writer draft
+   - active design3d reference
+   - active workspace context
+   - session recovery state
+
+5. **Propose smart enhancements**
+   If you see opportunities to improve Henry’s architecture, polish, modularity, or user experience without derailing progress, propose them clearly and rank them by impact.
+
+## What “done enough” means
+Henry is finishable/stable when:
+- app launches reliably
+- Henry visibly replies correctly
+- mode switching works
+- scripture tools work
+- writer draft flow works
+- design3d flow works
+- memory panel works
+- task linkage works
+- export packs work
+- session recovery works
+- command layer works
+- no obvious broken flow remains
+
+## How to work
+1. Inspect the current code first.
+2. Respect the existing architecture and patterns.
+3. Make the smallest cleanest changes that create real progress.
+4. Keep type safety intact.
+5. Keep the UI clear and calm.
+6. Suggest improvements that help Topher think better and build faster.
+7. Prefer finishing momentum over abstract perfection.
+
+## Deliverable style
+For each pass, return:
+1. files changed
+2. what was fixed or added
+3. what still feels weak or unfinished
+4. verification results
+5. recommended next move
+
+## Final note
+Think like a strong product-minded engineer and a systems builder.
+Help Henry become:
+- a companion
+- an operator
+- a builder
+- a study guide
+- a design planning assistant
+- a real local-first AI workspace
+
+Do not flatten him into a generic assistant.
+Make him clearer, stronger, smoother, and more complete.

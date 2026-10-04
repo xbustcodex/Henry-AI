@@ -1,0 +1,928 @@
+HENRY AI — MEMORY BLUEPRINT
+WITH EXTRA MEMORY BANDWIDTH, RECALL LOGIC, TABLE DESIGN, AND RETRIEVAL FLOW
+
+GOAL
+
+Build Henry’s memory system so it feels deeper, more continuous, and more lifelike than a normal AI assistant.
+
+Henry’s memory must not be a single flat chat history.
+Henry needs a layered memory architecture with:
+- short-term memory
+- session memory
+- working memory
+- long-term personal memory
+- project memory
+- relationship memory
+- narrative memory
+- memory summaries
+- memory ranking
+- memory graph
+- retrieval logic
+- bandwidth modes
+
+==================================================
+1. MEMORY DESIGN PRINCIPLES
+==================================================
+
+Design Henry’s memory system around these principles:
+
+1. Continuity
+Henry should remember what matters across days, weeks, months, and projects.
+
+2. Relevance
+Henry should retrieve what matters most, not just what is newest.
+
+3. Compression
+Older memory should be summarized and compressed without losing important facts.
+
+4. Bandwidth
+Henry should be able to pull more context than a standard assistant.
+
+5. Personalization
+Henry should remember user-specific patterns, goals, tone preferences, and life themes.
+
+6. Relationship Growth
+Henry should build a deeper understanding of the user over time.
+
+7. Narrative Coherence
+Henry should understand the user’s work and life as an evolving story, not isolated facts.
+
+==================================================
+2. MEMORY LAYERS
+==================================================
+
+LAYER 1 — LIVE TURN MEMORY
+Purpose:
+Store the current conversational turn and immediate tool context.
+
+Contains:
+- current user message
+- current assistant response draft
+- live transcript
+- current intent
+- current UI state
+- tools called in current turn
+- tool results in current turn
+
+Lifetime:
+- current turn only
+- can be rolled into session memory after completion
+
+--------------------------------------------------
+LAYER 2 — SESSION MEMORY
+Purpose:
+Track the current conversation session in a structured way.
+
+Contains:
+- recent user messages
+- recent Henry replies
+- session goals
+- active tasks in session
+- files touched in session
+- web pages used in session
+- emotional/intent pattern for session
+- session summary
+- unresolved items from session
+
+Lifetime:
+- current session
+- summarized and compressed at session end
+
+--------------------------------------------------
+LAYER 3 — WORKING MEMORY BUFFER
+Purpose:
+Hold currently important context across the session and near-term work.
+
+Contains:
+- active project
+- active goals
+- top unresolved questions
+- promises Henry made
+- pending actions
+- most relevant files
+- recent summaries
+- important user instructions
+- top current preferences
+- current strategic focus
+
+Lifetime:
+- rolling
+- refreshed dynamically
+- should persist across app restarts when useful
+
+--------------------------------------------------
+LAYER 4 — LONG-TERM PERSONAL MEMORY
+Purpose:
+Store durable information about the user.
+
+Contains:
+- preferred name
+- communication style
+- preferred tone
+- goals
+- values
+- priorities
+- recurring habits
+- recurring frustrations
+- favorite workflows
+- business interests
+- repeated intentions
+- life timeline anchors
+- important events
+- motivational patterns
+
+Lifetime:
+- persistent
+
+--------------------------------------------------
+LAYER 5 — PROJECT MEMORY
+Purpose:
+Store durable information for each project.
+
+Contains:
+- project name
+- project type
+- project summary
+- project status
+- created date
+- last active date
+- related files
+- related conversations
+- related goals
+- blockers
+- deadlines
+- next steps
+- milestone history
+- strategic importance
+- project summary rollups
+
+Lifetime:
+- persistent
+
+--------------------------------------------------
+LAYER 6 — RELATIONSHIP MEMORY
+Purpose:
+Store how Henry should best support the user over time.
+
+Contains:
+- what support style works best
+- how the user reacts under stress
+- preferred coaching style
+- preferred action style
+- best timing for prompts
+- when to simplify
+- when to motivate
+- when to challenge
+- long-term trust-building notes
+- patterns in user’s needs
+
+Lifetime:
+- persistent
+- carefully updated with confidence scoring
+
+--------------------------------------------------
+LAYER 7 — NARRATIVE MEMORY
+Purpose:
+Store the evolving story of the user’s life, projects, and identity shifts.
+
+Contains:
+- major life/work arcs
+- recurring themes
+- turning points
+- wins
+- setbacks
+- unfinished storylines
+- changes in priorities
+- growth over time
+- major business and personal milestones
+- “what matters most right now” summaries by era
+
+Lifetime:
+- persistent
+- slow-changing
+- summary-driven
+
+==================================================
+3. DATABASE TABLES
+==================================================
+
+Use SQLite locally first.
+Design schema so it can later sync to cloud if needed.
+
+TABLE: users
+Fields:
+- id
+- preferred_name
+- created_at
+- updated_at
+- timezone
+- default_tone
+- default_mode
+- notes
+
+--------------------------------------------------
+TABLE: conversations
+Fields:
+- id
+- user_id
+- started_at
+- ended_at
+- title
+- summary
+- emotional_tone
+- main_intent
+- project_id_nullable
+- importance_score
+- unresolved_count
+- created_at
+- updated_at
+
+--------------------------------------------------
+TABLE: messages
+Fields:
+- id
+- conversation_id
+- role
+- content
+- transcript_source_nullable
+- intent
+- emotional_signal
+- importance_score
+- created_at
+- metadata_json
+
+--------------------------------------------------
+TABLE: session_memory
+Fields:
+- id
+- conversation_id
+- summary
+- active_goals_json
+- active_tasks_json
+- active_files_json
+- emotional_pattern
+- unresolved_items_json
+- created_at
+- updated_at
+
+--------------------------------------------------
+TABLE: working_memory
+Fields:
+- id
+- user_id
+- active_context_summary
+- active_project_ids_json
+- active_goal_ids_json
+- pending_commitments_json
+- relevant_file_ids_json
+- relevant_memory_ids_json
+- refreshed_at
+
+--------------------------------------------------
+TABLE: personal_memory
+Fields:
+- id
+- user_id
+- memory_key
+- memory_value
+- memory_type
+- summary
+- source
+- confidence_score
+- relevance_score
+- emotional_significance_score
+- strategic_significance_score
+- recency_score
+- active_status
+- created_at
+- updated_at
+- last_recalled_at
+
+Examples of memory_type:
+- identity
+- preference
+- habit
+- value
+- frustration
+- goal
+- timeline_anchor
+- style
+- business_interest
+
+--------------------------------------------------
+TABLE: projects
+Fields:
+- id
+- user_id
+- name
+- type
+- status
+- summary
+- strategic_importance_score
+- emotional_importance_score
+- created_at
+- updated_at
+- last_active_at
+
+--------------------------------------------------
+TABLE: project_memory
+Fields:
+- id
+- project_id
+- memory_key
+- memory_value
+- summary
+- blocker_flag
+- deadline_nullable
+- confidence_score
+- relevance_score
+- created_at
+- updated_at
+- last_recalled_at
+
+--------------------------------------------------
+TABLE: relationship_memory
+Fields:
+- id
+- user_id
+- pattern_type
+- summary
+- support_preference
+- context_trigger
+- confidence_score
+- relevance_score
+- created_at
+- updated_at
+- last_recalled_at
+
+Examples of pattern_type:
+- encouragement_style
+- overwhelm_pattern
+- action_preference
+- communication_preference
+- timing_preference
+- motivation_pattern
+
+--------------------------------------------------
+TABLE: narrative_memory
+Fields:
+- id
+- user_id
+- arc_name
+- summary
+- start_date_nullable
+- end_date_nullable
+- importance_score
+- active_status
+- linked_project_ids_json
+- linked_memory_ids_json
+- created_at
+- updated_at
+
+Examples of arc_name:
+- Henry AI build arc
+- business growth arc
+- discipline rebuilding arc
+- creative writing arc
+
+--------------------------------------------------
+TABLE: files
+Fields:
+- id
+- user_id
+- file_name
+- file_path
+- file_type
+- summary
+- extracted_text_summary
+- project_id_nullable
+- importance_score
+- created_at
+- updated_at
+- last_accessed_at
+
+--------------------------------------------------
+TABLE: file_memory_links
+Fields:
+- id
+- file_id
+- memory_id
+- memory_table
+- relationship_type
+- created_at
+
+Examples of relationship_type:
+- supports
+- references
+- continues
+- contradicts
+- relates_to
+
+--------------------------------------------------
+TABLE: goals
+Fields:
+- id
+- user_id
+- title
+- summary
+- status
+- priority_score
+- emotional_significance_score
+- strategic_significance_score
+- created_at
+- updated_at
+- last_active_at
+
+--------------------------------------------------
+TABLE: commitments
+Fields:
+- id
+- user_id
+- source_conversation_id
+- project_id_nullable
+- description
+- status
+- due_date_nullable
+- importance_score
+- created_at
+- updated_at
+- completed_at_nullable
+
+--------------------------------------------------
+TABLE: milestones
+Fields:
+- id
+- user_id
+- project_id_nullable
+- title
+- summary
+- milestone_type
+- significance_score
+- created_at
+
+Examples of milestone_type:
+- win
+- setback
+- launch
+- decision
+- realization
+- breakthrough
+
+--------------------------------------------------
+TABLE: memory_summaries
+Fields:
+- id
+- user_id
+- summary_type
+- period_label
+- summary
+- linked_memory_ids_json
+- linked_project_ids_json
+- created_at
+
+Examples of summary_type:
+- daily_rollup
+- weekly_rollup
+- monthly_rollup
+- project_rollup
+- where_we_left_off
+- life_timeline_rollup
+
+--------------------------------------------------
+TABLE: memory_graph_edges
+Fields:
+- id
+- from_entity_type
+- from_entity_id
+- to_entity_type
+- to_entity_id
+- relationship_type
+- weight_score
+- created_at
+- updated_at
+
+Examples of entity_type:
+- project
+- file
+- goal
+- memory
+- milestone
+- narrative_arc
+- conversation
+
+==================================================
+4. MEMORY OBJECT FORMAT
+==================================================
+
+Every stored memory item should contain:
+
+- id
+- user_id
+- memory_layer
+- memory_type
+- summary
+- raw_value_or_reference
+- source
+- created_at
+- updated_at
+- last_recalled_at
+- confidence_score
+- relevance_score
+- recency_score
+- emotional_significance_score
+- strategic_significance_score
+- active_status
+- linked_entities
+- tags_json
+
+==================================================
+5. MEMORY SCORING SYSTEM
+==================================================
+
+Every memory should be ranked using weighted scoring.
+
+Suggested scoring categories:
+- relevance_score
+- recency_score
+- emotional_significance_score
+- strategic_significance_score
+- confidence_score
+
+Suggested derived retrieval score:
+retrieval_score =
+(relevance_score * 0.30) +
+(recency_score * 0.20) +
+(emotional_significance_score * 0.15) +
+(strategic_significance_score * 0.25) +
+(confidence_score * 0.10)
+
+Additional boosts:
+- unresolved boost
+- repeated mention boost
+- current project boost
+- direct user request boost
+- “important to user” boost
+- current emotional context boost
+
+==================================================
+6. MEMORY INGESTION RULES
+==================================================
+
+When should Henry save memory?
+
+SAVE TO LONG-TERM MEMORY WHEN:
+- the user explicitly states a goal
+- the user shares a preference
+- the user reveals a durable pattern
+- the user mentions something important repeatedly
+- the user defines what matters to them
+- a meaningful milestone happens
+- a project advances significantly
+- a strong emotional event affects direction
+- Henry detects a stable recurring behavior
+
+DO NOT SAVE AS LONG-TERM MEMORY WHEN:
+- the fact is trivial
+- the fact is one-time and low-value
+- the fact is likely temporary and unimportant
+- the detail is too vague to be useful
+- confidence is too low
+
+SAVE TO PROJECT MEMORY WHEN:
+- a project is named
+- a project goal is set
+- a blocker is discovered
+- a milestone occurs
+- a deadline is discussed
+- a next step is identified
+- a file is tied to the project
+
+SAVE TO RELATIONSHIP MEMORY WHEN:
+- Henry learns how the user likes to be helped
+- Henry notices how the user responds to stress
+- Henry notices what tone works best
+- Henry notices what style leads to action
+- a recurring support pattern becomes clear
+
+SAVE TO NARRATIVE MEMORY WHEN:
+- a major arc forms
+- a turning point happens
+- a large identity shift is visible
+- a long-term theme becomes obvious
+- multiple events point to one larger story
+
+==================================================
+7. MEMORY RETRIEVAL FLOW
+==================================================
+
+Every reply should use structured retrieval.
+
+STEP 1 — PARSE CURRENT TURN
+Detect:
+- intent
+- emotional state
+- project relevance
+- urgency
+- need for files
+- need for web
+- need for memory recall
+
+STEP 2 — PULL LIVE + SESSION CONTEXT
+Retrieve:
+- current messages
+- current session summary
+- session active tasks
+- current active files
+- unresolved items in session
+
+STEP 3 — PULL WORKING MEMORY
+Retrieve:
+- active goals
+- active projects
+- pending commitments
+- recent linked files
+- top current strategic focus
+
+STEP 4 — PULL LONG-TERM MEMORY
+Retrieve top-ranked personal memories related to:
+- current intent
+- current project
+- emotional context
+- repeated user themes
+
+STEP 5 — PULL PROJECT MEMORY
+If a project is active, retrieve:
+- summary
+- blockers
+- deadlines
+- next steps
+- milestones
+- linked files
+- recent changes
+
+STEP 6 — PULL RELATIONSHIP MEMORY
+Retrieve support-style guidance:
+- how to phrase help
+- whether to simplify
+- whether to push action
+- whether to encourage
+
+STEP 7 — PULL NARRATIVE MEMORY
+Retrieve only when useful:
+- long-term arcs
+- milestones
+- prior turning points
+- continuity references
+
+STEP 8 — ASSEMBLE RESPONSE CONTEXT
+Build a final response context packet with:
+- current turn
+- session summary
+- working memory highlights
+- top 3-10 relevant long-term memories
+- top project memory
+- top relationship cues
+- optional narrative references
+
+==================================================
+8. MEMORY BANDWIDTH MODES
+==================================================
+
+Create four retrieval depth modes.
+
+MODE 1 — SHALLOW
+Use:
+- minimal history
+- most recent session only
+- low token usage
+Best for:
+- quick replies
+- lightweight mobile use
+
+MODE 2 — NORMAL
+Use:
+- current session
+- working memory
+- top relevant long-term memories
+Best for:
+- standard Henry behavior
+
+MODE 3 — DEEP
+Use:
+- current session
+- working memory
+- broader long-term memory pull
+- project memory
+- relationship memory
+Best for:
+- planning
+- reflection
+- strategy
+- emotional support
+- continuity-heavy interactions
+
+MODE 4 — MAXIMUM MEMORY BANDWIDTH
+Use:
+- current session
+- working memory
+- broad long-term memory retrieval
+- project memory
+- relationship memory
+- narrative memory
+- unresolved commitments
+- file links
+- milestone rollups
+- where-we-left-off summaries
+- timeline summaries
+
+Best for:
+- major planning
+- life/business reflection
+- reconnecting old threads
+- recovering long context
+- building lifelike continuity
+
+==================================================
+9. MEMORY COMPRESSION + SUMMARIZATION
+==================================================
+
+Need structured compression so memory grows without becoming chaos.
+
+At session end:
+- create session summary
+- store unresolved items
+- store active tasks
+- store project references
+- store emotional pattern
+
+Daily:
+- create daily rollup summary
+- include main tasks, wins, blockers, direction
+
+Weekly:
+- create weekly rollup
+- include major progress, recurring themes, stalled items
+
+Monthly:
+- create monthly rollup
+- include strategic shifts, milestones, important emotional/context changes
+
+Project-level:
+- maintain rolling project summary
+- track project evolution over time
+
+Narrative-level:
+- maintain active life/work arc summaries
+- update when major changes happen
+
+Compression rules:
+- keep raw records where useful
+- summarize aggressively for old sessions
+- never lose milestone-level data
+- preserve unresolved items
+- preserve major shifts in goals or identity
+
+==================================================
+10. WHERE-WE-LEFT-OFF SYSTEM
+==================================================
+
+On startup or return to Henry, generate a recovery summary.
+
+Include:
+- what the user was working on
+- last active project
+- unfinished tasks
+- open commitments
+- last meaningful insight
+- recommended next step
+- related files
+- related memory references
+
+This summary should be stored in memory_summaries as:
+- summary_type = where_we_left_off
+
+==================================================
+11. RELATIONSHIP INTELLIGENCE RULES
+==================================================
+
+Henry should adapt to the user in a grounded way.
+
+Track:
+- when the user needs structure
+- when the user needs encouragement
+- when the user needs bluntness
+- when the user needs simplicity
+- when the user wants strategy
+- when the user wants action
+
+Do not overfit quickly.
+Only update relationship patterns when:
+- repeated over time
+- confidence threshold is met
+- pattern improves results
+
+==================================================
+12. MEMORY GRAPH
+==================================================
+
+Build a graph that links:
+- goals to projects
+- projects to files
+- files to conversations
+- conversations to commitments
+- milestones to arcs
+- narrative arcs to projects
+- personal memories to support style
+- recurring themes to timeline events
+
+Use graph edges to improve retrieval and continuity.
+
+Examples:
+- “This file continues that roadmap”
+- “This conversation revived that old project”
+- “This milestone belongs to the Henry AI build arc”
+- “This frustration links to the user’s repeated overwhelm pattern”
+
+==================================================
+13. HENRY MEMORY BEHAVIORS
+==================================================
+
+Henry should be able to naturally say things like:
+- Last time you were focused on the Henry build and memory system
+- You’ve mentioned wanting Henry to feel more alive several times
+- This connects to your bigger goal of making Henry feel like a true companion
+- You seemed most energized when we shifted from chatbot thinking to lifelike presence
+- We left off building the architecture and memory expansion
+- This project has become one of your highest-priority arcs
+- You tend to move faster when I turn ideas into build-ready structure
+
+These should come from actual stored memory, not fake invention.
+
+==================================================
+14. SAFETY RULES FOR MEMORY
+==================================================
+
+- Never invent memories
+- Never claim certainty when confidence is low
+- Mark low-confidence recalls internally
+- Avoid using sensitive memory inappropriately
+- Allow user control over memory depth and memory deletion
+- Allow editing or deleting stored memories later
+- Clearly separate remembered facts from inferences
+
+==================================================
+15. IMPLEMENTATION ORDER
+==================================================
+
+PHASE 1
+- SQLite schema
+- conversations
+- messages
+- session_memory
+- working_memory
+
+PHASE 2
+- personal_memory
+- projects
+- project_memory
+- goals
+- commitments
+
+PHASE 3
+- relationship_memory
+- narrative_memory
+- milestones
+- memory_summaries
+
+PHASE 4
+- memory scoring engine
+- retrieval engine
+- compression engine
+- where-we-left-off generator
+
+PHASE 5
+- memory graph edges
+- maximum memory bandwidth mode
+- advanced retrieval tuning
+
+==================================================
+16. FINAL GOAL
+==================================================
+
+Henry’s memory system should feel:
+- deep
+- personal
+- continuous
+- organized
+- strategically useful
+- emotionally aware
+- project-aware
+- life-aware
+- more lifelike than ordinary AI systems
+
+The final result should make Henry feel like:
+- he knows the user
+- he remembers what matters
+- he reconnects threads naturally
+- he grows more helpful over time
+- he carries the story forward instead of starting over

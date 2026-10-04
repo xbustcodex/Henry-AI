@@ -1,0 +1,605 @@
+HENRY AI — FULL FEATURE IMPLEMENTATION LIST
+
+Build Henry AI with all of the following features and organize development into clear modules. The goal is to make Henry feel like a persistent, intelligent, action-oriented digital brain that helps plan, organize, create, summarize, remember, and execute.
+
+==================================================
+1. CORE IDENTITY FEATURES
+==================================================
+
+1. Persistent Memory
+- Remember past chats
+- Remember user preferences
+- Remember recurring projects
+- Remember favorite workflows
+- Remember unfinished tasks
+- Remember file relationships
+- Remember goals and priorities
+- Build a timeline of progress
+
+2. Context Awareness
+- Detect current task from conversation
+- Detect intent from natural language
+- Understand open files and recent actions
+- Understand project phase
+- Understand whether the user wants brainstorming, execution, summarizing, researching, writing, or planning
+- Pull context from recent activity automatically
+
+3. Single-Thread Workspace Brain
+- Keep everything connected in one evolving thread
+- Link ideas to docs
+- Link docs to tasks
+- Link tasks to updates
+- Link updates to next actions
+- Show “what led to this” and “what comes next”
+
+==================================================
+2. VIKTOR-STYLE HIGH-USEFULNESS FEATURES
+==================================================
+
+1. Smart Summarization
+- Summarize conversations
+- Summarize long chats
+- Summarize uploaded files
+- Summarize PDFs
+- Summarize project history
+- Summarize daily work into status updates
+- Summarize multiple files into one overview
+- Include “Explain this simply” mode
+- Include “Give me only the action items” mode
+
+2. Task Extraction
+- Turn conversation into task list
+- Detect deadlines
+- Detect priorities
+- Detect blockers
+- Detect follow-ups
+- Turn messy idea dumps into structured tasks
+- Create project phases automatically
+- Convert discussion into checklist format
+
+3. One-Click Action System
+Provide quick buttons/actions for:
+- Summarize this
+- Turn into roadmap
+- Turn into checklist
+- Turn into weekly update
+- Turn into doc
+- Save to workspace
+- Extract action items
+- Organize files
+- Continue this project
+- Create next step
+
+4. Embedded Workflow Behavior
+- Keep Henry easily accessible
+- Add command palette access
+- Add hotkey access if possible
+- Design for minimal app switching
+- Make Henry feel always available, not buried
+
+==================================================
+3. PLANNING AND EXECUTION FEATURES
+==================================================
+
+1. Project Planning
+- Create roadmap from idea
+- Create sprint plan from goal
+- Break big goal into phases
+- Create 30-day plan
+- Create weekly action plan
+- Build launch plan
+- Build business plan
+- Build content calendar
+- Build product roadmap
+- Build “what to do next” list
+
+2. Task Execution Support
+- Organize files automatically
+- Rename files properly
+- Create folders for new projects
+- Generate standard docs automatically
+- Fill templates
+- Move files into correct places
+- Archive old versions
+- Bump version numbers
+- Generate status reports
+
+3. Follow-Through System
+- Remind user what was started but not finished
+- Surface next logical step
+- Detect stalled projects
+- Ask whether to continue paused work
+- Offer checkpoint summaries
+- Offer end-of-day wrap-up
+- Offer morning startup prompt
+
+==================================================
+4. DOCUMENT AND WORKSPACE FEATURES
+==================================================
+
+1. Document Generation
+- Create overview docs
+- Create roadmap docs
+- Create status docs
+- Create investor deck outlines
+- Create meeting summary docs
+- Create strategy docs
+- Create standard headers automatically
+- Apply naming format automatically
+- Auto-fill owner, status, summary, and links
+
+2. Smart Document Linking
+- Suggest related documents
+- Detect duplicates
+- Connect older versions to newer versions
+- Link meetings to projects
+- Link ideas to action docs
+- Link strategy docs to execution docs
+
+3. Workspace Intelligence
+- Search by purpose
+- Search by date
+- Search by project
+- Search by version
+- Search by tag
+- Search by topic
+- Show recent docs
+- Show most important docs
+- Show docs related to what the user is doing now
+
+4. Versioning System
+- Safe version bump
+- Archive old versions
+- Compare v1 to v2
+- Explain what changed
+- Generate updated draft from previous version
+- Track document history
+
+==================================================
+5. NATURAL LANGUAGE FEATURES
+==================================================
+
+1. Conversational Commands
+Support natural commands like:
+- Henry, organize this mess
+- Turn this into a plan
+- What should I do next?
+- Make this clearer
+- Build this into a business
+- Summarize all this
+- Create the doc for this idea
+- Show me where I left off
+
+2. Intent-Based Responses
+Henry should distinguish between:
+- Brainstorming
+- Execution
+- Summarizing
+- Researching
+- Writing
+- Planning
+- Cleaning up
+- Reviewing progress
+
+3. Tone Adaptation
+Add optional modes:
+- Calm mode
+- Coach mode
+- Strategic mode
+- Technical mode
+- Motivational mode
+- Simple/plain-English mode
+
+==================================================
+6. PROACTIVE INTELLIGENCE FEATURES
+==================================================
+
+1. Smart Suggestions
+- Suggest next step
+- Suggest cleanup when folders get messy
+- Suggest summary when a chat gets long
+- Suggest roadmap when ideas become detailed
+- Suggest task list when user is overwhelmed
+- Suggest weekly review at the right time
+- Suggest backup if project is important
+- Suggest renaming messy files
+
+2. Pattern Learning
+- Notice repeated work habits
+- Notice favorite doc types
+- Notice repeated projects
+- Notice when the user gets stuck
+- Notice when the user creates lots of drafts but not final versions
+- Notice best working times
+- Notice common prompts and build shortcuts
+
+3. Workspace Health Detection
+- Detect too many loose files
+- Detect too many untitled docs
+- Detect missing summaries
+- Detect missing links between files
+- Detect outdated roadmaps
+- Detect duplicate versions
+- Detect projects with no next step
+
+==================================================
+7. FILE AND SYSTEM CONTROL FEATURES
+==================================================
+
+1. File Operations
+- Create folders
+- Move files
+- Rename files
+- Delete junk files
+- Archive older versions
+- Sort files by type
+- Sort files by date
+- Sort files by project
+- Clean downloads folder
+- Organize desktop
+
+2. System Actions
+- Open apps
+- Close apps
+- Launch project folders
+- Open recent files
+- Run safe terminal commands
+- Monitor disk space
+- Monitor memory usage
+- Suggest cleanup actions
+
+3. Backup and Export
+- Create workspace backup
+- Export project bundle
+- Zip selected files
+- Prepare share package
+- Save project snapshot
+- Create restore point for workspace
+
+==================================================
+8. CONTENT UNDERSTANDING FEATURES
+==================================================
+
+1. File Understanding
+- Read PDFs
+- Read DOCX files
+- Read TXT and Markdown files
+- Analyze code files
+- Read CSVs
+- Extract text from images
+- Prepare for future video transcription support
+
+2. Multi-File Synthesis
+- Combine notes from many files
+- Compare documents
+- Pull themes across files
+- Build one master summary from many sources
+- Find contradictions between docs
+- Find repeated ideas
+- Build timeline from file history
+
+3. Ask-My-Files Mode
+Support questions like:
+- What does my roadmap say?
+- What changed from the last version?
+- Where did I mention monetization?
+- Which files relate to this business idea?
+- Show me the latest doc on this
+
+==================================================
+9. INTERFACE AND UX FEATURES
+==================================================
+
+1. Main Interface
+- Chat panel
+- Workspace sidebar
+- Recent work panel
+- Suggestions panel
+- Quick actions row
+- Status/activity feed
+- Search bar at top
+- Memory panel
+
+2. Quality-of-Life UX
+- Auto-scroll chat correctly
+- Drag-and-drop file upload
+- Keyboard shortcuts
+- Command palette
+- Tabbed workspaces
+- Right-click quick actions
+- Progress indicators
+- Inline previews
+- Undo for file actions
+- Confirmation on risky actions
+
+3. Feels-Alive Features
+- Typing indicator
+- Task progress narration
+- Smart status messages
+- Smooth transitions
+- Activity feed showing what Henry is doing
+- “Thinking through project...” state
+- “I found 3 related files” state
+
+==================================================
+10. VOICE FEATURES
+==================================================
+
+1. Voice Input
+- Speech-to-text
+- Real-time transcription
+- Push-to-talk
+- Voice button in chat
+
+2. Voice Output
+- Read responses aloud
+- Narrate task execution
+- Toggle voice on/off
+- Adjustable speech speed
+- Different voice options
+
+3. Wake Behavior
+- Prepare for future “Hey Henry” activation
+- Prepare for hands-free mode
+- Support voice command shortcuts
+
+==================================================
+11. INTEGRATION FEATURES
+==================================================
+
+1. Replit / Dev Support
+- Generate prompts for Replit
+- Turn selected features into dev tasks
+- Create implementation checklists for coding
+- Generate issue-style tickets
+- Generate feature specs
+- Generate bug reports
+- Generate test cases
+
+2. Productivity Integrations
+- Google Drive
+- Gmail
+- Calendar
+- Slack
+- Notion
+- GitHub
+- Discord
+- Dropbox
+
+3. AI Workflow Integrations
+- OpenAI key management
+- Model selection
+- Cost tracking
+- Usage reporting
+- Prompt template library
+
+==================================================
+12. BUSINESS BUILDER FEATURES
+==================================================
+
+1. Idea-to-Business Pipeline
+- Turn idea into offer
+- Turn offer into roadmap
+- Turn roadmap into launch tasks
+- Turn launch tasks into weekly plan
+- Turn notes into product concept
+- Turn concept into sales message
+
+2. Revenue-Focused Helpers
+- Offer generator
+- Pricing brainstormer
+- Simple funnel builder
+- Customer avatar creator
+- Content plan builder
+- Lead magnet planner
+- Outreach draft generator
+- Sales page outline creator
+
+3. Creator / Business OS Mode
+- Track business ideas
+- Rank ideas by potential
+- Choose best next move
+- Maintain a business dashboard
+- Store experiments and results
+- Build a “what’s working” memory
+
+==================================================
+13. WRITING FEATURES
+==================================================
+
+1. Rewrite Tools
+- Make this clearer
+- Make this stronger
+- Make this shorter
+- Make this more persuasive
+- Make this more professional
+- Make this sound human
+- Turn notes into finished copy
+
+2. Structured Writing
+- Outline generator
+- Draft expander
+- Executive summary generator
+- Email draft builder
+- Meeting recap builder
+- Proposal draft builder
+
+3. Book / Long-Form Support
+- Save story ideas
+- Build chapter outlines
+- Keep continuity notes
+- Track themes
+- Connect life events to writing topics
+- Generate summaries per chapter
+
+==================================================
+14. ADMIN AND SAFETY FEATURES
+==================================================
+
+1. Safe Action System
+- Preview before deleting or moving files
+- Ask before risky operations
+- Keep action log
+- Allow undo where possible
+- Add restricted mode for dangerous commands
+
+2. Settings
+- Default owner
+- Root workspace path
+- Naming rules
+- Backup preferences
+- Memory limits
+- AI model preference
+- Voice settings
+- Theme settings
+
+3. Logs and Visibility
+- Show what Henry did
+- Show when Henry did it
+- Show what changed
+- Show why it suggested something
+- Show what files were touched
+
+==================================================
+15. RECOMMENDED DEVELOPMENT STRUCTURE
+==================================================
+
+Organize implementation into these modules:
+
+Module 1: Brain
+- Memory
+- Context awareness
+- Intent detection
+- Preference learning
+- Project continuity
+- Timeline of progress
+
+Module 2: Action Engine
+- Summaries
+- Task extraction
+- Planning tools
+- Document generation
+- Rewrite tools
+- Action conversion
+
+Module 3: Workspace Engine
+- Search
+- File organization
+- Versioning
+- Document linking
+- Ask-my-files mode
+- Workspace health monitoring
+
+Module 4: UX Layer
+- Chat
+- Sidebar
+- Quick actions
+- Uploads
+- Activity feed
+- Command palette
+- Keyboard shortcuts
+- Status indicators
+- Inline previews
+
+Module 5: Voice Layer
+- Speech-to-text
+- Text-to-speech
+- Voice controls
+- Real-time transcription
+- Future wake-word support
+
+Module 6: Integrations Layer
+- Replit support tools
+- Productivity integrations
+- AI workflow integrations
+- Business-building workflows
+
+Module 7: Safety and Admin
+- Safe file operations
+- Action previews
+- Logs
+- Undo support
+- Settings panel
+- Permissions and command restrictions
+
+==================================================
+16. IMPLEMENTATION PRIORITY
+==================================================
+
+Build in this order:
+
+Phase 1
+- Persistent memory
+- Context awareness
+- Smart summarization
+- Task extraction
+- Document generation
+- Workspace search
+- File organization
+- Versioning
+- Quick actions
+- Drag-and-drop uploads
+- Activity log
+- Settings panel
+
+Phase 2
+- Related file linking
+- Ask-my-files mode
+- Proactive suggestions
+- Follow-through prompts
+- Workspace health monitoring
+- Rewrite tools
+- Structured writing tools
+- Multi-file synthesis
+- Export and backup tools
+- Replit prompt/spec/ticket generator
+
+Phase 3
+- Business builder tools
+- Voice input/output
+- Safe terminal and system actions
+- Productivity integrations
+- AI model settings and cost tracking
+- Business dashboard
+- Book-writing support
+- Advanced automation and autonomy
+
+==================================================
+17. IMPORTANT PRODUCT DIRECTION
+==================================================
+
+Henry should not feel like a simple chatbot.
+Henry should feel like:
+- a persistent digital brain
+- an organized creative workspace
+- a planning and execution assistant
+- a document and file intelligence system
+- a business-building helper
+- a natural-language operating layer for the user’s work
+
+Focus on making Henry:
+- useful
+- clean
+- proactive
+- organized
+- memory-driven
+- execution-capable
+- easy to interact with
+- safe for file and system actions
+
+==================================================
+18. FINAL BUILD GOAL
+==================================================
+
+Create Henry AI as a desktop-first intelligent assistant that:
+- remembers
+- organizes
+- summarizes
+- plans
+- writes
+- links ideas together
+- understands files
+- supports business growth
+- helps the user follow through
+- turns chaos into clear next steps
+- becomes more helpful over time through memory and learned patterns

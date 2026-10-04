@@ -1,0 +1,28 @@
+name = "henry-ai-proxy"
+main = "worker.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+
+# ── Companion Relay KV Store ────────────────────────────────────────────────
+# To enable cloud relay:
+#   1. Run: npx wrangler kv namespace create HENRY_RELAY
+#   2. Copy the id from the output into the binding below
+#   3. Run: npx wrangler deploy
+#
+# [[kv_namespaces]]
+# binding = "HENRY_RELAY"
+# id = "<paste-your-kv-namespace-id-here>"
+#
+# For preview/dev:
+# [[kv_namespaces]]
+# binding = "HENRY_RELAY"
+# id = "<preview-namespace-id>"
+# preview_id = "<preview-namespace-id>"
+
+# Optional: lock to a specific zone / custom domain
+# [[routes]]
+# pattern = "proxy.henry.yourdomain.com/*"
+# zone_name = "yourdomain.com"

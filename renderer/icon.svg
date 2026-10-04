@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <!-- Subtle ambient glow behind the H -->
+    <radialGradient id="ambient" cx="50%" cy="54%" r="42%">
+      <stop offset="0%" stop-color="#7c6aff" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#7c6aff" stop-opacity="0"/>
+    </radialGradient>
+    <!-- H letter gradient — slightly brighter at the top, grounded at the base -->
+    <linearGradient id="hGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#9d90ff"/>
+      <stop offset="100%" stop-color="#6255e0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" rx="104" fill="#0a0a18"/>
+
+  <!-- Ambient inner glow (centering attention on the H) -->
+  <rect width="512" height="512" rx="104" fill="url(#ambient)"/>
+
+  <!-- Neural pulse arcs — top-right corner, representing awareness and presence -->
+  <!-- Outermost arc -->
+  <path
+    d="M 342 58 A 116 116 0 0 1 454 170"
+    fill="none"
+    stroke="#7c6aff"
+    stroke-width="4"
+    stroke-linecap="round"
+    opacity="0.22"
+  />
+  <!-- Middle arc -->
+  <path
+    d="M 342 94 A 80 80 0 0 1 418 170"
+    fill="none"
+    stroke="#7c6aff"
+    stroke-width="4"
+    stroke-linecap="round"
+    opacity="0.38"
+  />
+  <!-- Inner arc -->
+  <path
+    d="M 342 130 A 44 44 0 0 1 382 170"
+    fill="none"
+    stroke="#7c6aff"
+    stroke-width="4"
+    stroke-linecap="round"
+    opacity="0.60"
+  />
+  <!-- Origin node — the anchor point of the arcs (brain/signal source) -->
+  <circle cx="342" cy="170" r="8" fill="#7c6aff" opacity="0.80"/>
+  <circle cx="342" cy="170" r="4" fill="#b8aeff"/>
+
+  <!-- H — the identity anchor, gradient for depth -->
+  <text
+    x="248"
+    y="334"
+    font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+    font-size="268"
+    font-weight="800"
+    text-anchor="middle"
+    fill="url(#hGrad)"
+  >H</text>
+</svg>

@@ -1,0 +1,13 @@
+{
+  "name": "henry-proxy",
+  "version": "1.0.0",
+  "description": "Henry AI cloud proxy — Cloudflare Worker",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:staging": "wrangler deploy --env staging"
+  },
+  "devDependencies": {
+    "wrangler": "^3.114.17"
+  }
+}

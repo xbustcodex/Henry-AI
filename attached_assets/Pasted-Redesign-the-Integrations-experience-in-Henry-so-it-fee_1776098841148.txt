@@ -1,0 +1,137 @@
+Redesign the Integrations experience in Henry so it feels simple and human, not technical.
+
+Problem:
+The current integrations flow feels too developer-heavy. Asking users for raw OAuth tokens is confusing and makes setup feel cold, fragile, and overly technical.
+
+Product goal:
+Integrations should feel like logging into apps, not configuring infrastructure.
+
+What I want:
+1. Make the Integrations page dramatically simpler
+2. Replace “blank token field” style setup with guided connection flows
+3. Keep advanced/manual token entry available, but hidden behind an Advanced section
+4. Make the UI feel friendly, obvious, and low-friction
+
+Design direction:
+
+A. Main Integrations screen
+- Show integration cards for each service
+- Each card should include:
+  - service icon
+  - service name
+  - short plain-English description
+  - connection status
+  - one primary button:
+    - Connect
+    - Reconnect
+    - Manage
+- Status examples:
+  - Not connected
+  - Connected
+  - Needs attention
+
+B. Connection flow types
+Support 3 setup styles depending on service:
+
+1. OAuth-style services
+Examples:
+- Google
+- Slack
+- GitHub
+- Notion
+
+UX:
+- Show a big “Connect” button
+- Use plain language like:
+  - Connect your Google account
+  - Connect your Slack workspace
+  - Authorize GitHub
+- Do NOT lead with token fields
+
+2. API-key services
+Examples:
+- OpenAI
+- Groq
+- Anthropic
+- Replicate
+- ElevenLabs
+
+UX:
+- Show a guided API key form
+- Add short help text:
+  - “Paste your API key”
+  - “Stored locally on your device”
+  - “Used only to connect this provider”
+- Make it friendly, not developer-scary
+
+3. Username/password or server-based services
+Only where actually appropriate and safe.
+Examples:
+- local/internal tools
+- self-hosted services
+- custom business systems
+
+UX:
+- Use normal login language:
+  - Email or username
+  - Password
+  - Server URL if needed
+- Keep it simple and familiar
+
+C. Advanced setup
+- Create an “Advanced” disclosure section on each integration
+- Put raw token/manual config there
+- Hide scopes, internal IDs, redirect jargon, and technical settings by default
+
+D. UX tone
+Use plain, human language.
+Good examples:
+- Connect your account
+- Sign in to continue
+- Paste your API key
+- Henry will save this locally on your device
+- Reconnect to refresh access
+
+Avoid:
+- OAuth token
+- redirect URI
+- provider ID
+- client secret
+- scopes
+unless they are in Advanced
+
+E. Information architecture
+Each integration card should open a modal or detail panel with:
+- service title
+- short explanation of what connecting it unlocks
+- the correct auth flow for that service
+- connected/disconnected status
+- disconnect button if connected
+
+F. Safety and implementation notes
+- Do not fake username/password for services that really require OAuth
+- Use the correct auth method per provider
+- The goal is a simpler UX, not insecure shortcuts
+- Keep existing backend/provider logic where possible; improve the front-end experience first
+
+Implementation priorities:
+1. Redesign the Integrations UI
+2. Add provider-specific connection flows
+3. Move token/manual fields into Advanced
+4. Improve labels, helper text, and overall clarity
+5. Keep changes focused on integrations UX only
+
+Do not:
+- redesign the whole app
+- refactor unrelated features
+- break existing provider logic
+- remove advanced/manual options entirely
+
+After making changes:
+- show me which files changed
+- show the diff
+- explain the new UX structure
+- tell me which integrations now use:
+  - OAuth-style flow
+  - API key flow
+  - username/password or server flow

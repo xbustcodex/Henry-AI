@@ -1,0 +1,228 @@
+/**
+ * The cross-boundary seam for agent tool-stream streaming.
+ *
+ * `toolStreamBuffer.test.ts` drives `toolStreamReducer` with hand-written
+ * `{ round, text }` literals, and `electron/agent/toolStream.test.ts` drives
+ * `runToolConversation` and asserts on the payloads it pushes at a window
+ * stand-in. Neither can see the other. That gap is not theoretical: renaming
+ * the runner's delta key from `text` to `delta` leaves all 75 buffer tests
+ * passing while the renderer subscribes to a channel whose payloads it
+ * silently discards — the exact "declared but unreachable" failure this
+ * feature was written to close, reintroduced one layer up.
+ *
+ * This file drives the REAL runner and feeds its REAL payloads through the
+ * REAL channel into the REAL reducer, then asserts on the text a user would
+ * see. No Electron window, no DOM, no network: `runToolConversation` reaches
+ * the renderer only through `context.getWindow().webContents.send`, which a
+ * plain object stands in for exactly.
+ *
+ * What it deliberately does NOT do is re-test the runner or the reducer. Their
+ * units are covered where they live. The only thing that can be wrong here and
+ * nowhere else is the agreement between the two about the payload.
+ */
+
+import { describe, it, expect, vi } from 'vitest';
+import { runToolConversation, type CompleteFn } from '../../electron/agent/toolRunner';
+import { ToolRegistry } from '../../electron/agent/toolRegistry';
+import type { AgentContext, ToolDefinition, ToolResult } from '../../electron/agent/types';
+import {
+  createToolStreamChannel,
+  initialToolStreamState,
+  selectToolStreamText,
+  toolStreamReducer,
+  type ToolStreamAction,
+  type ToolStreamBridge,
+  type ToolStreamState,
+} from './toolStreamBuffer';
+
+// The runner reaches the session store lazily and only when a sessionId is
+// present; the stand-in context below omits it, and these keep the audit-log
+// import from ever resolving. Mirrors `electron/agent/toolStream.test.ts`.
+vi.mock('../../electron/ipc/sessionStore', () => ({
+  recordSessionMessage: vi.fn(async () => undefined),
+  toolCallBlocks: vi.fn(() => []),
+  createSessionRecord: vi.fn(async () => 'sess'),
+}));
+vi.mock('../../electron/ipc/securityPolicy', () => ({ policyFlag: () => false }));
+
+/** What a user would see during one real agent turn. */
+interface Seen {
+  /** Provisional text after every tool-stream event, in the order they arrived. */
+  provisional: string[];
+  /** Provisional text once `ai:stream` has delivered the answer chunk. */
+  afterAnswerChunk: string;
+  /** Whether the hand-off happened at all. */
+  answerStarted: boolean;
+  /** The authoritative answer the runner returned to `ai.ts`. */
+  answer: string;
+  /** How many times the tool actually executed. */
+  toolRuns: number;
+  /** Bridge listeners still registered when the turn ended. */
+  liveListeners: number;
+}
+
+/**
+ * Runs one real agent turn, wiring the runner's window output through a
+ * preload-shaped bridge into the real consumer.
+ *
+ * `webContents.send` delivers synchronously into the registered callbacks,
+ * exactly as ipcRenderer does, so the provisional text is sampled at the
+ * moment each event arrives rather than reconstructed afterwards.
+ */
+async function runSeam(opts: {
+  /** Round 1 streams the raw tool call as text deltas, as real models do. */
+  toolRoundStreams: boolean;
+  /** Deltas the answer round streams before returning its content. */
+  answerDeltas: string[];
+}): Promise<Seen> {
+  const execute = vi.fn(
+    async (_params: Record<string, unknown>, _context: AgentContext): Promise<ToolResult> => ({
+      ok: true,
+      data: '18C',
+    }),
+  );
+  const tool: ToolDefinition = {
+    name: 'get_weather',
+    description: 'weather',
+    inputSchema: { type: 'object', properties: {} },
+    category: 'external',
+    safetyLevel: 'silent',
+    execute,
+  };
+  const registry = new ToolRegistry();
+  registry.register(tool);
+
+  let state: ToolStreamState = initialToolStreamState;
+  const dispatch = (action: ToolStreamAction) => {
+    state = toolStreamReducer(state, action);
+  };
+
+  // The bridge is the preload's shape: two callbacks, each returning its own
+  // teardown. This is the only translation between the two halves.
+  const listeners = {
+    delta: new Set<(p: unknown) => void>(),
+    final: new Set<(p: unknown) => void>(),
+  };
+  const provisional: string[] = [];
+  const bridge: ToolStreamBridge = {
+    onAgentToolStreamDelta: (cb) => {
+      const handler = (p: unknown) => {
+        dispatch({ type: 'delta', payload: p });
+        provisional.push(selectToolStreamText(state));
+        cb(p);
+      };
+      listeners.delta.add(handler);
+      return () => listeners.delta.delete(handler);
+    },
+    onAgentToolStreamFinal: (cb) => {
+      const handler = (p: unknown) => {
+        dispatch({ type: 'final', payload: p });
+        provisional.push(selectToolStreamText(state));
+        cb(p);
+      };
+      listeners.final.add(handler);
+      return () => listeners.final.delete(handler);
+    },
+  };
+
+  const win = {
+    isDestroyed: () => false,
+    webContents: {
+      send: (channel: string, payload: unknown) => {
+        const set = channel === 'agent:tool-stream-delta' ? listeners.delta
+          : channel === 'agent:tool-stream-final' ? listeners.final
+            : undefined;
+        if (!set) return;
+        for (const cb of [...set]) cb(payload);
+      },
+    },
+  };
+  const context = { db: {}, getWindow: () => win } as unknown as AgentContext;
+
+  let round = 0;
+  const complete: CompleteFn = vi.fn(async (_messages, _tools, handlers) => {
+    round++;
+    if (round === 1) {
+      // The shape measured live from llama3.2:3b and qwen2.5-coder:7b: a
+      // tool-calling round streams the raw call as ordinary text deltas.
+      if (opts.toolRoundStreams) {
+        handlers?.onDelta?.('{"name":"get_weather"');
+        handlers?.onDelta?.(',"parameters":{"city":"Paris"}}');
+      }
+      return {
+        content: 'Let me check.',
+        toolCalls: [{ id: 't1', name: 'get_weather', arguments: { city: 'Paris' } }],
+      };
+    }
+    for (const d of opts.answerDeltas) handlers?.onDelta?.(d);
+    return { content: 'It is 18C in Paris.', toolCalls: [] };
+  });
+
+  const channel = createToolStreamChannel(bridge, dispatch);
+  channel.subscribe();
+  dispatch({ type: 'begin' });
+
+  const result = await runToolConversation({ registry, context, messages: [], complete });
+
+  // ai.ts: onChunk(answer) — and only then — before onDone(answer).
+  dispatch({ type: 'answer-chunk' });
+  const answerStarted = state.answerStarted;
+  const afterAnswerChunk = selectToolStreamText(state);
+  dispatch({ type: 'settle' });
+
+  channel.unsubscribe();
+  return {
+    provisional,
+    afterAnswerChunk,
+    answerStarted,
+    answer: result.content,
+    toolRuns: execute.mock.calls.length,
+    liveListeners: listeners.delta.size + listeners.final.size,
+  };
+}
+
+const streamed = { toolRoundStreams: true, answerDeltas: ['It is ', '18C in Paris.'] };
+
+describe('runner → preload bridge → renderer consumer', () => {
+  // The whole point of this file. If the runner's payload key and the
+  // reducer's reader ever disagree, the channel receives events the reducer
+  // discards and this is empty — while every unit test on both sides still
+  // passes, because each only ever sees its own hand-written literals.
+  it('delivers the runner\'s deltas as visible provisional text', async () => {
+    const seen = await runSeam(streamed);
+    expect(seen.provisional.join(' ')).toContain('get_weather');
+    expect(seen.provisional.join(' ')).toContain('It is 18C in Paris.');
+  });
+
+  // The duplication trap, on real payloads rather than hand-written ones: the
+  // last round's `-final` content IS the answer, and ai.ts sends that same
+  // answer on the chunk channel right after.
+  it('hands the answer off to the chunk channel so it is shown once', async () => {
+    const seen = await runSeam(streamed);
+    expect(seen.answer).toBe('It is 18C in Paris.');
+    expect(seen.provisional.at(-1)).toBe('It is 18C in Paris.');
+    expect(seen.answerStarted).toBe(true);
+    expect(seen.afterAnswerChunk).toBe('');
+  });
+
+  // A tool round that streams nothing must leave nothing provisional, so a
+  // non-streaming provider does not render an empty working block.
+  it('shows nothing provisional when no round streamed', async () => {
+    const seen = await runSeam({ toolRoundStreams: false, answerDeltas: [] });
+    expect(seen.provisional).toEqual([]);
+    expect(seen.answerStarted).toBe(true);
+    expect(seen.answer).toBe('It is 18C in Paris.');
+  });
+
+  // Streaming is a display concern. If it broke the action, the feature would
+  // be worse than not streaming at all, because it would still look correct.
+  it('executes the tool exactly once', async () => {
+    const seen = await runSeam(streamed);
+    expect(seen.toolRuns).toBe(1);
+  });
+
+  it('releases both bridge listeners when the turn ends', async () => {
+    const seen = await runSeam(streamed);
+    expect(seen.liveListeners).toBe(0);
+  });
+});
