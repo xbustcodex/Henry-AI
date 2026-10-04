@@ -19,6 +19,7 @@
  */
 
 import { useEffect, useState, useMemo } from 'react';
+import { saveUserProfile } from '../../henry/userProfile';
 import { useStore } from '../../store';
 import type { AIProvider } from '../../types';
 import { PROVIDERS, AVAILABLE_MODELS, formatPrice } from '../../providers/models';
@@ -142,14 +143,23 @@ function ProfileSection() {
   const save = async () => {
     setBusy(true);
     try {
+      // The same writer first launch uses, so "where Henry keeps a name" has
+      // one answer. Settings edits an existing profile, so it writes the
+      // settings rows only — saving twice must not pile up duplicate memories.
+      const saved = await saveUserProfile({ name, location }, { source: 'settings', remember: false });
+      if (saved.failures.length > 0) throw new Error(saved.failures.join('; '));
+
+      // An empty box here is a deliberate edit of a profile that already
+      // exists, so it clears. In first launch the same empty box means "I did
+      // not say", and `saveUserProfile` leaves it alone.
       const pairs: Array<[string, string]> = [
         ['owner_name', name.trim()],
         ['user_name', name.trim()],
         ['location', location.trim()],
       ];
-      for (const [k, v] of pairs) {
-        await window.henryAPI.saveSetting?.(k, v);
-        updateSetting(k, v);
+      for (const [key, value] of pairs) {
+        if (!value) await window.henryAPI.saveSetting?.(key, '');
+        updateSetting(key, value);
       }
       toast.success('Profile saved');
     } catch (e) {

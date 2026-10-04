@@ -15,7 +15,6 @@ import {
   isFreshProfile,
   shouldGateOnSetup,
   markFirstRunComplete,
-  clearFirstRunMarker,
 } from './firstRun';
 
 beforeEach(() => {
@@ -124,12 +123,6 @@ describe('the marker', () => {
 
     expect(localStorage.getItem(FIRST_RUN_KEY)).toBe('true');
     expect(saveSetting).toHaveBeenCalledWith(FIRST_RUN_SETTING, 'true');
-  });
-
-  it('is cleared when the user explicitly reopens setup', () => {
-    localStorage.setItem(FIRST_RUN_KEY, 'true');
-    clearFirstRunMarker();
-    expect(localStorage.getItem(FIRST_RUN_KEY)).toBeNull();
   });
 
   it('survives a renderer with no bridge at all', () => {

@@ -3,9 +3,15 @@ import { useStore } from '../../store';
 import { wakeWordManager } from '../../henry/wakeWord';
 import { useCapturesStore, selectUnroutedCaptures } from '../../ambient/capturesStore';
 import { useAmbientStore } from '../../henry/ambientStateStore';
+import { resolveProviderState } from '../../henry/backendStatus';
 
 export default function TitleBar() {
   const { companionStatus, workerStatus, setCurrentView, viewHistory, goBack, settings } = useStore();
+  // The title bar names the engine the router can actually reach. It used to
+  // read `settings.companion_provider` raw, so it rendered "Ollama · moondream"
+  // for a selection the backend notice was simultaneously calling unconfigured.
+  const providerRows = useStore((s) => s.providers);
+  const providerState = resolveProviderState({ settings, providers: providerRows });
   const captures = useCapturesStore((s) => s.captures);
   const unroutedCount = selectUnroutedCaptures(captures).length;
   const [installPrompt, setInstallPrompt] = useState<any>(null);
@@ -146,14 +152,12 @@ export default function TitleBar() {
       <div className="titlebar-no-drag flex-1 flex items-center justify-center gap-2 text-xs min-w-0">
         <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusColor(companionStatus.status)}`} />
         <span className="text-henry-text-dim truncate max-w-[220px]">
-          {settings.companion_provider ? (
+          {providerState.kind === 'ready' ? (
             <>
-              <span className="capitalize">{settings.companion_provider}</span>
-              {settings.companion_model && (
-                <span className="text-henry-text-muted hidden sm:inline">
-                  {' · '}{settings.companion_model.replace('llama-','').replace('-versatile','').replace('-instant','')}
-                </span>
-              )}
+              <span className="capitalize">{providerState.route.provider}</span>
+              <span className="text-henry-text-muted hidden sm:inline">
+                {' · '}{providerState.route.model.replace('llama-','').replace('-versatile','').replace('-instant','')}
+              </span>
             </>
           ) : 'Henry'}
           {companionStatus.status !== 'idle' && (

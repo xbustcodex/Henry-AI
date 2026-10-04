@@ -254,7 +254,7 @@ function rowModels(row: ProviderRow): string[] {
 export function resolveChat(
   content: string,
   settings: Record<string, string>,
-  providers: ProviderRow[],
+  providers: readonly ProviderRow[],
 ): ModelRoute {
   const preference = (settings.model_quality_preference || 'balanced') as QualityPreference;
   const messageTask = detectTaskType(content);

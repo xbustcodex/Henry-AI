@@ -5,6 +5,7 @@ import OllamaElectronSetup from './OllamaElectronSetup';
 import MobileProviderStep from './MobileProviderStep';
 import type { OpencodeModelInfo } from '../../types';
 import { OPENCODE_ZEN_PROVIDER_ID, opencodeProviderIdForModel } from '../../../electron/providers/classification';
+import { AVAILABLE_MODELS } from '../../providers/models';
 
 /** Cloud is BYOK; Zen is credential-optional; Ollama needs no credential. */
 type ProviderMode = 'cloud' | 'zen' | 'ollama';
@@ -118,7 +119,7 @@ export default function ProviderStep({ onNext, onBack }: ProviderStepProps) {
 }
 
 function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
-  const { setProviders, updateSetting } = useStore();
+  const { setProviders, updateSetting, providers } = useStore();
 
   // Top-level mode: a BYOK cloud provider, the OpenCode Zen bridge (only when
   // opencode is genuinely installed on this machine), or local Ollama.
@@ -181,6 +182,21 @@ function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // ── Second Brain (optional) ───────────────────────────────────────────
+  // Henry runs two engines: the one chosen above for everyday answers, and an
+  // optional stronger cloud model for the questions that need one. Empty means
+  // "same model for everything", which is also what every provider below falls
+  // back to when the user never touches this — the stage never picks for them.
+  const [workerModel, setWorkerModel] = useState('');
+
+  // Only models belonging to a provider this machine has actually enabled are
+  // offered. A model the user has no credential for is not a choice.
+  const enabledProviderIds = providers.filter((p) => p.enabled).map((p) => p.id);
+  const workerOptions = AVAILABLE_MODELS.filter(
+    (m) => m.provider !== 'ollama' && enabledProviderIds.includes(m.provider),
+  );
+  const workerProvider = AVAILABLE_MODELS.find((m) => m.id === workerModel)?.provider ?? '';
 
   const isElectron = typeof window.henryAPI.ollamaIsInstalled === 'function';
 
@@ -332,6 +348,16 @@ function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
         updateSetting('companion_provider', 'ollama');
         updateSetting('worker_model', selectedModel.trim());
         updateSetting('worker_provider', 'ollama');
+      }
+
+      // The optional Second Brain overrides the default the branches above
+      // write. With none chosen, the primary model answers everything — which
+      // is the pre-existing behaviour, and what "skip" means here.
+      if (workerModel.trim() && workerProvider) {
+        await window.henryAPI.saveSetting('worker_model', workerModel.trim());
+        await window.henryAPI.saveSetting('worker_provider', workerProvider);
+        updateSetting('worker_model', workerModel.trim());
+        updateSetting('worker_provider', workerProvider);
       }
 
       const raw = await window.henryAPI.getProviders();
@@ -747,6 +773,53 @@ function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
           )}
         </div>
       )}
+
+      {/* Second Brain — the optional half of what used to be a whole second
+          stage. It asks for nothing: the default is the model already chosen
+          above, and the picker only offers providers this machine has. */}
+      <div className="rounded-xl border border-henry-border/30 bg-henry-surface/20 p-4 mb-5">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-lg">☁️</span>
+          <h3 className="font-semibold text-henry-text text-sm">Second Brain</h3>
+          <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-henry-hover text-henry-text-muted">optional</span>
+        </div>
+        <p className="text-xs text-henry-text-dim leading-relaxed mb-3">
+          Henry uses two engines. The one you chose above is your everyday brain — for a local
+          provider it runs on your computer, free and private. A second brain is a stronger cloud AI
+          he can call in for the questions that need one. Leave it alone and he uses the same model
+          for everything.
+        </p>
+        {workerOptions.length > 0 ? (
+          <div className="space-y-2">
+            <select
+              value={workerModel}
+              onChange={(e) => setWorkerModel(e.target.value)}
+              aria-label="Second brain"
+              className="w-full bg-henry-bg border border-henry-border rounded-xl px-3 py-2.5 text-sm text-henry-text outline-none focus:border-henry-accent/60"
+            >
+              <option value="">Same model for everything</option>
+              {workerOptions.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+            {workerModel && (
+              <button
+                onClick={() => setWorkerModel('')}
+                className="text-[11px] text-henry-text-muted hover:text-henry-text underline underline-offset-4 transition-colors"
+              >
+                Skip — use one model for everything for now
+              </button>
+            )}
+          </div>
+        ) : (
+          <p className="text-[11px] text-henry-text-muted leading-relaxed">
+            No cloud provider is set up yet, so there is no second brain to choose. You can add one
+            later in Settings → AI Providers.
+          </p>
+        )}
+      </div>
 
       {error && <p className="text-center text-xs text-henry-error mb-4">{error}</p>}
 

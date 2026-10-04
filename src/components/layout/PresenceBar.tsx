@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef } from 'react';
 import { useAmbientStore, type AmbientStateValue } from '../../henry/ambientStateStore';
-import { useDebugStore } from '../../henry/debugStore';
+import { resolveProviderState } from '../../henry/backendStatus';
 import { useExecutionModeStore } from '../../henry/executionModeStore';
 import { getFocusNow } from '../../henry/getFocusNow';
 import { useStore } from '../../store';
+
 import HenryHomePanel from './HenryHomePanel';
 
 // ── Keyframes injected once ────────────────────────────────────────────────
@@ -201,10 +202,13 @@ export default function PresenceBar() {
   const toggleExpanded = useAmbientStore((s) => s.toggleExpanded);
   const toggleMuted    = useAmbientStore((s) => s.toggleMuted);
 
-  const lastModels = useDebugStore((s) => s.lastModels);
   const settings   = useStore((s) => s.settings);
+  const providerRows = useStore((s) => s.providers);
   const setCurrentView = useStore((s) => s.setCurrentView);
   const execMode   = useExecutionModeStore((s) => s.mode);
+  // One verdict, shared with the backend notice and the chat resolver: the pill
+  // may only name an engine the router can actually send to.
+  const providerState = resolveProviderState({ settings, providers: providerRows });
 
   const [focusLabel, setFocusLabel] = useState<string | null>(null);
   const keyframesInjected = useRef(false);
@@ -232,20 +236,16 @@ export default function PresenceBar() {
   const visual = stateVisual(ambientState);
   const accent = modeAccent(execMode);
 
-  // Brain label
-  const companionEntry = lastModels.find((m) => m.role === 'companion');
-  let brainLabel = activeBrain;
-  if (!brainLabel && companionEntry) {
-    brainLabel = companionEntry.provider === 'ollama'
-      ? `Local AI · ${companionEntry.model}`
-      : `Cloud AI · ${companionEntry.model}${companionEntry.isFallback ? ' ⚡' : ''}`;
+  // Brain label — the configured engine, or nothing at all. It used to read
+  // `settings.companion_provider` directly, which is how the installed app could
+  // show "Local AI · moondream:latest" above a "No AI provider configured"
+  // notice: the notice read a different store than the pill did.
+  let brainLabel: string | null = activeBrain;
+  if (!brainLabel && providerState.kind === 'ready') {
+    const { provider: cp, model: cm } = providerState.route;
+    brainLabel = cp === 'ollama' ? `Local AI · ${cm}` : `Cloud AI · ${cm}`;
   }
-  if (!brainLabel) {
-    const cp = settings.companion_provider;
-    const cm = settings.companion_model;
-    if (cp === 'ollama') brainLabel = cm ? `Local AI · ${cm}` : 'Local AI';
-    else if (cp) brainLabel = cm ? `Cloud AI · ${cm}` : 'Cloud AI';
-  }
+
 
   // In focus mode: minimal bar — only show indicator + expand
   const isFocusMode = execMode === 'focus';

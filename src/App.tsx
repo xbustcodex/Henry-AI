@@ -13,7 +13,7 @@ import { startSelfHealing, type HenryRepairEvent } from './henry/selfHealing';
 import { getTodayBriefing, saveBriefing, buildBriefingPrompt, getTodayKey } from './henry/proactiveBriefing';
 import { isNative } from './capacitor';
 import { checkAndNotify, syncFromDb as syncRemindersFromDb } from './henry/reminders';
-import OnboardingWizard, { shouldShowOnboarding } from './components/onboarding/OnboardingWizard';
+import OnboardingWizard from './components/onboarding/OnboardingWizard';
 import { installCreatorsActivation } from './henry/creatorsActivation';
 import { applyTheme, sanitizeTheme, DEFAULT_THEME } from './henry/theme';
 import ProductTour from './components/onboarding/ProductTour';
@@ -25,15 +25,13 @@ import ConfirmToolModal from './components/agent/ConfirmToolModal';
 import {
   isFreshProfile,
   shouldGateOnSetup,
-  clearFirstRunMarker,
   FIRST_RUN_KEY,
 } from './firstRun';
 import { WORKSPACE_MANIFEST_KEY } from './henry/workspaceSeeder';
 import { isMacOS, isLinux, isWindows } from './utils/platform';
 import { updateCapabilitySnapshot } from './henry/capabilityRegistry';
 import StartupFailureBanner from './components/health/StartupFailureBanner';
-import { hasUsableBackend } from './henry/backendStatus';
-import { isRetiredProvider, retiredProviderName } from './providers/models';
+import { resolveProviderState } from './henry/backendStatus';
 
 // Check if companion mode is active
 // Logic: on native, default to companion mode if paired (unless user explicitly chose full mode)
@@ -63,7 +61,12 @@ export default function App() {
   const [nudge, setNudge] = useState<HenryNudge | null>(null);
   const [repair, setRepair] = useState<HenryRepairEvent | null>(null);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState(() => shouldShowOnboarding());
+  // The overlay is opened only on purpose — by "Re-run guided setup". It is
+  // never opened on load: the first-launch gate below is the single thing that
+  // decides setup has not happened, and this flag used to be a second verdict
+  // reading a second marker, which put a duplicate of the whole flow on top of
+  // the app the moment the first one finished.
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   // True once the first-launch flow finishes in this session. Without it,
   // completing setup would leave the profile reading as fresh (it was fresh when
@@ -71,23 +74,19 @@ export default function App() {
   // front of the user — a gate that never lets go.
   const firstRunDone = useRef(false);
 
-  // Global event for re-launching the wizard from anywhere (Setup panel, etc.)
+  // Reopening setup from anywhere (the Setup panel's own button). It shows the
+  // same machine over the app; it deliberately does not clear the completion
+  // markers, because a half-cleared pair is how "has setup been done?" came to
+  // have two answers.
   useEffect(() => {
-    const onOpenWizard = () => {
-      // Both markers are cleared so the reopened flow is a full run, not one that
-      // reads "already configured" from the first-run state it just completed.
-      clearFirstRunMarker();
-      try { localStorage.removeItem('henry:onboarding_v1_complete'); } catch { /* */ }
-      setShowOnboarding(true);
-    };
+    const onOpenWizard = () => setShowOnboarding(true);
     window.addEventListener('henry_open_setup_wizard', onOpenWizard);
     return () => window.removeEventListener('henry_open_setup_wizard', onOpenWizard);
   }, []);
   const [backendNoticeDismissed, setBackendNoticeDismissed] = useState(
     () => !!sessionStorage.getItem('henry:backend_notice_dismissed'),
   );
-  const companionProvider = useStore((s) => s.settings.companion_provider);
-  const retiredSelection = retiredProviderName(companionProvider);
+  const providerRows = useStore((s) => s.providers);
   const [showSplash, setShowSplash] = useState(() => {
     // Only show splash on first launch of a session (not every time)
     const seen = sessionStorage.getItem('henry_splash_seen');
@@ -109,6 +108,15 @@ export default function App() {
     setCurrentView,
     settings,
   } = useStore();
+
+  // The notice reads the SAME verdict the chat resolver and the brain pill do,
+  // fed with the LIVE store state. It used to call `hasUsableBackend()` with no
+  // arguments at all, so it read the `henry:providers` localStorage mirror while
+  // the pill read `settings.companion_provider` — and an install whose mirror
+  // had been lost rendered "No AI provider configured" directly above
+  // "Local AI · moondream:latest".
+  const providerState = resolveProviderState({ settings, providers: providerRows });
+  const backendMissing = providerState.kind !== 'ready';
 
   useEffect(() => {
     void initApp();
@@ -552,21 +560,24 @@ export default function App() {
     providers: HenryProviderRecord[];
     conversations: Awaited<ReturnType<typeof window.henryAPI.getConversations>>;
   }) {
-    // Retire any provider selection that no longer resolves to a supported
-    // provider. Leaving one in place produced a permanent fallback loop: the
-    // router could never resolve it, and the install looked like it had a
-    // backend while sending nothing. It is cleared here so the router reports
-    // the retired provider by name instead.
-    const providerKeys = ['companion_provider', 'worker_provider', 'chat_fast_provider', 'companion_provider_2'];
-    for (const key of providerKeys) {
-      const current = useStore.getState().settings[key];
-      if (!isRetiredProvider(current)) continue;
-      await window.henryAPI.saveSetting(key, '');
-      useStore.getState().updateSetting(key, '');
-    }
+    // A retired selection is deliberately LEFT IN PLACE. It used to be blanked
+    // here "so the router reports the retired provider by name" — which is
+    // backwards: blanking it is precisely what erases the name, leaving the
+    // install with a bare "No chat engine is selected". `resolveProviderState`
+    // refuses the id by name and substitutes nothing, so the loop this was
+    // guarding against cannot happen.
 
-    const providers = prefetched?.providers
-      ?? await window.henryAPI.getProviders().catch(() => [] as HenryProviderRecord[]);
+    // A FAILED read must not be written back as "this install has no
+    // providers". The old `.catch(() => [])` produced exactly that: an IPC
+    // hiccup replaced the `henry:providers` mirror with `[]` while the engine
+    // selection in settings survived, and every surface that read the mirror
+    // then reported "no AI provider" for an install that could answer.
+    const readProviders = prefetched?.providers
+      ?? await window.henryAPI.getProviders().then(
+        (rows) => rows as HenryProviderRecord[],
+        () => null,
+      );
+    const providers = readProviders ?? [];
     const conversations = prefetched?.conversations
       ?? await window.henryAPI.getConversations().catch(
         () => [] as Awaited<ReturnType<typeof window.henryAPI.getConversations>>,
@@ -581,16 +592,20 @@ export default function App() {
 
     setConversations(conversations);
 
-    // Sync providers from SQLite → localStorage so webMock reads correct API keys
-    const toLocalStorage = providers.map((p: HenryProviderRecord) => ({
-      id: p.id,
-      name: p.name,
-      api_key: p.api_key || p.apiKey || '',
-      apiKey: p.api_key || p.apiKey || '',
-      enabled: Boolean(p.enabled),
-      models: p.models || '[]',
-    }));
-    try { localStorage.setItem('henry:providers', JSON.stringify(toLocalStorage)); } catch { /* ignore */ }
+    // Sync providers from SQLite → localStorage so webMock reads correct API
+    // keys. Skipped entirely when the read failed: overwriting a good mirror
+    // with an empty one is what made the notice and the brain pill disagree.
+    if (readProviders) {
+      const toLocalStorage = providers.map((p: HenryProviderRecord) => ({
+        id: p.id,
+        name: p.name,
+        api_key: p.api_key || p.apiKey || '',
+        apiKey: p.api_key || p.apiKey || '',
+        enabled: Boolean(p.enabled),
+        models: p.models || '[]',
+      }));
+      try { localStorage.setItem('henry:providers', JSON.stringify(toLocalStorage)); } catch { /* ignore */ }
+    }
 
     setProviders(
       providers.map((p: HenryProviderRecord) => ({
@@ -716,16 +731,21 @@ export default function App() {
   return (
     <ErrorBoundary>
     <div className="h-screen w-screen flex flex-col overflow-hidden">
-      {/* Backend notice — either "nothing configured" or "your selection was
-          retired". Both are stated explicitly; neither substitutes a provider. */}
-      {!backendNoticeDismissed && (retiredSelection || !hasUsableBackend()) && (
+      {/* Backend notice — the only thing it may say is what the shared resolver
+          says. Each state names what is unresolved and offers the Settings
+          action; none of them substitutes a provider. */}
+      {!backendNoticeDismissed && backendMissing && (
         <div className="flex items-center justify-between px-4 py-1.5 bg-yellow-500/10 border-b border-yellow-500/20 flex-shrink-0">
           <p className="text-[11px] text-yellow-400">
-            {retiredSelection
-              ? `⚠ ${retiredSelection} is no longer a supported provider — Henry can't use it. `
+            {providerState.kind === 'provider-unavailable'
+              ? `⚠ ${providerState.retiredName} is no longer a supported provider — Henry can't use it. `
+              : providerState.kind === 'unresolved'
+              ? `${providerState.message} `
               : '⚠ No AI provider configured — Henry AI won\'t respond without one. '}
             <button onClick={() => useStore.getState().setCurrentView('settings')} className="underline hover:text-yellow-300">
-              {retiredSelection ? 'Pick a supported provider in Settings →' : 'Add a provider in Settings →'}
+              {providerState.kind === 'nothing-configured'
+                ? 'Add a provider in Settings →'
+                : 'Pick a provider and model in Settings →'}
             </button>
           </p>
           <button onClick={() => { setBackendNoticeDismissed(true); sessionStorage.setItem('henry:backend_notice_dismissed','1'); }} className="text-yellow-400/50 hover:text-yellow-400 text-xs ml-3">✕</button>
@@ -826,7 +846,8 @@ export default function App() {
         </div>
       </div>
 
-      {/* Onboarding wizard — first launch + manual relaunch */}
+      {/* Setup, reopened on purpose. The first launch is the gate above; this
+          is the same machine over a running app, never a second gate. */}
       {showOnboarding && (
         <OnboardingWizard onComplete={() => setShowOnboarding(false)} />
       )}

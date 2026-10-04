@@ -284,18 +284,6 @@ function createWindow() {
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 
-
-// ── Auto-updater setup ────────────────────────────────────────────────────────
-if (app.isPackaged) {
-  autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
-  autoUpdater.on('update-downloaded', (info) => {
-    BrowserWindow.getAllWindows().forEach(win => {
-      win.webContents.send('henry-update-ready', info.version);
-    });
-  });
-}
-
 // Single instance: a second launch would start a second sync server on 4242,
 // a second reminder poller and scheduler, duplicate global hotkeys, and two
 // processes writing the same henry.db.
@@ -1054,9 +1042,6 @@ app.whenReady().then(() => {
   autoUpdater.on('update-not-available', () => {
     // Silently ignore — no need to notify
   });
-  autoUpdater.on('download-progress', (progress: any) => {
-    getMainWindow()?.webContents.send('updater:progress', progress);
-  });
   autoUpdater.on('update-downloaded', () => {
     getMainWindow()?.webContents.send('updater:update-downloaded');
   });
@@ -1070,12 +1055,6 @@ app.whenReady().then(() => {
   ipcMain.handle('updater:install', () => {
     autoUpdater.quitAndInstall(false, true);
   });
-
-  // Check silently after 10 s so first launch isn't slowed down
-  setTimeout(() => {
-    if (!app.isPackaged) return;
-    autoUpdater.checkForUpdates().catch(() => null);
-  }, 10_000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

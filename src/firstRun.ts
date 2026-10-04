@@ -120,8 +120,3 @@ export function markFirstRunComplete(): void {
   try { localStorage.setItem(FIRST_RUN_KEY, 'true'); } catch { /* private mode */ }
   try { void bridge()?.saveSetting?.(FIRST_RUN_SETTING, 'true'); } catch { /* best effort */ }
 }
-
-/** Forget the marker — used when the user explicitly reopens setup. */
-export function clearFirstRunMarker(): void {
-  try { localStorage.removeItem(FIRST_RUN_KEY); } catch { /* private mode */ }
-}

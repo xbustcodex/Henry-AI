@@ -21,6 +21,9 @@
  *   3. Only the AI provider stage is required, because it is the one stage
  *      without which the product does nothing at all. Everything else can be
  *      deferred, and says so.
+ *   4. A decision is asked once. Two stages that both asked for a provider and
+ *      a model meant every new user chose their brain twice before reaching
+ *      the app, which read as a wizard that loops.
  *
  * The plan is pure data: no React, no IPC, no localStorage. What the machine
  * discovered about the machine goes in; what the user has to walk through comes
@@ -33,7 +36,6 @@ export type StageId =
   | 'accessibility'
   | 'screen'
   | 'ai'
-  | 'engines'
   | 'companion'
   | 'panels'
   | 'memory'
@@ -76,17 +78,22 @@ export interface StagePlanEntry {
 }
 
 /**
- * The intended order. `engines` sits between provider and phone because
- * assigning the brains is a decision made while the provider choice is fresh;
- * it was in the codebase and unreachable from either wizard.
+ * The intended order.
+ *
+ * There used to be a second entry here — `engines`, "Pick your brains" —
+ * sitting between the provider stage and the phone stage, because it existed
+ * in the codebase and no wizard reached it. When it was finally wired up, the
+ * flow asked every new user to choose a provider and a model twice on an
+ * ordinary forward walk: once on `ai`, then again on `engines`. Brain
+ * selection happens on `ai` and nowhere else; the optional second-brain
+ * assignment it used to own is part of that one stage now.
  */
 const STAGE_ORDER: readonly { id: StageId; title: string; required: boolean; macOnly?: boolean }[] = [
   { id: 'welcome', title: 'Welcome', required: false },
   { id: 'howItWorks', title: 'How to use Henry', required: false },
   { id: 'accessibility', title: 'Accessibility access', required: false, macOnly: true },
   { id: 'screen', title: 'Screen recording', required: false, macOnly: true },
-  { id: 'ai', title: 'AI provider', required: true },
-  { id: 'engines', title: 'Pick your brains', required: false },
+  { id: 'ai', title: 'Your brain', required: true },
   { id: 'companion', title: 'Henry on your phone', required: false },
   { id: 'panels', title: 'Sidebar tour', required: false },
   { id: 'memory', title: 'Teach Henry about you', required: false },

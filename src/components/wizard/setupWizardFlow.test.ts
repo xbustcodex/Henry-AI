@@ -77,11 +77,6 @@ describe('a profile with nothing in it', () => {
     expect(text()).toContain("Hey. I'm Henry");
   });
 
-  it('cannot leave the first stage without being told what comes next', async () => {
-    await renderFlow();
-    expect(text()).not.toContain('Pick Your Brains');
-  });
-
   it('walks to the provider stage and stops there, because it is the required one', async () => {
     await renderFlow();
     fireEvent.click(screen.getByText('Set up AI →'));
@@ -146,15 +141,13 @@ describe('the whole sequence, end to end', () => {
     const keyField = await screen.findByPlaceholderText('sk-or-…');
     fireEvent.change(keyField, { target: { value: 'sk-or-not-a-real-key' } });
     fireEvent.click(screen.getByText('Continue →'));
-    await waitFor(() => expect(text()).toContain('Pick Your Brains'));
-
-    fireEvent.click(screen.getByText('Skip — use one model for everything for now'));
     await waitFor(() => expect(text()).toContain('Henry on your phone'));
+
     fireEvent.click(screen.getByText("Skip — I'll pair my phone later"));
     await waitFor(() => expect(text()).toContain('Everything in the sidebar'));
     fireEvent.click(screen.getByText('Skip the tour'));
     await waitFor(() => expect(text()).toContain('Teach Henry about you'));
-    fireEvent.click(screen.getByText('Skip — continue →'));
+    fireEvent.click(screen.getByText('Skip — teach Henry later'));
     await waitFor(() => expect(text()).toMatch(/Running on|Almost ready|all set/));
 
     fireEvent.click(screen.getByText(/Meet Henry|Continue anyway/));

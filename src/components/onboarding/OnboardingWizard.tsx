@@ -10,15 +10,11 @@ import SetupWizard from '../wizard/SetupWizard';
  * neither was the whole list.
  *
  * It is now the same machine as first launch (`SetupWizard`), presented as an
- * overlay, so a relaunch from the Setup panel walks the same stages in the same
- * order and skips the same ones.
+ * overlay. It also no longer decides *whether* it should appear: that was a
+ * second gate reading a second completion marker, so finishing the first-launch
+ * flow dropped the user straight into a second, identical run. One gate in
+ * `App.tsx` owns that decision now, and this file is only the frame.
  */
-
-export const ONBOARDING_DONE_KEY = 'henry:onboarding_v1_complete';
-
-export function shouldShowOnboarding(): boolean {
-  return !localStorage.getItem(ONBOARDING_DONE_KEY);
-}
 
 interface Props {
   onComplete: () => void;
@@ -27,12 +23,7 @@ interface Props {
 export default function OnboardingWizard({ onComplete }: Props) {
   return (
     <div className="fixed inset-0 z-[200]">
-      <SetupWizard
-        onComplete={() => {
-          localStorage.setItem(ONBOARDING_DONE_KEY, 'true');
-          onComplete();
-        }}
-      />
+      <SetupWizard onComplete={onComplete} />
     </div>
   );
 }

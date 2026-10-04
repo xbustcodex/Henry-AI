@@ -1,117 +1,208 @@
 /**
- * Backend status — the cheap synchronous "can Henry answer right now?" probe.
+ * Backend status — the ONE verdict on provider configuration.
  *
- * Two things this file exists to protect:
+ * The defect this file protects against is a screen that says two things at
+ * once. The backend notice once ran its own probe over the `henry:providers`
+ * localStorage mirror while the brain pill read `settings.companion_provider`,
+ * so a real install rendered "No AI provider configured — Henry AI won't respond
+ * without one" directly above "Local AI · moondream:latest".
  *
- *  1. OpenCode Zen counts as a usable backend WITH NO KEY. Zen's free models run
- *     unauthenticated through the local opencode bridge, so requiring a key
- *     here is wrong. Not counting opencode at all is worse: it made every fully
- *     configured Zen install read as "no AI provider", and ChatView's gate then
- *     returned the setup card before the router was ever reached — which is why
- *     sending a message with a working Zen selection did nothing.
+ * The fix is that there is no second probe any more: the banner, the pill, the
+ * chat preflight and `hasUsableBackend` all call `resolveProviderState`, which
+ * is built on `resolveChat` — the function that decides where a sent message
+ * actually goes. These assertions therefore pin the property that matters: what
+ * the router can send to is what the UI calls configured, and nothing else.
  *
- *  2. Zen stays a DISTINCT provider id. A Zen install is not an `opencode`
- *     install; the UI labels them differently and only Zen carries the Zen
- *     catalogue and its own optional key.
- *
- * Local Ollama must keep counting too — it needs no key and needs no license.
+ *   - OpenCode Zen counts WITH NO KEY — its free models run unauthenticated, and
+ *     demanding one is what made a working Zen install read as unconfigured.
+ *   - Local Ollama counts with no key either, for the same reason.
+ *   - A retired provider (Groq) counts for nothing, ever.
+ *   - A provider row on disk is an inventory entry, not a selection: a key the
+ *     user never chose cannot make an install look ready.
+ *   - A license key counts for nothing: no hosted AI is enabled in Henry.
  */
 
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from 'vitest';
-import { getBackendStatus, hasUsableBackend } from './backendStatus';
+import {
+  configuredBackendKinds,
+  getBackendStatus,
+  hasUsableBackend,
+  resolveProviderState,
+} from './backendStatus';
 
-function seedProviders(rows: Array<Record<string, unknown>>): void {
+/** What the onboarding provider step writes for a chosen local model. */
+const OLLAMA_ROW = {
+  id: 'ollama',
+  name: 'Ollama',
+  api_key: '',
+  apiKey: '',
+  enabled: true,
+  models: JSON.stringify(['moondream:latest']),
+};
+const OLLAMA_SELECTION = {
+  companion_provider: 'ollama',
+  companion_model: 'moondream:latest',
+};
+
+/** What the onboarding provider step writes for a chosen Zen model. */
+const ZEN_ROW = {
+  id: 'opencode-zen',
+  name: 'OpenCode Zen',
+  api_key: '',
+  apiKey: '',
+  enabled: true,
+  models: JSON.stringify(['hy3-free']),
+};
+const ZEN_SELECTION = {
+  companion_provider: 'opencode-zen',
+  companion_model: 'hy3-free',
+};
+
+function seedProviders(rows: unknown[]): void {
   localStorage.setItem('henry:providers', JSON.stringify(rows));
+}
+function seedSettings(settings: Record<string, string>): void {
+  localStorage.setItem('henry:settings', JSON.stringify(settings));
 }
 
 beforeEach(() => {
   localStorage.clear();
 });
 
-describe('getBackendStatus — OpenCode Zen without a key', () => {
-  it('counts a Zen row that carries no credential', () => {
-    seedProviders([{ id: 'opencode-zen', name: 'OpenCode Zen', enabled: true }]);
+describe('a keyless selection is a configured backend', () => {
+  it('counts a selected local Ollama model with no API key at all', () => {
+    seedProviders([OLLAMA_ROW]);
+    seedSettings(OLLAMA_SELECTION);
 
-    const status = getBackendStatus();
-    expect(status.kinds).toContain('opencode-zen');
-    expect(status.hasAny).toBe(true);
-    expect(status.primaryLabel).toBe('OpenCode Zen');
+    const state = resolveProviderState();
+    expect(state.kind).toBe('ready');
+    if (state.kind !== 'ready') throw new Error('unreachable');
+    expect(state.route.provider).toBe('ollama');
+    expect(state.route.model).toBe('moondream:latest');
+    expect(state.route.apiKey).toBe('');
+    expect(hasUsableBackend()).toBe(true);
+    expect(getBackendStatus().primaryLabel).toBe('Local Ollama');
   });
 
-  it('counts Zen selected in settings when the row was never mirrored', () => {
-    // App.tsx mirrors SQLite → localStorage, but a row saved before that sync
-    // runs is only visible through settings. The probe must still see it.
-    seedProviders([]);
-    const status = getBackendStatus({
-      companion_provider: 'opencode-zen',
-      companion_model: 'some-zen-model-id',
-    });
-    expect(status.kinds).toContain('opencode-zen');
-    expect(hasUsableBackend({ companion_provider: 'opencode-zen' })).toBe(true);
+  it('counts a selected OpenCode Zen model that carries no credential', () => {
+    seedProviders([ZEN_ROW]);
+    seedSettings(ZEN_SELECTION);
+
+    const state = resolveProviderState();
+    expect(state.kind).toBe('ready');
+    if (state.kind !== 'ready') throw new Error('unreachable');
+    expect(state.route.provider).toBe('opencode-zen');
+    expect(state.label).toBe('OpenCode Zen');
+    expect(hasUsableBackend()).toBe(true);
   });
 
-  it('keeps Zen distinct from the plain opencode group', () => {
-    seedProviders([{ id: 'opencode-zen', name: 'OpenCode Zen', enabled: true }]);
+  it('keeps Zen a distinct provider id from the plain opencode group', () => {
+    seedProviders([ZEN_ROW]);
+    seedSettings(ZEN_SELECTION);
+    expect(getBackendStatus().kinds).toContain('opencode-zen');
     expect(getBackendStatus().kinds).not.toContain('opencode');
 
     seedProviders([{ id: 'opencode', name: 'OpenCode', enabled: true }]);
-    const plain = getBackendStatus();
-    expect(plain.kinds).toContain('opencode');
-    expect(plain.kinds).not.toContain('opencode-zen');
-    expect(plain.primaryLabel).toBe('OpenCode');
+    seedSettings({ companion_provider: 'opencode', companion_model: 'gpt-5-codex' });
+    expect(getBackendStatus().kinds).toContain('opencode');
+    expect(getBackendStatus().kinds).not.toContain('opencode-zen');
   });
 
-  it('prefers the Zen row when both opencode groups are configured', () => {
-    seedProviders([
-      { id: 'opencode', name: 'OpenCode', enabled: true },
-      { id: 'opencode-zen', name: 'OpenCode Zen', enabled: true },
-    ]);
-    const status = getBackendStatus();
-    expect(status.kinds).toContain('opencode-zen');
-    expect(status.primaryLabel).toBe('OpenCode Zen');
+  it('does not count a local row the user never selected as an engine', () => {
+    seedProviders([OLLAMA_ROW]);
+
+    expect(hasUsableBackend()).toBe(false);
+    expect(resolveProviderState().kind).toBe('unresolved');
+    expect(configuredBackendKinds()).toContain('ollama');
+  });
+
+  it('does not count a key on disk that the user never selected', () => {
+    seedProviders([{ id: 'openai', name: 'OpenAI', api_key: 'sk-a-real-looking-key', enabled: true }]);
+
+    const state = resolveProviderState();
+    expect(state.kind).toBe('unresolved');
+    if (state.kind !== 'unresolved') throw new Error('unreachable');
+    expect(state.code).toBe('provider_not_configured');
+    expect(hasUsableBackend()).toBe(false);
   });
 });
 
-describe('getBackendStatus — local and cloud still work', () => {
-  it('counts local Ollama with no key at all', () => {
-    seedProviders([{ id: 'ollama', name: 'Ollama', enabled: true }]);
-    const status = getBackendStatus();
-    expect(status.kinds).toContain('ollama');
-    expect(status.hasAny).toBe(true);
-  });
-
-  it('counts Ollama selected purely through settings', () => {
+describe('nothing configured stays nothing configured', () => {
+  it('reports no backend on a bare install', () => {
     seedProviders([]);
-    expect(getBackendStatus({ companion_provider: 'ollama' }).kinds).toContain('ollama');
-  });
 
-  it('counts a real cloud key', () => {
-    seedProviders([{ id: 'openrouter', api_key: 'sk-or-a-real-looking-key' }]);
-    expect(getBackendStatus().kinds).toContain('openrouter');
-  });
-
-  it('reports nothing usable on a bare install', () => {
-    seedProviders([]);
     const status = getBackendStatus();
     expect(status.hasAny).toBe(false);
     expect(status.kinds).toEqual([]);
     expect(status.primaryLabel).toBe('No AI provider');
-  });
-
-  it('never counts a license key as an AI backend — no hosted AI is enabled', () => {
-    localStorage.setItem('henry:license_key', 'lic_abc');
-    const status = getBackendStatus();
-    expect(status.hasAny).toBe(false);
-    expect(status.kinds).toEqual([]);
-    expect(status.primaryLabel).toBe('No AI provider');
+    expect(resolveProviderState().kind).toBe('nothing-configured');
     expect(hasUsableBackend()).toBe(false);
   });
 
-  it('never counts a relay URL as an AI backend — it is not an engine selection', () => {
-    localStorage.setItem('henry:providers', JSON.stringify([]));
-    const status = getBackendStatus({ relay_base_url: 'https://relay.example.com/v1' });
-    expect(status.hasAny).toBe(false);
-    expect(status.kinds).toEqual([]);
+  it('never counts a license key — no hosted AI is enabled in Henry', () => {
+    localStorage.setItem('henry:license_key', 'lic_abc');
+    seedProviders([]);
+
+    expect(hasUsableBackend()).toBe(false);
+    expect(getBackendStatus().primaryLabel).toBe('No AI provider');
+  });
+
+  it('never counts a relay URL — it is not an engine selection', () => {
+    seedProviders([]);
+    seedSettings({ relay_base_url: 'https://relay.example.com/v1' });
+
+    expect(hasUsableBackend()).toBe(false);
+    expect(getBackendStatus().kinds).toEqual([]);
+  });
+});
+
+describe('a retired provider is named and refused', () => {
+  it('never reports Groq as configured, whatever else is on the machine', () => {
+    seedProviders([{ id: 'openai', name: 'OpenAI', api_key: 'sk-a-real-looking-key', enabled: true }]);
+    seedSettings({ companion_provider: 'groq', companion_model: 'llama-3.3-70b-versatile' });
+
+    const state = resolveProviderState();
+    expect(state.kind).toBe('provider-unavailable');
+    if (state.kind !== 'provider-unavailable') throw new Error('unreachable');
+    expect(state.retiredName).toBe('Groq');
+    expect(state.message).toContain('Groq');
+    expect(state.message).toContain('will not route to another provider');
+    expect(hasUsableBackend()).toBe(false);
+  });
+});
+
+describe('an unresolvable selection says exactly what is missing', () => {
+  it('names the provider whose row never landed', () => {
+    seedProviders([]);
+    seedSettings(OLLAMA_SELECTION);
+
+    const state = resolveProviderState();
+    expect(state.kind).toBe('unresolved');
+    if (state.kind !== 'unresolved') throw new Error('unreachable');
+    expect(state.code).toBe('provider_row_missing');
+    expect(state.message).toContain('ollama');
+  });
+
+  it('names a model the selected provider does not offer', () => {
+    seedProviders([OLLAMA_ROW]);
+    seedSettings({ companion_provider: 'ollama', companion_model: 'a-model-nobody-pulled' });
+
+    const state = resolveProviderState();
+    expect(state.kind).toBe('unresolved');
+    if (state.kind !== 'unresolved') throw new Error('unreachable');
+    expect(state.code).toBe('model_unavailable');
+  });
+
+  it('demands a credential only from a provider that charges for one', () => {
+    seedProviders([
+      { id: 'anthropic', name: 'Anthropic', api_key: '', enabled: true, models: '[]' },
+    ]);
+    seedSettings({ companion_provider: 'anthropic', companion_model: 'claude-3-5-haiku-20241022' });
+
+    const state = resolveProviderState();
+    expect(state.kind).toBe('unresolved');
+    if (state.kind !== 'unresolved') throw new Error('unreachable');
+    expect(state.code).toBe('api_key_missing');
   });
 });

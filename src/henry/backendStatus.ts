@@ -1,16 +1,27 @@
 /**
- * Backend Status — synchronous answer to "does Henry have an AI backend right now?"
+ * Backend Status — the ONE answer to "does Henry have an AI backend right now?"
  *
- * The async resolver in henryAI.ts is the authoritative router, but UI panels
- * often need a fast synchronous answer ("show or hide this AI button on first
- * render"). This module reads localStorage + cached provider state for a
- * best-effort answer that's right 99% of the time.
+ * Four surfaces used to answer that question separately and disagree: the
+ * backend notice in `App.tsx`, the brain pill in `PresenceBar`/`TitleBar`, the
+ * chat preflight, and a cheap localStorage probe that lived in this file. The
+ * probe read only the `henry:providers` mirror while the pill read
+ * `settings.companion_provider`, so an install whose selection was persisted
+ * but whose mirror had been lost rendered "No AI provider configured" directly
+ * above "Local AI · moondream:latest" — two truths on one screen.
  *
- * Only REAL, user-configured backends count. A license key does not: no hosted
- * AI backend is enabled anywhere in Henry, so a license backs nothing and must
- * never make an install look ready. A relay URL does not either on its own —
- * the relay is only usable once the user selects it as their engine, and the
- * selection is what this module's siblings read.
+ * There is now one resolver, {@link resolveProviderState}, and it is built on
+ * `resolveChat` — the same function that decides where a sent message actually
+ * goes. Anything the router cannot send to is not reported as configured:
+ *
+ *   - a selected, available Ollama model IS a backend, and needs no API key;
+ *   - so is an OpenCode-backed selection, whose free models run unauthenticated;
+ *   - a retired provider (Groq) is named and refused, never substituted;
+ *   - a provider row on disk is NOT a selection — nothing is routed from a key
+ *     the user never chose;
+ *   - a license key is not a backend: no hosted AI is enabled anywhere in Henry.
+ *
+ * The banner, the pill, the chat preflight and {@link hasUsableBackend} all read
+ * this one verdict, so they cannot contradict each other or the wire.
  */
 
 import {
@@ -18,7 +29,16 @@ import {
   OPENCODE_PROVIDER_IDS,
   OPENCODE_ZEN_PROVIDER_ID,
   isOpencodeProvider,
+  isOllamaProvider,
 } from '../../electron/providers/classification';
+import {
+  isProviderRoutingError,
+  resolveChat,
+  type ModelRoute,
+  type ProviderRow as RoutedProviderRow,
+  type RoutingErrorCode,
+} from './modelRouter';
+import { retiredProviderName } from '../providers/models';
 
 export type BackendKind =
   | 'ollama'
@@ -36,15 +56,43 @@ export interface BackendStatus {
   primaryLabel: string;
 }
 
+/**
+ * The single verdict on provider configuration.
+ *
+ * `ready` is the only state in which a message can be dispatched, and it names
+ * the exact provider and model it will go to. Every other state names what is
+ * unresolved and substitutes nothing.
+ */
+export type ProviderState =
+  | {
+      kind: 'ready';
+      route: ModelRoute;
+      /** Backends this profile has configured, whether selected or not. */
+      kinds: BackendKind[];
+      /** e.g. "Local Ollama" — the pill's headline. */
+      label: string;
+    }
+  | { kind: 'nothing-configured'; kinds: BackendKind[] }
+  | { kind: 'provider-unavailable'; providerId: string; retiredName: string; message: string }
+  | {
+      kind: 'unresolved';
+      code: RoutingErrorCode;
+      providerId: string;
+      model: string;
+      message: string;
+      kinds: BackendKind[];
+    };
 
-interface ProviderRow {
-  id: string;
-  name?: string;
-  api_key?: string;
-  apiKey?: string;
-  enabled?: boolean;
+
+/**
+ * A provider row exactly as the router reads it, plus the `enabled` flag the
+ * inventory uses. One shape for both: a row the router cannot match must not be
+ * able to make an install look ready, and a row it CAN match must not be
+ * invisible to the inventory.
+ */
+interface ProviderRow extends RoutedProviderRow {
+  enabled?: boolean | number;
 }
-
 
 /**
  * Which opencode-backed provider this install is actually configured for, or
@@ -81,6 +129,14 @@ function readProviders(): ProviderRow[] {
   return [];
 }
 
+function readSettings(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem('henry:settings');
+    if (raw) return JSON.parse(raw) as Record<string, string>;
+  } catch { /* ignore */ }
+  return {};
+}
+
 function hasKey(providers: ProviderRow[], id: string): boolean {
   const p = providers.find((x) => x.id === id);
   const key = (p?.api_key || p?.apiKey || '').trim();
@@ -99,53 +155,143 @@ function ollamaConfigured(providers: ProviderRow[], settings?: Record<string, st
 }
 
 
-
-export function getBackendStatus(settings?: Record<string, string>): BackendStatus {
-  const providers = readProviders();
+/**
+ * Every backend this profile has CONFIGURED, selected or not.
+ *
+ * An inventory, not a verdict: it feeds the "you already have these" copy in
+ * the setup card. Whether any of them can actually answer is
+ * {@link resolveProviderState}'s question alone.
+ */
+export function configuredBackendKinds(
+  settings?: Record<string, string>,
+  providers?: readonly RoutedProviderRow[],
+): BackendKind[] {
+  const rows: ProviderRow[] = providers ? [...providers] : readProviders();
+  const s = settings ?? readSettings();
   const kinds: BackendKind[] = [];
 
-  if (ollamaConfigured(providers, settings))   kinds.push('ollama');
+  if (ollamaConfigured(rows, s)) kinds.push('ollama');
 
   // opencode / OpenCode Zen reach a real model through the local opencode
   // bridge and need no Henry-side key — the free Zen models run
-  // unauthenticated. Not counting them here is what made a fully configured
-  // Zen install render the "no AI provider" setup card instead of answering.
-  const opencode = opencodeProviderId(providers, settings);
+  // unauthenticated.
+  const opencode = opencodeProviderId(rows, s);
   if (opencode === OPENCODE_ZEN_PROVIDER_ID) kinds.push('opencode-zen');
   else if (opencode === OPENCODE_PROVIDER_ID) kinds.push('opencode');
 
-  if (hasKey(providers, 'openai'))      kinds.push('openai');
-  if (hasKey(providers, 'anthropic'))   kinds.push('anthropic');
-  if (hasKey(providers, 'google'))      kinds.push('google');
-  if (hasKey(providers, 'openrouter'))  kinds.push('openrouter');
+  if (hasKey(rows, 'openai'))      kinds.push('openai');
+  if (hasKey(rows, 'anthropic'))   kinds.push('anthropic');
+  if (hasKey(rows, 'google'))      kinds.push('google');
+  if (hasKey(rows, 'openrouter'))  kinds.push('openrouter');
   // No license kind and no relay kind: no hosted AI backend is enabled in
   // Henry, so neither can make an install look ready.
+  return kinds;
+}
 
-  const labelMap: Record<BackendKind, string> = {
-    ollama:     'Local Ollama',
-    'opencode-zen': 'OpenCode Zen',
-    opencode:   'OpenCode',
-    openai:     'Your OpenAI key',
-    anthropic:  'Your Anthropic key',
-    google:     'Your Google key',
-    openrouter: 'Your OpenRouter key',
-  };
 
-  const primary = kinds[0];
+const LABEL_BY_KIND: Record<BackendKind, string> = {
+  ollama:         'Local Ollama',
+  'opencode-zen': 'OpenCode Zen',
+  opencode:       'OpenCode',
+  openai:         'Your OpenAI key',
+  anthropic:      'Your Anthropic key',
+  google:         'Your Google key',
+  openrouter:     'Your OpenRouter key',
+};
+
+/** The pill headline for a provider id, e.g. "Local Ollama" / "Your OpenAI key". */
+export function backendLabelFor(providerId: string): string {
+  if (isOllamaProvider(providerId)) return LABEL_BY_KIND.ollama;
+  if (isOpencodeProvider(providerId)) {
+    return providerId === OPENCODE_ZEN_PROVIDER_ID
+      ? LABEL_BY_KIND['opencode-zen']
+      : LABEL_BY_KIND.opencode;
+  }
+  return Object.prototype.hasOwnProperty.call(LABEL_BY_KIND, providerId)
+    ? LABEL_BY_KIND[providerId as BackendKind]
+    : providerId;
+}
+
+
+/**
+ * The one provider-configuration verdict every surface renders from.
+ *
+ * Defaults read the same localStorage mirrors the rest of the renderer uses, so
+ * a caller with no live store state still gets a real answer. Callers that DO
+ * have live state (the app shell, Chat) pass it in — that is what keeps the
+ * banner, the pill and the wire from telling different stories.
+ */
+export function resolveProviderState(input: {
+  content?: string;
+  settings?: Record<string, string>;
+  providers?: readonly RoutedProviderRow[];
+} = {}): ProviderState {
+  const settings = input.settings ?? readSettings();
+  const providers: readonly ProviderRow[] = input.providers ?? readProviders();
+  const kinds = configuredBackendKinds(settings, providers);
+
+  const providerId = (settings.companion_provider ?? '').trim();
+  const model = (settings.companion_model ?? '').trim();
+
+  // A retired id is refused by name. It is never routed, never swapped for a
+  // live provider, and never counted as configured.
+  const retiredName = retiredProviderName(providerId);
+  if (retiredName) {
+    return {
+      kind: 'provider-unavailable',
+      providerId,
+      retiredName,
+      message:
+        `⚠️ **${retiredName} is no longer a supported provider.** Henry will not route to another provider in its place. `
+        + 'Pick a supported provider in **Settings → AI Providers** and set it as your companion engine.',
+    };
+  }
+
+  // Nothing selected and nothing on disk: this install genuinely has no AI. A
+  // provider row that exists WITHOUT a selection is not this state — there the
+  // router's own "pick an engine" message is the accurate answer.
+  if (!providerId && kinds.length === 0) {
+    return { kind: 'nothing-configured', kinds };
+  }
+
+  try {
+    const route = resolveChat(input.content ?? '', settings, providers);
+    return { kind: 'ready', route, kinds, label: backendLabelFor(route.provider) };
+  } catch (err) {
+    if (isProviderRoutingError(err)) {
+      return {
+        kind: 'unresolved',
+        code: err.code,
+        providerId: err.providerId,
+        model: err.model,
+        message: `⚠ ${err.detail}`,
+        kinds,
+      };
+    }
+    throw err;
+  }
+}
+
+
+export function getBackendStatus(settings?: Record<string, string>): BackendStatus {
+  const state = resolveProviderState({ settings });
+  const kinds = 'kinds' in state ? state.kinds : configuredBackendKinds(settings);
   return {
-    hasAny: kinds.length > 0,
+    hasAny: state.kind === 'ready',
     kinds,
-    primaryLabel: primary ? labelMap[primary] : 'No AI provider',
+    primaryLabel: state.kind === 'ready' ? state.label : 'No AI provider',
   };
 }
 
 /**
- * Convenience: true if Henry has an AI backend the user actually configured.
+ * Convenience: true when Henry has an AI backend the user actually configured
+ * AND the router can send to it — the same verdict the banner, the status pill
+ * and the chat preflight render.
  *
  * False when they have nothing — the caller should show the setup path
  * instead of attempting a chat call that will only fail. A license key does
  * not flip this: nothing in Henry serves hosted AI today.
  */
 export function hasUsableBackend(settings?: Record<string, string>): boolean {
-  return getBackendStatus(settings).hasAny;
+  return resolveProviderState({ settings }).kind === 'ready';
 }

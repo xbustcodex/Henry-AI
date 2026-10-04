@@ -70,8 +70,15 @@ function stubBridge(profile: Profile) {
     {
       get(target, prop: string) {
         if (prop in target) return target[prop];
-        // Anything else is an unmodelled bridge call. Returning a resolved promise
-        // keeps an unawaited call from surfacing as an unhandled rejection.
+        // A listener must hand back an UNSUBSCRIBE. The catch-all below returns
+        // a promise, and React calls `.destroy()` on whatever a subscription
+        // returns — so any `on*` member the shell subscribes to that is not
+        // modelled above would take the whole tree down mid-render.
+        if (prop.startsWith('on')) return () => noop;
+
+        // Anything else is an unmodelled bridge call. Returning a resolved
+        // promise keeps an unawaited call from surfacing as an unhandled
+        // rejection.
         return resolved;
       },
     },
@@ -98,6 +105,23 @@ const SETUP_FLOW_ENTRY = /Set up AI/;
 
 function setupFlowIsShowing(): boolean {
   return screen.queryAllByText(SETUP_FLOW_ENTRY).length > 0;
+}
+
+// The shell reads `matchMedia` for its theme/density preferences and jsdom has
+// no implementation. Without this the app shell throws into the error boundary
+// the moment setup finishes — which is precisely the code path these cases
+// exist to inspect, so the shell must actually render here.
+if (!window.matchMedia) {
+  window.matchMedia = ((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener() {},
+    removeEventListener() {},
+    addListener() {},
+    removeListener() {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia;
 }
 
 beforeEach(() => {
@@ -203,4 +227,40 @@ describe('first-launch gate — an existing profile is preserved', () => {
     }, { timeout: 15_000 });
     expect(setupFlowIsShowing()).toBe(false);
   });
+});
+
+describe('one gate, not two', () => {
+  /**
+   * The overlay used to mount on load whenever a second, unrelated completion
+   * marker was absent — so finishing the first-launch flow set `setupComplete`,
+   * the shell rendered, and the overlay put a second, identical run of the same
+   * machine on top of it. That was the other half of "the wizard loops".
+   *
+   * The overlay is the `fixed inset-0 z-[200]` frame onboarding puts around the
+   * machine, and it mounts the instant its flag is set, so the frame is what to
+   * watch. The selector is that exact class list rather than `z-[200]`, which
+   * the toast host also uses at a different position.
+   */
+  it('does not drop a second copy of the flow over a configured app', async () => {
+    const { container } = mountApp({ settings: { setup_complete: 'true' } });
+
+    await waitFor(() => {
+      expect(useStore.getState().setupComplete).toBe(true);
+    }, { timeout: 15_000 });
+    expect(container.querySelector('.fixed.inset-0.z-\\[200\\]')).toBeNull();
+  }, 20_000);
+
+  it('still opens the flow when the user asks for it', async () => {
+    const { container } = mountApp({ settings: { setup_complete: 'true' } });
+    await waitFor(() => {
+      expect(useStore.getState().setupComplete).toBe(true);
+    }, { timeout: 15_000 });
+    expect(container.querySelector('.fixed.inset-0.z-\\[200\\]')).toBeNull();
+
+    act(() => { window.dispatchEvent(new CustomEvent('henry_open_setup_wizard')); });
+
+    await waitFor(() => {
+      expect(container.querySelector('.fixed.inset-0.z-\\[200\\]')).not.toBeNull();
+    }, { timeout: 15_000 });
+  }, 20_000);
 });

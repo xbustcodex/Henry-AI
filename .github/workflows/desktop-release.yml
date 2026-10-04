@@ -4,11 +4,10 @@ on:
   push:
     tags:
       - 'v*'
+  # Manual runs build and upload artifacts for inspection. They publish nothing:
+  # the same tag already carries a live release for installed Henrys, and
+  # re-uploading over it would replace files those installs are downloading.
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version tag (e.g. v1.0.0)'
-        required: false
 
 permissions:
   contents: write
@@ -17,8 +16,42 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  # ── Release classification ──────────────────────────────────────────────────
+  # One definition of "is this a release?" and "is it a pre-release?", shared by
+  # every job. Publishing and the GitHub prerelease flag are two halves of one
+  # decision: a tag pushed as a pre-release but published as a normal release
+  # hands the build to every stable Henry, because installed clients run with
+  classify:
+    runs-on: ubuntu-latest
+    outputs:
+      is_tag: ${{ steps.classify.outputs.is_tag }}
+      is_prerelease: ${{ steps.classify.outputs.is_prerelease }}
+      publish: ${{ steps.classify.outputs.publish }}
+      ep_pre_release: ${{ steps.classify.outputs.ep_pre_release }}
+    steps:
+      - id: classify
+        env:
+          REF: ${{ github.ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          is_tag=false
+          [[ "$REF" == refs/tags/v* ]] && is_tag=true
+          # Semver: any pre-release marker in the version (1.0.0-beta.1, -rc.1).
+          is_prerelease=false
+          if [ "$is_tag" = true ] && [[ "$REF_NAME" == *-* ]]; then is_prerelease=true; fi
+          publish=never;    [ "$is_tag" = true ] && publish=always
+          ep_pre_release=false; [ "$is_prerelease" = true ] && ep_pre_release=true
+          {
+            echo "is_tag=$is_tag"
+            echo "is_prerelease=$is_prerelease"
+            echo "publish=$publish"
+            echo "ep_pre_release=$ep_pre_release"
+          } >> "$GITHUB_OUTPUT"
+          echo "ref=$REF tag=$is_tag prerelease=$is_prerelease publish=$publish"
+
   # ── Mac ───────────────────────────────────────────────────────────────────
   build-mac:
+    needs: [classify]
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -60,6 +93,7 @@ jobs:
 
   # ── Windows ───────────────────────────────────────────────────────────────
   build-win:
+    needs: [classify]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -82,10 +116,14 @@ jobs:
           NODE_ENV: production
 
       - name: Build Windows installer
-        run: npx electron-builder --win --x64 --publish always
+        shell: bash
+        run: npx electron-builder --win --x64 --publish "${{ needs.classify.outputs.publish }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES: true
+          # electron-builder has no --prerelease flag; EP_PRE_RELEASE is what
+          # its GitHub publisher reads to create the release as a pre-release.
+          EP_PRE_RELEASE: ${{ needs.classify.outputs.ep_pre_release }}
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
@@ -96,6 +134,7 @@ jobs:
 
   # ── Linux ─────────────────────────────────────────────────────────────────
   build-linux:
+    needs: [classify]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -123,9 +162,10 @@ jobs:
           NODE_ENV: production
 
       - name: Build Linux AppImage + deb
-        run: npx electron-builder --linux --x64 --publish always
+        run: npx electron-builder --linux --x64 --publish "${{ needs.classify.outputs.publish }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EP_PRE_RELEASE: ${{ needs.classify.outputs.ep_pre_release }}
 
       - name: Upload Linux AppImage
         uses: actions/upload-artifact@v4
@@ -143,9 +183,9 @@ jobs:
 
   # ── Create GitHub Release ─────────────────────────────────────────────────
   release:
-    needs: [build-mac, build-win, build-linux]
+    needs: [build-mac, build-win, build-linux, classify]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: needs.classify.outputs.is_tag == 'true'
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -158,6 +198,6 @@ jobs:
           files: release-artifacts/**
           generate_release_notes: true
           draft: false
-          prerelease: ${{ contains(github.ref, '-beta') || contains(github.ref, '-alpha') }}
+          prerelease: ${{ needs.classify.outputs.is_prerelease == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

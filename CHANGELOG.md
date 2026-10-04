@@ -1,5 +1,119 @@
 # Changelog
 
+## First launch asks for a brain once, and remembers what you told it (2026-10-04)
+
+Two defects, both seen on the installed app on a genuinely fresh profile.
+
+**"Teach Henry about you" had no Save.** The stage rendered ONE button whose
+label flipped between "Save and continue →" and "Skip — continue →" depending on
+whether anything had been typed, so a user who typed nothing saw only a Skip and
+concluded there was nothing to save with. Worse, the save behind it called
+`saveMemoryFact` — a preload method that does not exist on the bridge at all —
+behind an optional call and a swallowed catch, so even when the label flipped the
+write was a silent no-op and the answer was gone on restart.
+
+- `src/henry/userProfile.ts` is now the single writer: the same settings rows
+  (`owner_name`, `user_name`, `location`) and the same `personal_memory` table the
+  Settings profile section and the Memory panel already use. Settings → Profile
+  and the onboarding stage now share it instead of each having their own answer.
+- The stage has two separate actions — `Save & Continue →`, which writes exactly
+  what was typed and refuses to advance if anything failed, and `Skip — teach
+  Henry later`. Blank fields are not stored and do not blank anything existing.
+- Placeholder examples ("e.g. Topher", "e.g. Portland, OR") are example text and
+  are never values; the seam test reads every row back out of the database and
+  asserts none of them appears.
+
+**First launch looped.** The stage plan carried BOTH `ai` (required) and
+`engines` ("Pick your brains"), so every new user chose a provider and a model
+twice on an ordinary forward walk. And the onboarding overlay was a second,
+independent gate: it mounted on load whenever its own unrelated completion
+marker was absent, so finishing the first-launch flow dropped the user straight
+into a second, identical run of the same machine — the other half of "it loops".
+
+- The plan has one brain stage. `EngineAssignStep` is gone; the optional Second
+  Brain it owned is a section of the `ai` stage, defaulting to the model already
+  chosen and offering only providers this machine actually has enabled.
+- One gate decides whether setup is unfinished. The overlay opens only when the
+  user asks for it (`henry_open_setup_wizard`), and it no longer writes a second
+  completion marker. `clearFirstRunMarker` — which cleared one half of the pair
+  it had written — is removed rather than left to disagree with the database.
+- The first stage is latched only after discovery resolves, so the plan is built
+  from the real machine rather than from the `web` placeholder; and completion
+  writes happen once, guarded against a second click landing before the first
+  write resolves.
+
+`src/components/wizard/setupWizardProgression.test.ts` walks the machine forward
+with no Back and asserts the brain is asked for once, the required stage holds,
+every optional stage is declinable, and completion happens once.
+`src/components/onboarding/stages/memoryStagePersistence.test.ts` drives the real
+renderer stage against the real main-process handlers over a real SQLite file,
+including a close-and-reopen for "survives restart".
+
+## One screen can no longer claim Henry has and has not got an AI provider (2026-10-04)
+
+An installed Henry showed all three of these at once:
+
+    ⚠ No AI provider configured — Henry AI won't respond without one.
+    Local AI · moondream:latest
+    Ollama · moondream:latest
+
+Each line was true to a different reader. The notice ran its own probe over the
+`henry:providers` localStorage mirror; the presence bar and the title bar read
+`settings.companion_provider`; Chat read the router. Two of them had no notion
+of whether the selection could actually be sent to.
+
+- `src/henry/backendStatus.ts` now exposes one resolver,
+  `resolveProviderState`, built on `resolveChat` — the function that decides
+  where a sent message actually goes. The backend notice, both status pills,
+  `chatPreflight` and `hasUsableBackend` all render that single verdict, so they
+  cannot contradict each other or the wire. A selected, available Ollama model
+  is a backend with no key; a retired provider is named and refused; a provider
+  row the user never selected is an inventory entry, not a selection.
+- `App.enterApp()` no longer writes `[]` over the provider mirror when a
+  providers read fails, and no longer blanks a retired selection "so the router
+  can name it" — blanking it was what erased the name, leaving the install with
+  a bare "No chat engine is selected".
+- The notice keeps its inverse: a genuinely unconfigured install still warns,
+  and its action still opens Settings.
+
+`src/henry/providerState.seam.test.ts` drives the real shell, the real pills,
+the real chat preflight and the real transport with a real profile behind them:
+onboarding's selection produces no notice, agreeing pills, an identical route
+and an HTTP request that leaves for that local runtime; nothing configured
+warns and navigates; Groq is named everywhere and nothing is ever sent.
+
+## A release can no longer be published that no installed Henry can update (2026-10-04)
+
+Three ways existed to publish a release that looks fine and updates nobody.
+An installed Henry asks electron-updater for `latest-mac.yml` /
+`latest.yml` / `latest-linux.yml`, and that request is the entire update
+channel: if the release has only DMGs, every installed copy gets a 404, decides
+it is up to date, and says nothing.
+
+- `scripts/release.sh` uploaded two DMGs and nothing else. It now refuses to
+  create the release unless the metadata each published platform needs is
+  present, describes *this* version, and points only at artifacts that were
+  actually built — naming every omission on stderr — and it uploads that
+  metadata, the block maps and the installers alongside the DMGs. A beta
+  version is created as a GitHub pre-release rather than a normal release.
+- The desktop-release workflow published from any ref. A manual dispatch ran
+  the Windows and Linux builds with `--publish always`, which can replace files
+  an installed copy is mid-download on; its unused `version` input is gone.
+  One `classify` job now decides "is this a tag?" and "is it a pre-release?"
+  and both the publish policy and the GitHub pre-release flag read from it.
+- A `-beta`/`-alpha` tag set GitHub's pre-release flag but never told
+  electron-builder, which created a *normal* release — so clients running
+  `allowPrerelease = false` ingested the beta anyway. electron-builder 24 has no
+  `--prerelease` option, and `build.publish.releaseType` outranks a CLI value;
+  its GitHub publisher reads `EP_PRE_RELEASE`, which is what the workflow now
+  sets.
+
+Dead updater wiring also went: `henry-update-ready` and `updater:progress` were
+sent to a renderer that never subscribed to them, and every launch ran two
+startup update checks 10s and 30s in. `src/henry/releasePipeline.test.ts`
+guards all of it — it runs `release.sh` for real against a fixture artifact
+directory with a stubbed `curl`, and parses the workflow.
+
 ## First-launch setup is complete, and a fresh install is genuinely empty (2026-10-04)
 
 Setup used to be two wizards that disagreed: a three-step `SetupWizard`

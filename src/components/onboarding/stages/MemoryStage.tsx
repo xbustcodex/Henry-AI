@@ -1,51 +1,68 @@
 import { useState } from 'react';
 import { isMacOS } from '../../../utils/platform';
+import { useStore } from '../../../store';
+import {
+  PROFILE_FIELDS,
+  hasAnythingToSave,
+  saveUserProfile,
+  suppliedValue,
+  type UserProfileFields,
+} from '../../../henry/userProfile';
 
 interface Props {
+  /** Called only after the supplied values are stored. */
   onNext: () => void;
+  /** An explicit, remembered deferral. It never writes anything. */
+  onSkip: () => void;
 }
-
-interface MemoryBridge {
-  saveMemoryFact?: (fact: { fact: string; category: string; importance: number }) => Promise<unknown>;
-}
-
-const FIELDS = [
-  { label: 'Your name', placeholder: 'Alex', key: 'name' },
-  { label: 'What you do', placeholder: 'Freelance designer', key: 'job' },
-  { label: 'Biggest goal right now', placeholder: 'Double revenue this year', key: 'goal' },
-] as const;
-
-type FieldKey = (typeof FIELDS)[number]['key'];
 
 /**
  * Teaching Henry about the user.
  *
- * Optional: empty fields are simply not saved, and nothing is ever filled in
- * for them. What the user types here is written to their own memory — no
- * example name, no sample business, no assumed employer.
+ * This stage used to render ONE button whose label flipped between "Save and
+ * continue" and "Skip — continue" depending on whether anything had been typed.
+ * Two things were wrong with that: the save called a preload method that does
+ * not exist (`saveMemoryFact`), so it was a silent no-op, and a label that
+ * changes meaning is indistinguishable from a save that never appears. Both
+ * actions are now separate buttons, and the save is a real write through the
+ * same settings rows and the same personal-memory table the rest of Henry uses.
  */
-export default function MemoryStage({ onNext }: Props) {
-  const [values, setValues] = useState<Record<FieldKey, string>>({ name: '', job: '', goal: '' });
-  const [saved, setSaved] = useState(false);
+export default function MemoryStage({ onNext, onSkip }: Props) {
+  const [values, setValues] = useState<UserProfileFields>({ name: '', location: '', role: '', goal: '' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
-  const answers: Array<{ fact: string }> = [];
-  if (values.name.trim()) answers.push({ fact: `User's name is ${values.name.trim()}` });
-  if (values.job.trim()) answers.push({ fact: `User works as: ${values.job.trim()}` });
-  if (values.goal.trim()) answers.push({ fact: `User's main goal right now: ${values.goal.trim()}` });
+  const canSave = hasAnythingToSave(values);
 
-  async function saveAndContinue() {
-    if (!saved) {
-      const api = typeof window === 'undefined' ? undefined : window.henryAPI as unknown as MemoryBridge | undefined;
-      for (const answer of answers) {
-        try {
-          await api?.saveMemoryFact?.({ ...answer, category: 'personal', importance: 3 });
-        } catch {
-          /* a fact the user can re-enter later is not worth blocking on */
-        }
+  async function save() {
+    if (!canSave || saving) return;
+    setSaving(true);
+    setError('');
+    try {
+      const saved = await saveUserProfile(values, { source: 'onboarding', remember: true });
+
+      // Anything that did not land is reported rather than swallowed. Advancing
+      // past a failed save is how the user was told their details were kept
+      // when they were not.
+      if (saved.failures.length > 0) {
+        setError(`Henry could not save: ${saved.failures.join('; ')}. What you typed is still here — try again.`);
+        return;
       }
-      setSaved(true);
+
+      // Keep the rest of the app in step with what was just written.
+      const { updateSetting } = useStore.getState();
+      for (const field of PROFILE_FIELDS) {
+        const value = suppliedValue(values, field.key);
+        if (!value) continue;
+        for (const key of field.settingKeys) updateSetting(key, value);
+      }
+
+      onNext();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Henry could not save that. Try again.');
+    } finally {
+      setSaving(false);
     }
-    onNext();
   }
 
   return (
@@ -54,7 +71,8 @@ export default function MemoryStage({ onNext }: Props) {
         <p className="text-5xl mb-3">🧠</p>
         <h2 className="text-2xl font-bold text-white">Teach Henry about you</h2>
         <p className="text-white/55 text-sm mt-2 leading-relaxed">
-          Memory is what makes Henry useful instead of generic. Leave anything blank — it is not required.
+          Memory is what makes Henry useful instead of generic. Fill in whatever is worth keeping —
+          every field is optional.
         </p>
       </div>
 
@@ -62,13 +80,14 @@ export default function MemoryStage({ onNext }: Props) {
         <p className="text-[10px] uppercase tracking-widest text-henry-accent/80">
           Tell Henry about yourself right now
         </p>
-        {FIELDS.map((field) => (
+        {PROFILE_FIELDS.map((field) => (
           <div key={field.key}>
-            <label className="text-[10px] text-white/50 uppercase tracking-wider block mb-1">
+            <label htmlFor={`profile-${field.key}`} className="text-[10px] text-white/50 uppercase tracking-wider block mb-1">
               {field.label}
             </label>
             <input
-              value={values[field.key]}
+              id={`profile-${field.key}`}
+              value={values[field.key] ?? ''}
               onChange={(e) => setValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
               placeholder={field.placeholder}
               className="w-full bg-white/5 border border-white/15 rounded-xl px-3 py-2 text-sm text-white placeholder-white/25 outline-none focus:border-henry-accent/50 transition-all"
@@ -76,8 +95,9 @@ export default function MemoryStage({ onNext }: Props) {
           </div>
         ))}
         <p className="text-[10px] text-white/35 leading-relaxed">
-          These save to your own memory, on this computer. Add more anytime — say &ldquo;remember
-          that&hellip;&rdquo; in chat or open the Memory panel.
+          These save to your own memory, on this computer. The greyed-out text is an example only —
+          Henry never stores it. Add more anytime — say &ldquo;remember that&hellip;&rdquo; in chat or
+          open the Memory panel.
         </p>
       </div>
 
@@ -113,12 +133,32 @@ export default function MemoryStage({ onNext }: Props) {
         </p>
       </div>
 
-      <button
-        onClick={() => void saveAndContinue()}
-        className="w-full py-3.5 rounded-xl bg-henry-accent text-white font-bold text-sm hover:bg-henry-accent/85 transition-all"
-      >
-        {answers.length > 0 ? `Save and continue →` : 'Skip — continue →'}
-      </button>
+      {error && (
+        <p role="alert" className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">
+          {error}
+        </p>
+      )}
+
+      <div className="space-y-2">
+        <button
+          onClick={() => void save()}
+          disabled={!canSave || saving}
+          className="w-full py-3.5 rounded-xl bg-henry-accent text-white font-bold text-sm hover:bg-henry-accent/85 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {saving ? 'Saving…' : 'Save & Continue →'}
+        </button>
+        <button
+          onClick={onSkip}
+          className="block w-full text-center text-white/45 text-xs hover:text-white/75 transition-all"
+        >
+          Skip — teach Henry later
+        </button>
+        {!canSave && (
+          <p className="text-center text-[11px] text-white/35">
+            Nothing typed yet, so there is nothing to save.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

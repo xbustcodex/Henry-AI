@@ -265,3 +265,11 @@ The Linux x64 build (AppImage + DEB) is verified as a release candidate. All run
 4. Test Windows build on Windows machine
 5. Test macOS build on Mac (or CI)
 6. Tag release and publish
+
+Step 6 goes through `scripts/release.sh`, which refuses to create a release
+whose updater metadata is missing, stale or incomplete — build the platform
+first (electron-builder writes `latest-mac.yml` / `latest.yml` /
+`latest-linux.yml` and the `.blockmap` files into `release2/`) or it will name
+what is absent and stop. The GitHub Actions workflow publishes Windows and
+Linux only, and only from a `v*` tag; the macOS metadata comes from a locally
+built and notarized Mac build.

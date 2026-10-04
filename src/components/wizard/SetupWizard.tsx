@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import WelcomeStep from './WelcomeStep';
 import ProviderStep from './ProviderStep';
-import EngineAssignStep from './EngineAssignStep';
 import CompleteStep from './CompleteStep';
 import HowItWorksStage from '../onboarding/stages/HowItWorksStage';
 import PermissionsStage from '../onboarding/stages/PermissionsStage';
@@ -19,6 +18,7 @@ import {
   EMPTY_DISCOVERY,
   type StageId,
   type StagePlanEntry,
+  type MachineDiscovery,
 } from '../onboarding/stages';
 import { markFirstRunComplete } from '../../firstRun';
 import { useStore } from '../../store';
@@ -29,8 +29,6 @@ interface Props {
 
   /** Called once the user reaches the end of the flow. */
   onComplete?: () => void;
-  /** Where to open, for the "reopen setup" path. Defaults to the first stage. */
-  startAt?: StageId;
 }
 
 /**
@@ -45,13 +43,21 @@ interface Props {
  * advances past the one stage that the product cannot work without; the user
  * makes every decision and takes every skip.
  */
-export default function SetupWizard({ onComplete, startAt }: Props) {
+export default function SetupWizard({ onComplete }: Props) {
   const { settings, providers } = useStore();
-  const [discovery, setDiscovery] = useState(EMPTY_DISCOVERY);
+  const [discovery, setDiscovery] = useState<MachineDiscovery | null>(null);
   const [stageId, setStageId] = useState<StageId | null>(null);
   const [skipped, setSkipped] = useState<StageId[]>([]);
 
-  const plan = useMemo(() => buildStagePlan(discovery), [discovery]);
+  // Completing must happen once. Two paths into `done` — a double click, or a
+  // re-render while the finish write is in flight — used to run the whole
+  // completion sequence twice.
+  const finished = useRef(false);
+
+  // The plan is built from real discovery, never from the empty placeholder:
+  // `EMPTY_DISCOVERY` claims the platform is `web`, and latching a stage onto
+  // it is how a macOS user got the Linux stage list.
+  const plan = useMemo(() => buildStagePlan(discovery ?? EMPTY_DISCOVERY), [discovery]);
   const walkable = useMemo(() => availableStages(plan), [plan]);
   const currentEntry: StagePlanEntry | undefined = plan.find((entry) => entry.id === stageId);
 
@@ -64,9 +70,9 @@ export default function SetupWizard({ onComplete, startAt }: Props) {
   // The first stage is chosen once discovery has been read, so a macOS user is
   // never flashed the Linux stage list first.
   useEffect(() => {
-    if (stageId) return;
-    setStageId(startAt ?? firstStageId(plan) ?? 'welcome');
-  }, [plan, stageId, startAt]);
+    if (stageId || !discovery) return;
+    setStageId(firstStageId(plan) ?? 'welcome');
+  }, [plan, stageId, discovery]);
 
   const aiChoice = useMemo(() => {
     const providerId = settings.companion_provider?.trim() ?? '';
@@ -95,6 +101,8 @@ export default function SetupWizard({ onComplete, startAt }: Props) {
   }, [advance]);
 
   function finish() {
+    if (finished.current) return;
+    finished.current = true;
     markFirstRunComplete();
     onComplete?.();
   }
@@ -143,9 +151,6 @@ export default function SetupWizard({ onComplete, startAt }: Props) {
                 )}
               </div>
             )}
-            {stageId === 'engines' && (
-              <EngineAssignStep onNext={advance} onBack={retreat} onSkip={() => skip('engines')} />
-            )}
             {stageId === 'companion' && (
               <CompanionStage onNext={advance} onSkip={() => skip('companion')} />
             )}
@@ -153,7 +158,7 @@ export default function SetupWizard({ onComplete, startAt }: Props) {
               <PanelsStage onNext={advance} onSkip={() => skip('panels')} />
             )}
             {stageId === 'memory' && (
-              <MemoryStage onNext={advance} />
+              <MemoryStage onNext={advance} onSkip={() => skip('memory')} />
             )}
             {stageId === 'done' && (
               <CompleteStep
@@ -163,8 +168,8 @@ export default function SetupWizard({ onComplete, startAt }: Props) {
                   provider: aiChoice.providerId,
                   model: aiChoice.modelId,
                   hasCredential: aiChoice.hasCredential,
-                  localModels: discovery.localModelIds.length,
-                  opencodeInstalled: discovery.opencodeInstalled,
+                  localModels: discovery?.localModelIds.length ?? 0,
+                  opencodeInstalled: discovery?.opencodeInstalled ?? false,
                   skipped,
                 }}
               />

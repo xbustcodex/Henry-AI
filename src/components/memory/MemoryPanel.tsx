@@ -114,12 +114,14 @@ export default function MemoryPanel() {
   // ── Save handlers ──────────────────────────────────────────────────────
   async function saveFact() {
     if (!factForm.memory_value.trim() || !api?.savePersonalMemory) return;
+    // The handler reads camelCase against NOT NULL columns; sending snake_case
+    // here wrote nothing at all, silently, on every Save.
     await api.savePersonalMemory({
-      memory_key: factForm.memory_type,
-      memory_value: factForm.memory_value,
-      memory_type: factForm.memory_type,
-      confidence_score: factForm.confidence_score,
-      relevance_score: 0.7,
+      memoryKey: factForm.memory_type,
+      memoryValue: factForm.memory_value,
+      memoryType: factForm.memory_type,
+      confidenceScore: factForm.confidence_score,
+      relevanceScore: 0.7,
     });
     setFactForm({ memory_value: '', memory_type: 'identity', confidence_score: 0.8 });
     setAdding(null);

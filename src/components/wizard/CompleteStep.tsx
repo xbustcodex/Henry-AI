@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useStore } from '../../store';
 import { loadProjects } from '../../henry/richMemory';
 
@@ -22,6 +22,10 @@ export default function CompleteStep({ onBack, onDone, outcome }: CompleteStepPr
   const [completing, setCompleting] = useState(false);
   const [visible, setVisible] = useState(false);
 
+  // Two clicks land before the first `await` resolves, so `completing` is not
+  // enough on its own: without this, setup was marked complete twice.
+  const finished = useRef(false);
+
   const localModel = settings.companion_model || '';
   const provider = settings.companion_provider || '';
   const isOllama = provider === 'ollama';
@@ -43,6 +47,8 @@ export default function CompleteStep({ onBack, onDone, outcome }: CompleteStepPr
     : null;
 
   async function handleComplete() {
+    if (finished.current) return;
+    finished.current = true;
     setCompleting(true);
     try {
       await window.henryAPI.saveSetting('setup_complete', 'true');
@@ -53,6 +59,7 @@ export default function CompleteStep({ onBack, onDone, outcome }: CompleteStepPr
       onDone?.();
     } catch (err) {
       console.error('Failed to complete setup:', err);
+      finished.current = false;
       setCompleting(false);
     }
   }

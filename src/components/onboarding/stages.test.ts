@@ -59,7 +59,6 @@ describe('a fresh profile reaches the first stage', () => {
       'welcome',
       'howItWorks',
       'ai',
-      'engines',
       'companion',
       'panels',
       'memory',
@@ -67,9 +66,13 @@ describe('a fresh profile reaches the first stage', () => {
     ]);
   });
 
-  it('keeps the engine-assignment stage, which used to be unreachable dead code', () => {
-    const walk = availableStages(buildStagePlan(LINUX_DESKTOP)).map((stage) => stage.id);
-    expect(walk).toContain('engines');
+  it('asks for a brain exactly once — the duplicate stage is gone from the plan', () => {
+    // `engines` ("Pick your brains") sat next to the provider stage and asked
+    // the same question twice on an ordinary forward walk. Brain selection is
+    // the `ai` stage and nothing else.
+    const walk: string[] = availableStages(buildStagePlan(LINUX_DESKTOP)).map((stage) => stage.id);
+    expect(walk.filter((id) => id === 'ai')).toHaveLength(1);
+    expect(walk).not.toContain('engines');
   });
 
   it('ends on the summary stage and has no stage after it', () => {
@@ -108,7 +111,7 @@ describe('stages this machine does not need', () => {
     // macOS-only stage — which renders nothing off macOS. A blank screen with no
     // way forward was the symptom; walking the available list is the fix.
     expect(nextStageId(plan, 'howItWorks')).toBe('ai');
-    expect(nextStageId(plan, 'ai')).toBe('engines');
+    expect(nextStageId(plan, 'ai')).toBe('companion');
   });
 });
 
@@ -180,6 +183,6 @@ describe('the required stage blocks until it is satisfied', () => {
   it('lets the flow leave the required stage once the choice is satisfied', () => {
     const plan = buildStagePlan(LINUX_DESKTOP);
     expect(blockingReason(plan, 'ai', configuredByUser)).toBeNull();
-    expect(nextStageId(plan, 'ai')).toBe('engines');
+    expect(nextStageId(plan, 'ai')).toBe('companion');
   });
 });

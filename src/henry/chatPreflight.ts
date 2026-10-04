@@ -13,15 +13,8 @@
  * the user chose.
  */
 
-import { retiredProviderName } from '../providers/models';
-import { getBackendStatus, hasUsableBackend, type BackendKind } from './backendStatus';
-import {
-  isProviderRoutingError,
-  resolveChat,
-  type ModelRoute,
-  type ProviderRow,
-  type RoutingErrorCode,
-} from './modelRouter';
+import { resolveProviderState, type BackendKind } from './backendStatus';
+import type { ModelRoute, ProviderRow, RoutingErrorCode } from './modelRouter';
 
 export type ChatPreflight =
   | { kind: 'ready'; route: ModelRoute }
@@ -88,34 +81,21 @@ export function chatPreflight(input: {
   providers: ProviderRow[];
 }): ChatPreflight {
   const { content, settings, providers } = input;
-  const selectedProviderId = (settings.companion_provider ?? '').trim();
 
-  const retired = retiredProviderName(selectedProviderId);
-  if (retired) {
-    return {
-      kind: 'provider-unavailable',
-      message:
-        `⚠️ **${retired} is no longer a supported provider.** Henry will not route to another provider in its place. ` +
-        'Pick a supported provider in **Settings → AI Providers** and set it as your companion engine.',
-    };
-  }
+  // One verdict, shared with the banner and the status pill. This function used
+  // to re-derive "is anything configured" from a different set of signals than
+  // the notice above it, which is how an install could be told "no AI provider"
+  // by one surface and "Local AI · moondream:latest" by the next.
+  const state = resolveProviderState({ content, settings, providers });
 
-  // Only when NOTHING is configured do we offer the setup card. When a backend
-  // exists but no engine is selected, the router's own "pick one" message is
-  // the more accurate answer, and it is what the user is really being told.
-  if (!selectedProviderId && !hasUsableBackend(settings)) {
-    return {
-      kind: 'setup-required',
-      message: buildSetupRequiredMessage(getBackendStatus(settings).kinds),
-    };
-  }
-
-  try {
-    return { kind: 'ready', route: resolveChat(content, settings, providers) };
-  } catch (err) {
-    if (isProviderRoutingError(err)) {
-      return { kind: 'unresolved', code: err.code, message: `⚠️ ${err.detail}` };
-    }
-    throw err;
+  switch (state.kind) {
+    case 'ready':
+      return { kind: 'ready', route: state.route };
+    case 'provider-unavailable':
+      return { kind: 'provider-unavailable', message: state.message };
+    case 'nothing-configured':
+      return { kind: 'setup-required', message: buildSetupRequiredMessage(state.kinds) };
+    case 'unresolved':
+      return { kind: 'unresolved', code: state.code, message: state.message };
   }
 }

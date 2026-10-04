@@ -205,6 +205,14 @@ a default, a fallback, or a required key. If a provider or model cannot be
 resolved, surface an explicit configuration error naming what is unresolved —
 never substitute a different provider, and never silently fall back.
 
+"Is a usable AI provider configured?" has exactly one answer, produced by
+`resolveProviderState` in `src/henry/backendStatus.ts` and built on
+`resolveChat` from `src/henry/modelRouter.ts`. The backend notice, the
+presence-bar and title-bar pills, the chat preflight and `hasUsableBackend` all
+read that verdict — never a localStorage mirror of their own, never raw
+`companion_provider`. A second reader is how the installed app came to say "No
+AI provider configured" above "Local AI · moondream:latest".
+
 Do not expose API keys in logs, reports, tests, screenshots, or commits.
 
 TESTING
