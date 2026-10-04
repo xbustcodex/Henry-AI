@@ -228,6 +228,52 @@ then no text. That is very likely the same diversion surfacing differently — c
 whether Zen is also being routed to the agent path rather than assuming a Zen-specific
 stream defect.
 
+## 11c. Chat routing trace — boundaries PROVEN WORKING (2026-10-04, HEAD 8978726)
+
+Instrumented the live installed app (asar `95795e79…`) on the onboarded Ollama profile.
+**Every boundary up to assistant-message creation is proven working.** The defect is
+strictly downstream of that.
+
+| Boundary | Method | Result |
+|---|---|---|
+| Model inference | `sendMessage({provider:'ollama',model:'llama3.2:3b',…})` | **WORKS** — `{content:"IPCOK-8823", usage, cost}` |
+| Streaming transport | `streamMessage(…)` + `onChunk`/`onDone` | **WORKS** — chunks `["STR","M","OK","-","773","1"]`, `onDone("STRMOK-7731")` |
+| Stream accumulation | `store.appendStreamingContent` (`src/store/index.ts:91`) | **WORKS** — appends to `streamingContent` |
+| Agent interceptor | `interceptAndExecute(fullText)` (`ChatView.tsx:2037`) | Not the cause — appends to `fullText` inside a non-blocking `try/catch` |
+| Assistant message build | `ChatView.tsx:2087-2101` | Builds `assistantMsg{content: fullText, provider, model}` and calls `addMessage` at `:2101` |
+
+### The bisect
+`agentMode` defaults **ON** (`ChatView.tsx:377-382`: `v === null ? true`). With it ON,
+every turn carries `tools:[{name:'henry-agent'}]` (`:1979`) and a **task card** renders.
+With it OFF (`henry_agent_mode=false` in localStorage + reload), the task card disappears
+but the assistant reply **still does not render** — `replyAfterPrompt:null`.
+
+**So the agent/tool route is not the cause.** It is an additional symptom. Ordinary chat
+fails identically with tools disabled.
+
+### Where to look next (narrowed, in order)
+1. **`fullText` arriving empty at `stream.onDone` in ChatView's own stream instance**
+   (`:2002`). My probe used a *separate* `streamMessage` call and got `fullText` correctly;
+   ChatView's instance may differ because it registers `onChunk` *and* `onAgentToolStream*`
+   handlers, or because `agentMode` changed the request shape between runs.
+2. **`addMessage` reaching the store but the conversation view not rendering it.** After a
+   send: `tokenInDom:false`, `thinking:false`, and my bubble selector matched **0** elements
+   (`[class*=message],[class*=bubble],[data-role]`) — the DOM probe was inconclusive, so
+   verify the actual message component's class names before assuming a render filter.
+3. **The assistant message being created empty and filtered.** A message whose `content` is
+   `''` may be dropped by a truthiness filter between `addMessage` and the list.
+
+### Do NOT "fix" this by disabling agent mode globally
+`agentMode` defaulting ON is intentional ("so Henry uses his tool crew out of the box").
+The correct fix preserves tool/agent functionality and corrects only the ordinary-chat
+routing condition. Acceptance requires BOTH: an ordinary Chat prompt renders a normal
+assistant message with no task card, AND an explicit tool/agent operation still works.
+
+### Verified this session (unrelated to the above, keep)
+Fresh-profile onboarding on the installed build passes: Brain exactly once, required AI
+stage blocks, Ready showed `✅ Running on Ollama · llama3.2:3b`, `noProviderBanner:false`,
+`companion_provider`/`companion_model` persisted. Layout + macOS-copy fixes are installed.
+
 ## 12. Next recommended task, in priority order
 
 1. **Rebuild, package, install** from `9eb73af`; re-run the fresh-profile acceptance end
