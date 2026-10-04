@@ -12,7 +12,8 @@ import { ipcMain } from 'electron';
 import type Database from 'better-sqlite3';
 import { encryptKey, decryptKey, migrateProviderKeys, canEncrypt } from './_keyStorage';
 import { guardedEvent, revokeChannelApprovals } from './validation';
-import { setOpencodeZenCredential } from '../coder/opencode';
+import { rehydrateOpencodeZenCredential, setOpencodeZenCredential } from '../coder/opencode';
+import { OPENCODE_ZEN_PROVIDER_ID } from '../providers/classification';
 import { log } from '../lib/log';
 import {
   DEFAULT_POLICY,
@@ -45,6 +46,11 @@ export function registerSettingsHandlers(db: Database.Database, getMainWindow?: 
   // Encrypt any plaintext keys left over from before this feature shipped.
   // Safe to call every launch — already-encrypted rows are detected by prefix.
   migrateProviderKeys(db);
+  // Rehydrate the Zen credential from SQLite. `providers:save` pushes the key
+  // into the opencode CLI's child environment as it saves, but nothing ever
+  // put it back on the next launch — so a saved Zen key worked until restart
+  // and then silently dropped the catalogue to the unauthenticated subset.
+  rehydrateOpencodeZenCredential(db);
 
   // ── Settings ────────────────────────────────────────────────
 
@@ -112,9 +118,9 @@ export function registerSettingsHandlers(db: Database.Database, getMainWindow?: 
         ).run(provider.id, provider.name, encryptedKey, enabled, provider.models || '[]');
         // OpenCode Zen authenticates with OPENCODE_API_KEY, which the opencode
         // CLI only sees in its child environment. Push the saved key there now
-        // so it takes effect without a restart — otherwise the key would be
-        // stored and then silently ignored.
-        if (provider.id === 'opencode-zen') {
+        // so it takes effect without a restart; `rehydrateOpencodeZenCredential`
+        // above covers the restart side, so the key survives both.
+        if (provider.id === OPENCODE_ZEN_PROVIDER_ID) {
           setOpencodeZenCredential(rawKey);
         }
         log.debug('[providers:save] saved', provider.id);

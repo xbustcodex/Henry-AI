@@ -22,6 +22,9 @@ import {
   createLineBuffer,
   summarizeToolInput,
 } from './streamJson';
+import { decryptKey } from '../ipc/_keyStorage';
+import { OPENCODE_ZEN_PROVIDER_ID } from '../providers/classification';
+import { log } from '../lib/log';
 
 /** Default working directory when the caller does not supply one. */
 export const CODER_WORKSPACE_DIR = path.join(os.homedir(), 'HenryAI', 'coder-projects');
@@ -62,6 +65,30 @@ export function setOpencodeZenCredential(key: string | null | undefined): void {
 export function getOpencodeZenCredential(): string {
   return zenCredential;
 }
+
+/**
+ * Restore the Zen credential from the providers table at launch.
+ *
+ * `providers:save` is the only other writer, and it runs once, when the user
+ * presses Save. Without this, `zenCredential` starts empty on every launch and
+ * a saved key is ignored until the user re-saves it — which presents as "Zen
+ * worked yesterday". Reads only the Zen row; it cannot resurrect a deleted key.
+ */
+export function rehydrateOpencodeZenCredential(
+  db: { prepare: (sql: string) => { get: (id: string) => { api_key?: string } | undefined } },
+): void {
+  try {
+    const row = db
+      .prepare('SELECT api_key FROM providers WHERE id = ?')
+      .get(OPENCODE_ZEN_PROVIDER_ID);
+    setOpencodeZenCredential(row ? decryptKey(row.api_key ?? '') : '');
+  } catch (e: unknown) {
+    // A missing table or an uninitialised database must not stop boot; the
+    // worst case is the unauthenticated subset, which is what shipped before.
+    log.warn('[opencode] could not rehydrate the Zen credential', e);
+  }
+}
+
 export function buildCoderChildEnv(): NodeJS.ProcessEnv {
   const home = os.homedir();
   const env: NodeJS.ProcessEnv = { ...process.env };
@@ -370,7 +397,7 @@ export interface OpencodeModel {
  *
  * Older builds printed one bare id per line, so plain lines are still accepted.
  */
-function parseModelList(stdout: string): OpencodeModel[] {
+export function parseModelList(stdout: string): OpencodeModel[] {
   const out: OpencodeModel[] = [];
   const seen = new Set<string>();
   let group = '';
@@ -407,18 +434,25 @@ function parseModelList(stdout: string): OpencodeModel[] {
 
 function classifyModel(id: string, group?: string): OpencodeModel {
   const slash = id.indexOf('/');
-  const provider = slash > 0 ? id.slice(0, slash) : 'unknown';
+  const idProvider = slash > 0 ? id.slice(0, slash) : '';
   const name = slash > 0 ? id.slice(slash + 1) : id;
   // "opencode-zen (105)" is the group heading for the Zen catalogue; ids inside
   // it are namespaced by their upstream provider, so the provider has to come
   // from the group or every Zen model looks like a third-party one.
-  const bucket = (group || provider).toLowerCase();
+  const bucket = (group || idProvider).toLowerCase();
+  const isZen = bucket.includes('zen');
+  // Zen ids carry no `provider/` prefix, so the slash split above yields
+  // nothing for them. Falling through to the literal 'unknown' is what made all
+  // 108 Zen models ungroupable downstream: every consumer keyed off `provider`,
+  // found 'unknown', and dropped them. For a Zen model the group IS the
+  // provider, so say so rather than admitting defeat.
+  const provider = idProvider || group || 'unknown';
   return {
     id,
     provider,
     name,
-    group: group || provider,
-    isZen: bucket.includes('zen') || provider === 'opencode',
+    group: group || idProvider || 'unknown',
+    isZen,
     isFree: /-free$/.test(name),
   };
 }

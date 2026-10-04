@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { discoverOllamaModels } from '../electron/ipc/ollamaCapabilities';
 
 function getStore<T>(key: string, defaultValue: T): T {
   try {
@@ -1416,15 +1417,19 @@ const henryAPI: Window['henryAPI'] = {
       return { running: false, url, error: 'Ollama not available' };
     }
   },
+  // Browser/web mode has no Electron main process, so discovery is done here
+  // against the same two endpoints the main process uses — and it produces the
+  // same catalogue, because the data comes from the runtime either way.
   ollamaModels: async (baseUrl) => {
+    const url = (baseUrl || 'http://localhost:11434').replace(/\/+$/, '');
     try {
-      const url = baseUrl || 'http://localhost:11434';
-      const res = await fetch(`${url}/api/tags`);
-      if (!res.ok) return { models: [], error: `Ollama returned ${res.status}` };
-      const data = await res.json() as { models?: Array<{ name: string }> };
-      return { models: data.models ?? [] };
+      const found = await discoverOllamaModels(url);
+      return {
+        ...found,
+        error: found.models.length === 0 ? found.warnings[0] : undefined,
+      };
     } catch {
-      return { models: [] };
+      return { models: [], baseUrl: url, runtime: 'ollama' as const };
     }
   },
   ollamaPull: async (model, baseUrl) => {

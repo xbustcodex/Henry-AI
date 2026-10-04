@@ -31,6 +31,7 @@ import { callAIWithTools } from "../ipc/ai";
 import { createSessionRecord, recordSessionMessage } from "../ipc/sessionStore";
 import { decryptKey } from "../ipc/_keyStorage";
 import { log } from '../lib/log';
+import { requiresApiKey } from "../providers/classification";
 import {
   ensureTriggerSchema,
   readTrigger,
@@ -864,10 +865,13 @@ export class HenryScheduler {
       throw new Error("Worker provider not found. Reconfigure the Worker engine in Settings.");
     }
 
-    const isOllama =
-      (provider.id || "").toLowerCase() === "ollama" ||
-      (provider.name || "").toLowerCase() === "ollama";
-    if (!isOllama && !provider.api_key) {
+    // Shared classification, not an inline "is this literally ollama" check.
+    // OpenCode-backed providers (the CLI as a whole, and Zen specifically) do
+    // not use a Henry API key: the opencode CLI authenticates with
+    // OPENCODE_API_KEY in its own child environment. Gating them on the
+    // providers table rejected every Routine on an OpenCode model before a
+    // single token was spent.
+    if (requiresApiKey(provider)) {
       throw new Error(`Worker provider "${provider.name}" is missing an API key.`);
     }
 

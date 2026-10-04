@@ -19,6 +19,7 @@ import type {
   CatalogEntryState,
   CatalogListing,
 } from './types';
+import type { OllamaModelCatalogue } from '../electron/ipc/ollamaCapabilities';
 
 declare global {
   interface HenryProviderRecord {
@@ -831,7 +832,12 @@ declare global {
     opencodeModels?: () => Promise<{ ok: boolean; models: OpencodeModelInfo[]; error?: string }>;
     opencodeBridgeStatus?: () => Promise<{ running: boolean; port: number; baseUrl: string; modelCount: number; error?: string }>;
     opencodeTest?: (model: string) => Promise<{ ok: boolean; reply?: string; error?: string }>;
-    ollamaModels: (baseUrl?: string) => Promise<{ models: Array<{ name: string; [k: string]: any }>; error?: string }>;
+    /**
+     * The models the running Ollama instance actually holds, with the
+     * capabilities it reports for each. There is no static list behind this:
+     * the response is whatever `/api/tags` + `/api/show` said a moment ago.
+     */
+    ollamaModels: (baseUrl?: string) => Promise<OllamaModelCatalogue>;
     ollamaPull: (model: string, baseUrl?: string) => Promise<{ success: boolean; error?: string }>;
     ollamaDelete: (model: string, baseUrl?: string) => Promise<{ success: boolean; error?: string }>;
     onOllamaPullProgress: (cb: (data: any) => void) => () => void;

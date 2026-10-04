@@ -15,6 +15,7 @@ import {
   OLLAMA_URL,
 } from './ollamaManager';
 import { readNdjsonStream } from '../providers/ndjson';
+import { discoverOllamaModels, type OllamaModelCatalogue } from './ollamaCapabilities';
 
 type WindowGetter = () => BrowserWindow | null;
 
@@ -30,15 +31,21 @@ let getWindow: WindowGetter;
 
 const DEFAULT_OLLAMA_URL = 'http://localhost:11434';
 
-interface OllamaModel {
-  name: string;
-  size: number;
-  digest: string;
-  modified_at: string;
-  details?: {
-    family: string;
-    parameter_size: string;
-    quantization_level: string;
+/**
+ * The exact inventory the given base URL holds right now, with the
+ * capabilities the runtime reports for each model. There is no static list
+ * behind this: pull a model and it appears, remove one and it disappears, with
+ * no change to Henry.
+ */
+export async function ollamaCatalogue(baseUrl?: string): Promise<OllamaModelCatalogue> {
+  const base = (baseUrl || DEFAULT_OLLAMA_URL).replace(/\/+$/, '');
+  const found = await discoverOllamaModels(base);
+  return {
+    models: found.models,
+    baseUrl: found.baseUrl,
+    runtime: 'ollama',
+    warnings: found.warnings,
+    error: found.models.length === 0 && found.warnings.length > 0 ? found.warnings[0] : undefined,
   };
 }
 
@@ -60,27 +67,19 @@ export function registerOllamaHandlers(winGetter: WindowGetter) {
     }
   });
 
-  // List installed models
+  // List the models this Ollama instance actually holds, with the capabilities
+  // it reports for each one. This is the only source of local models; the
+  // renderer must not carry its own copy of the list.
   ipcMain.handle('ollama:models', async (_event, baseUrl?: string) => {
-    const url = baseUrl || DEFAULT_OLLAMA_URL;
     try {
-      const response = await fetch(`${url}/api/tags`);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
+      return await ollamaCatalogue(baseUrl);
+    } catch (err: unknown) {
       return {
-        models: (data.models || []).map((m: any) => ({
-          name: m.name,
-          size: m.size,
-          sizeGB: (m.size / 1e9).toFixed(1),
-          digest: m.digest?.slice(0, 12),
-          modified_at: m.modified_at,
-          family: m.details?.family || 'unknown',
-          parameterSize: m.details?.parameter_size || 'unknown',
-          quantization: m.details?.quantization_level || 'unknown',
-        })),
+        models: [],
+        baseUrl: baseUrl || DEFAULT_OLLAMA_URL,
+        runtime: 'ollama',
+        error: err instanceof Error ? err.message : String(err),
       };
-    } catch (err: any) {
-      return { models: [], error: err.message };
     }
   });
 

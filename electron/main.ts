@@ -52,6 +52,7 @@ import { decryptKey } from './ipc/_keyStorage';
 import { registerVoiceSttHandlers } from './voice/stt';
 import { registerVoiceGreetingHandlers } from './voice/greeting';
 import { registerVoiceTtsHandlers } from './voice/tts';
+import { registerIntegrationHandlers } from './integrations/ipc';
 import { log } from './lib/log';
 import type Database from 'better-sqlite3';
 import {
@@ -605,6 +606,12 @@ app.whenReady().then(() => {
   registerVoiceGreetingHandlers(db);
   registerVoiceSttHandlers(getMainWindow);
   registerVoiceTtsHandlers(db);
+  // Was never registered, so `integration:list` (and every sibling channel)
+  // rejected at runtime even though the preload bridge, the renderer and the
+  // channel schema all expected a reply. `getDb` is passed lazily because
+  // `integration:status` reads credentials and must not force the database open
+  // at registration time.
+  registerIntegrationHandlers(getDb, getMainWindow);
 
   // ── Agent Scheduler (Henry's Routines) ───────────────────────────────────
   // Registered after the agent tool kit so the registry is populated before any

@@ -1,7 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore } from '../../store';
 import { AVAILABLE_MODELS, PROVIDERS, formatPrice, type ProviderId } from '../../providers/models';
 import type { AIModel } from '../../types';
+import { localModelsToAIModels, localCatalogState, OLLAMA_PROVIDER_ID } from '../../providers/localModels';
+import type { LocalCatalogState } from '../../providers/localModels';
+import type { LocalModelInfo } from '../../../electron/ipc/ollamaCapabilities';
 
 interface EngineAssignStepProps {
   onNext: () => void;
@@ -15,16 +18,42 @@ export default function EngineAssignStep({ onNext, onBack }: EngineAssignStepPro
   const [localCustom, setLocalCustom] = useState('');
 
   const enabledProviderIds = providers.filter((p) => p.enabled).map((p) => p.id);
-  const ollamaEnabled = enabledProviderIds.includes('ollama');
-  const cloudProviders = enabledProviderIds.filter((id) => id !== 'ollama');
+  const ollamaEnabled = enabledProviderIds.includes(OLLAMA_PROVIDER_ID);
+  const cloudProviders = enabledProviderIds.filter((id) => id !== OLLAMA_PROVIDER_ID);
 
-  const localModels = AVAILABLE_MODELS.filter((m) => m.provider === 'ollama' && enabledProviderIds.includes('ollama'));
+  // The local list is the runtime's, not a table's: what Ollama holds right now.
+  // This step used to render `AVAILABLE_MODELS.filter(provider === 'ollama')`,
+  // which offered models the user had never pulled and none they had.
+  const [localModels, setLocalModels] = useState<LocalModelInfo[]>([]);
+  const [localCatalog, setLocalCatalog] = useState<LocalCatalogState>({ kind: 'ok' });
+  const localBaseUrl = settings.ollama_base_url || 'http://127.0.0.1:11434';
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const found = await window.henryAPI.ollamaModels?.(localBaseUrl);
+        if (cancelled) return;
+        const models = found?.models ?? [];
+        setLocalModels(models);
+        setLocalCatalog(localCatalogState(models, found?.error));
+      } catch (err: unknown) {
+        if (!cancelled) {
+          setLocalModels([]);
+          setLocalCatalog({ kind: 'unreachable', message: err instanceof Error ? err.message : 'Could not reach Ollama' });
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [localBaseUrl]);
+
+  const localOptions = localModelsToAIModels(localModels);
   const cloudModels = AVAILABLE_MODELS.filter((m) => cloudProviders.includes(m.provider));
 
   const effectiveLocal = localCustom.trim() || localModel;
   const effectiveCloud = cloudModel;
 
-  const localProvider = 'ollama';
+  const localProvider = OLLAMA_PROVIDER_ID;
   const cloudProvider = AVAILABLE_MODELS.find((m) => m.id === cloudModel)?.provider ?? '';
 
   async function handleNext() {
@@ -90,13 +119,13 @@ export default function EngineAssignStep({ onNext, onBack }: EngineAssignStepPro
                 )}
               </div>
 
-              {localModels.length > 0 && (
+              {localOptions.length > 0 ? (
                 <div>
                   <div className="text-[10px] font-medium text-henry-text-muted uppercase tracking-wider mb-2">
-                    Or pick from list
+                    Or pick from what&apos;s installed ({localOptions.length})
                   </div>
                   <div className="space-y-1.5 max-h-44 overflow-y-auto">
-                    {localModels.map((model) => (
+                    {localOptions.map((model) => (
                       <ModelOption
                         key={model.id}
                         model={model}
@@ -106,6 +135,10 @@ export default function EngineAssignStep({ onNext, onBack }: EngineAssignStepPro
                     ))}
                   </div>
                 </div>
+              ) : (
+                <p className="text-[10px] text-henry-text-dim">
+                  {localCatalog.message ?? 'No local models found yet — pull one, or type a name above.'}
+                </p>
               )}
             </>
           ) : (

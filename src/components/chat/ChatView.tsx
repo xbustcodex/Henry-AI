@@ -560,8 +560,8 @@ export default function ChatView() {
 
         const { autoSelectModels } = await import('@/henry/modelPriority');
         const ollamaUrl = s.ollama_base_url || 'http://localhost:11434';
-        const raw = await window.henryAPI.ollamaModels(ollamaUrl) as any;
-        const installed: string[] = (raw?.models ?? []).map((m: any) => m.name as string);
+        const raw = await window.henryAPI.ollamaModels(ollamaUrl);
+        const installed: string[] = (raw?.models ?? []).map((m) => m.id);
         if (!installed.length) return;
 
         const best = autoSelectModels(installed);

@@ -22,6 +22,18 @@ import { useEffect, useState, useMemo } from 'react';
 import { useStore } from '../../store';
 import type { AIProvider } from '../../types';
 import { PROVIDERS, AVAILABLE_MODELS, formatPrice } from '../../providers/models';
+import {
+  OPENCODE_ZEN_PROVIDER_ID,
+  opencodeProviderIdForModel,
+} from '../../../electron/providers/classification';
+import {
+  localModelsToAIModels,
+  localModelLabel,
+  localCatalogState,
+  OLLAMA_PROVIDER_ID,
+  type LocalCatalogState,
+} from '../../providers/localModels';
+import type { LocalModelInfo } from '../../../electron/ipc/ollamaCapabilities';
 import { toast } from '../ui/Toast';
 import RemoteControlPanel from './RemoteControlPanel';
 import DeviceLinkPanel from './DeviceLinkPanel';
@@ -252,7 +264,10 @@ function ProvidersSection() {
 
 // ── Engine assignment ────────────────────────────────────────────────────────
 
-function EngineRow({ engine, label, hint }: { engine: 'companion' | 'worker'; label: string; hint: string }) {
+// Exported for the picker seam test: this is the only model picker in the app,
+// and it is mounted in isolation rather than through the whole settings shell so
+// a test exercises the select itself rather than unrelated panels.
+export function EngineRow({ engine, label, hint }: { engine: 'companion' | 'worker'; label: string; hint: string }) {
   const settings = useStore((s) => s.settings);
   const updateSetting = useStore((s) => s.updateSetting);
   const providers = useStore((s) => s.providers);
@@ -303,12 +318,53 @@ function EngineRow({ engine, label, hint }: { engine: 'companion' | 'worker'; la
     return () => { cancelled = true; };
   }, []);
 
+  // ── Local models, discovered from the running runtime ─────────────────────
+  //
+  // There used to be a hand-written list of local models here and a separate
+  // fetch whose result was thrown away except for the names. Both are gone:
+  // the runtime is asked what it holds, and what it says — id, capabilities,
+  // context length — is what is shown and what is persisted.
+  const [localModels, setLocalModels] = useState<LocalModelInfo[]>([]);
+  const [localCatalog, setLocalCatalog] = useState<LocalCatalogState>({ kind: 'ok' });
+  const localBaseUrl = settings.ollama_base_url || 'http://localhost:11434';
+
+  // Always asked, never gated on an API key: Ollama is an unauthenticated
+  // local server, so a user with no provider rows configured at all still sees
+  // the models sitting on their own disk.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const found = await window.henryAPI.ollamaModels?.(localBaseUrl);
+        if (cancelled) return;
+        const models = found?.models ?? [];
+        setLocalModels(models);
+        setLocalCatalog(localCatalogState(models, found?.error));
+      } catch (err: unknown) {
+        if (cancelled) return;
+        setLocalModels([]);
+        setLocalCatalog({
+          kind: 'unreachable',
+          message: err instanceof Error ? err.message : 'Could not reach Ollama',
+        });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [localBaseUrl]);
+
+  const localById = new Map(localModels.map((m) => [m.id, m]));
+
+  // A discovered model keeps the provider id it actually belongs to. Zen is a
+  // distinct provider to the user — its own key, its own catalogue, its own
+  // entry in the AI Providers panel — so stamping every discovered model
+  // `opencode` here is what made all 108 Zen models render under the plain
+  // OpenCode label and persist as the wrong provider.
   const opencodeAsModels = useMemo(
     () =>
       opencodeModels.map((m) => ({
         id: m.id,
         name: m.name,
-        provider: 'opencode',
+        provider: opencodeProviderIdForModel(m),
         contextWindow: 0,
         inputPricePer1M: null,
         outputPricePer1M: null,
@@ -317,114 +373,109 @@ function EngineRow({ engine, label, hint }: { engine: 'companion' | 'worker'; la
     [opencodeModels],
   );
 
-  // opencode zen first (free + always available), then the rest of opencode's
-  // catalogue, then the statically-known providers.
-  const zenIds = new Set(opencodeModels.filter((o) => o.isZen).map((o) => o.id));
-  const zenModels = opencodeAsModels.filter((m) => zenIds.has(m.id));
-  const otherOpencodeModels = opencodeAsModels.filter((m) => !zenIds.has(m.id));
-  // De-dupe by id: opencode's openrouter/... entries can share a string with a
-  // static one, which would render two <option>s with the same value.
+  // Order: what the user's own machine holds (free, offline, already here),
+  // then opencode Zen (free, no key), then the rest of opencode, then the
+  // statically-known cloud providers. Every one of these lists is the runtime's
+  // or the user's, never a set of names somebody typed out in advance.
+  const localAsModels = useMemo(() => localModelsToAIModels(localModels), [localModels]);
+  const zenModels = opencodeAsModels.filter((m) => m.provider === OPENCODE_ZEN_PROVIDER_ID);
+  const otherOpencodeModels = opencodeAsModels.filter((m) => m.provider !== OPENCODE_ZEN_PROVIDER_ID);
+  // De-dupe by id: a discovered local tag and a cloud id can share a string,
+  // which would render two <option>s with the same value.
   const seenModelIds = new Set<string>();
-  const models = (opencodeReady
-    ? [...zenModels, ...otherOpencodeModels, ...baseModels]
-    : baseModels
-  ).filter((m) => {
+  const models = [
+    ...localAsModels,
+    ...(opencodeReady ? [...zenModels, ...otherOpencodeModels] : []),
+    ...baseModels,
+  ].filter((m) => {
     if (seenModelIds.has(m.id)) return false;
     seenModelIds.add(m.id);
     return true;
   });
 
-  // For Ollama, fetch installed models
-  const [ollamaInstalled, setOllamaInstalled] = useState<string[]>([]);
-  const [ollamaLoading, setOllamaLoading] = useState(false);
-
-  useEffect(() => {
-    if (currentProvider === 'ollama' || configuredIds.has('ollama')) {
-      setOllamaLoading(true);
-      window.henryAPI.ollamaModels?.(settings.ollama_base_url || 'http://localhost:11434')
-        .then((raw: any) => {
-          const installed = (raw?.models ?? []).map((m: any) => m.name as string);
-          setOllamaInstalled(installed);
-        })
-        .catch(() => {})
-        .finally(() => setOllamaLoading(false));
-    }
-  }, [currentProvider, settings.ollama_base_url, configuredIds]);
 
   const onPick = async (modelId: string) => {
     // opencode models are dynamic, so they are not in AVAILABLE_MODELS. They
     // are matched by ID, which can collide with the static `openrouter/...`
     // entries — so prefer the static entry when the id exists in both, since
     // that one has a real API key path.
-    const isOpencodePick =
-      opencodeModels.some((o) => o.id === modelId) && !AVAILABLE_MODELS.some((m) => m.id === modelId);
+    const discovered = opencodeModels.find((o) => o.id === modelId);
+    const isOpencodePick = discovered != null && !AVAILABLE_MODELS.some((m) => m.id === modelId);
 
     if (isOpencodePick) {
+      // The model decides its own provider, not the other way round. A Zen model
+      // persists as `opencode-zen`; hardcoding `opencode` here was the second
+      // place Zen identity was destroyed, and it is the one that survives a
+      // restart — so it is the reason a previously-working Zen selection came
+      // back as a plain OpenCode model.
+      const providerId = opencodeProviderIdForModel(discovered);
+      const isZen = providerId === OPENCODE_ZEN_PROVIDER_ID;
       // A provider row is REQUIRED, not optional: consumers resolve the engine
       // with `providers.find(p => p.id === <provider>)`, so saving the setting
       // alone left every chat surface reporting "No model configured".
+      //
+      // An existing Zen key is carried across rather than blanked: re-saving
+      // the row with an empty key would silently downgrade the catalogue to the
+      // unauthenticated subset every time a Zen model was picked.
+      const existingKey = providers.find((p) => p.id === providerId)?.apiKey ?? '';
+      const modelsForProvider = opencodeModels
+        .filter((o) => opencodeProviderIdForModel(o) === providerId)
+        .map((o) => o.id);
       await window.henryAPI.saveProvider?.({
-        id: 'opencode',
-        name: 'OpenCode (CLI)',
-        apiKey: '',
+        id: providerId,
+        name: isZen ? 'OpenCode Zen' : 'OpenCode (CLI)',
+        apiKey: existingKey,
         enabled: true,
-        models: JSON.stringify(opencodeModels.map((o) => o.id)),
+        models: JSON.stringify(modelsForProvider),
       });
       await refreshProviders(setProviders);
-      await window.henryAPI.saveSetting?.(`${engine}_provider`, 'opencode');
+      await window.henryAPI.saveSetting?.(`${engine}_provider`, providerId);
       await window.henryAPI.saveSetting?.(`${engine}_model`, modelId);
-      updateSetting(`${engine}_provider`, 'opencode');
+      updateSetting(`${engine}_provider`, providerId);
       updateSetting(`${engine}_model`, modelId);
       toast.success(`Engine → ${modelId}`);
       return;
     }
+    // A discovered local model is, by construction, already installed — it came
+    // from the runtime's own inventory. There is nothing to pull, and no fuzzy
+    // `startsWith` matching against a list of names that may not be installed.
+    const local = localById.get(modelId);
+    if (local) {
+      if (local.loadable === false) {
+        toast.error(local.warning ?? `${local.id} cannot be loaded by Ollama.`);
+        return;
+      }
+      try {
+        // The provider row is required: consumers resolve the engine with
+        // `providers.find(p => p.id === <provider>)`. `apiKey: ''` is correct
+        // and deliberate — Ollama has no account and reads no credential.
+        await window.henryAPI.saveProvider?.({
+          id: OLLAMA_PROVIDER_ID,
+          name: 'Ollama (Local)',
+          apiKey: '',
+          enabled: true,
+          models: JSON.stringify(localModels.map((m) => m.id)),
+        });
+        await refreshProviders(setProviders);
+        await window.henryAPI.saveSetting?.(`${engine}_provider`, OLLAMA_PROVIDER_ID);
+        await window.henryAPI.saveSetting?.(`${engine}_model`, local.id);
+        updateSetting(`${engine}_provider`, OLLAMA_PROVIDER_ID);
+        updateSetting(`${engine}_model`, local.id);
+        toast.success(`${label} → ${local.displayName}`);
+      } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : 'Could not set engine');
+      }
+      return;
+    }
+
     const model = AVAILABLE_MODELS.find((m) => m.id === modelId);
     if (!model) return;
-    
-    // Check if this is an Ollama model that needs to be pulled
-    const isOllama = model.provider === 'ollama';
-    const isInstalled = isOllama && ollamaInstalled.some((inst) => inst.startsWith(model.id) || model.id.startsWith(inst.split(':')[0]));
-    
-    if (isOllama && !isInstalled) {
-      // Model needs to be pulled first
-      toast.info(`Pulling ${model.name}... this may take a few minutes`);
-      
-      try {
-        const result = await window.henryAPI.ollamaPull?.(model.id, settings.ollama_base_url || 'http://localhost:11434');
-        if (!result?.success) {
-          throw new Error(result?.error || 'Failed to pull model');
-        }
-        
-        // Pull succeeded - refresh installed list
-        const refreshed = await window.henryAPI.ollamaModels?.(settings.ollama_base_url || 'http://localhost:11434');
-        const installed = (refreshed?.models ?? []).map((m: any) => m.name as string);
-        setOllamaInstalled(installed);
-        
-        toast.success(`Pulled ${model.name} successfully`);
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Failed to pull model';
-        toast.error(msg);
-        return; // Don't proceed to set as active model
-      }
-    }
-    
+
     try {
       await window.henryAPI.saveSetting?.(`${engine}_provider`, model.provider);
       await window.henryAPI.saveSetting?.(`${engine}_model`, model.id);
       updateSetting(`${engine}_provider`, model.provider);
       updateSetting(`${engine}_model`, model.id);
-
-      // Ensure the provider exists in the database (especially for keyless providers like Ollama)
-      if (model.provider === 'ollama') {
-        await window.henryAPI.saveProvider?.({
-          id: 'ollama',
-          name: 'Ollama (Local)',
-          apiKey: '',
-          enabled: true,
-          models: JSON.stringify(AVAILABLE_MODELS.filter((m) => m.provider === 'ollama').map((m) => m.id)),
-        });
-        await refreshProviders(setProviders);
-      }
 
       toast.success(`${label} → ${model.name}`);
     } catch (e) {
@@ -441,13 +492,36 @@ function EngineRow({ engine, label, hint }: { engine: 'companion' | 'worker'; la
       <p className="text-[11px] text-henry-text-muted mb-1.5">{hint}</p>
       <select className={inputCls} value={currentModel} onChange={(e) => onPick(e.target.value)}>
         <option value="" disabled>Choose a model…</option>
-        {models.map((m) => (
-          <option key={`${m.provider}:${m.id}`} value={m.id}>
-            {(PROVIDERS as Record<string, { name?: string }>)[m.provider]?.name ?? m.provider} — {m.name}
-            {m.inputPricePer1M != null ? ` (${formatPrice(m.inputPricePer1M)}/1M in)` : ''}
-          </option>
-        ))}
+        {models.map((m) => {
+          // A local model's label comes from what the runtime reported, so the
+          // row shows the capability set the user will actually get rather than
+          // one a former static table guessed.
+          const local = localById.get(m.id);
+          return (
+            <option
+              key={`${m.provider}:${m.id}`}
+              value={m.id}
+              disabled={local?.loadable === false}
+            >
+              {local
+                ? localModelLabel(local)
+                : `${(PROVIDERS as Record<string, { name?: string }>)[m.provider]?.name ?? m.provider} — ${m.name}` +
+                  (m.inputPricePer1M != null ? ` (${formatPrice(m.inputPricePer1M)}/1M in)` : '')}
+            </option>
+          );
+        })}
       </select>
+      {localCatalog.message && (
+        <p
+          className={
+            localCatalog.kind === 'degraded'
+              ? 'mt-1.5 text-[11px] text-henry-text-muted'
+              : 'mt-1.5 text-[11px] text-henry-accent'
+          }
+        >
+          Local models: {localCatalog.message}
+        </p>
+      )}
       {opencodeModels.some((o) => o.id === currentModel) && (
         <button
           onClick={() => void testOpencode(currentModel)}

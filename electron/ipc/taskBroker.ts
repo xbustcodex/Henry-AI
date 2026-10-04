@@ -18,6 +18,7 @@ import {
   buildWorkerCodeGenSystemPrompt,
 } from '../../src/henry/charter';
 import { emitTriggerEvent } from '../agent/triggers';
+import { requiresApiKey } from '../providers/classification';
 
 type WindowGetter = () => BrowserWindow | null;
 
@@ -109,11 +110,10 @@ function getWorkerEngineConfig(): { workerProviderId: string; workerModel: strin
     throw new Error('Worker engine is not configured. Open Settings and choose a Worker provider/model.');
   }
 
-  const idLower = (provider.id || '').toLowerCase();
-  const nameLower = (provider.name || '').toLowerCase();
-  const isOllama = idLower === 'ollama' || nameLower === 'ollama';
-
-  if (!isOllama && (!provider.api_key || provider.api_key === '')) {
+  // Shared classification — the same one the Routine scheduler and the model
+  // picker use. This was a second, independently written copy of the check,
+  // which is how the two surfaces drifted apart on OpenCode.
+  if (requiresApiKey(provider)) {
     throw new Error('Worker provider is missing an API key.');
   }
 

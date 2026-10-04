@@ -59,7 +59,7 @@ export default function OllamaElectronSetup({ onModelReady, onFallback }: Props)
   async function getInstalledModels(): Promise<string[]> {
     try {
       const result = await window.henryAPI.ollamaModels?.('http://127.0.0.1:11434');
-      return (result?.models ?? []).map((m: any) => m.name || '').filter(Boolean);
+      return (result?.models ?? []).map((m) => m.id).filter(Boolean);
     } catch {
       return [];
     }

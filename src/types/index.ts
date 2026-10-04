@@ -78,6 +78,12 @@ export interface OpencodeModelInfo {
   /** True for opencode's own hosted ("zen") service. */
   isZen: boolean;
   isFree: boolean;
+  /**
+   * Provider group the id was listed under, e.g. "opencode-zen". Zen ids carry
+   * no `provider/` prefix, so `provider` alone cannot identify them — this is
+   * the field that does.
+   */
+  group: string;
 }
 
 export type CatalogEntryType = 'app' | 'tool' | 'plugin' | 'extension';
