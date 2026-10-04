@@ -191,10 +191,21 @@ async function runModel(model: string, prompt: string, onTextPart?: (text: strin
   try { mkdirSync(CODER_WORKSPACE_DIR, { recursive: true }); } catch { /* best effort */ }
 
   return new Promise<RunOutcome>((resolve, reject) => {
-    const child = spawn(cli.path!, ['run', '--format', 'json', '--model', model, '--dir', CODER_WORKSPACE_DIR, prompt], {
-      env: buildCoderChildEnv(),
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    // Flag names follow the installed CLI's own contract. `--format` and `--dir` are
+    // not `omp` flags at all: it rejects them and exits 2 with
+    // "unknown flags: --format, --dir", so every OpenCode/Zen turn failed at launch
+    // before a token was ever requested. The correct spellings are `--mode json` for
+    // machine-readable output and `--cwd` for the working directory. `-p` (`--print`)
+    // makes the run non-interactive so it processes the prompt and exits rather than
+    // waiting on a TTY.
+    const child = spawn(
+      cli.path!,
+      ['run', '--mode', 'json', '--cwd', CODER_WORKSPACE_DIR, '-p', '--model', model, prompt],
+      {
+        env: buildCoderChildEnv(),
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    );
     let stdout = '';
     let stderr = '';
     activeChildren.add(child);
