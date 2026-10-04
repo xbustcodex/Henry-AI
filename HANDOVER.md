@@ -424,6 +424,42 @@ from the routing fix now landed.
 Ollama restart persistence: after a full quit and relaunch `llama3.2:3b` remained selected
 and produced a visible assistant reply with `hasToolSyntax:false`.
 
+## 11g. OPEN DEFECT — unauthenticated OpenCode Zen turns error on every free model
+
+Installed build `e960455b…`, agent mode OFF, Zen selected through the normal Settings UI.
+The picker offers **28 Zen models whose ids contain `free`**. Sending an ordinary prompt:
+
+- `jev-1.13-free` → `OpenCode Zen returned an error. Something went wrong with the
+  jev-1.13-free request.`
+- `deepseek-v4-flash-free` (explicitly `-free`) → **same error**
+
+So this is **not** "that model requires a credential". Zen is documented and implemented
+as **credential-OPTIONAL** for free models (a key only widens the catalogue), and every
+free model errors with no credential present.
+
+**Status: rendering is fixed (§11f); this is a separate, now well-scoped upstream defect in
+the OpenCode Zen execution/auth path.** The request reaches the transport and comes back as
+a correctly-attributed error, which is the right contract — but the request never succeeds.
+
+### Where to look
+`electron/coder/opencode.ts` and the OpenCode bridge invoked from `electron/ipc/ai.ts`
+(the `opencode-zen` → OpenCode transport boundary). Specifically:
+- `buildCoderChildEnv` and the `OPENCODE_API_KEY` child-env injection
+- `setOpencodeZenCredential` / `rehydrateOpencodeZenCredential` — is an empty key actually
+  reaching the child, and is an empty key expected to work?
+- whether the opencode CLI is installed and reachable in this install at all
+- what the underlying error is before Henry maps it to the generic "Something went wrong"
+
+To see the real error, temporarily surface the underlying exception at the transport
+boundary rather than the mapped user-facing sentence — the current message discards it,
+which is why this took this long to localise.
+
+### Reproduction
+1. Launch with `--user-data-dir=<isolated dir> --remote-debugging-port=9600`.
+2. Settings → Engines → pick any Zen model whose id contains `free` (no key set).
+3. Chat → send `Say hello in one short sentence.`
+4. Assistant message reads `OpenCode Zen returned an error.`
+
 ## 12. Next recommended task, in priority order
 
 1. **Rebuild, package, install** from `9eb73af`; re-run the fresh-profile acceptance end
