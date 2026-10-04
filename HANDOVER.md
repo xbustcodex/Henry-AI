@@ -98,6 +98,34 @@ accepting the layout and macOS-copy fixes on the installed app.
    fragments at runtime (`src/henry/secretScan.ts`) because GitHub push protection
    rejects verbatim literals — the Slack token shape specifically.
 
+## 5a. PRODUCT DECISION — agent/tool routing capability policy (do NOT "fix" this back)
+
+Decided by the owner after the `computer:` accidental-execution incident. This is policy,
+not an implementation detail. Encoded in `src/henry/agentRouting.ts`.
+
+- **runtime-confirmed tool-capable** → agent mode MAY default ON
+- **runtime-confirmed NOT tool-capable** → agent mode OFF; no user setting overrides it,
+  because a model that cannot emit a tool call cannot be given a tool route
+- **unknown / unobservable capability** → agent mode OFF (safe default)
+- **user explicitly enables Agent mode** → Henry MAY attempt the agent path, with a clear
+  failure if the model cannot actually support it
+- **never infer capability from a model name**
+
+Intent: normal Chat is the safe default behaviour, and the class of accidental
+`computer:` execution observed live (assistant messages containing
+`computer:openApp/runShell/osascript`, which the action interceptor then executed) cannot
+recur through an unseen default.
+
+Consequences to accept deliberately:
+- Providers with no capability channel (OpenAI, Anthropic, Zen) resolve to `unknown`, so a
+  fresh install defaults agent mode OFF there. Cloud/Zen agent turns need the toggle or a
+  stored `true`.
+- **Zen ordinary Chat must work perfectly with agent mode OFF.** Zen agent-mode
+  compatibility is a separate capability-verification row and must not block ordinary
+  Zen chat acceptance.
+- Capability data is runtime-reported only (`/api/show`); a record whose
+  `capabilitySource !== 'runtime'` reads as `unknown`, never as capable.
+
 ## 6. Onboarding state machine
 
 `src/components/onboarding/stages.ts` = the ordered plan (pure data).
