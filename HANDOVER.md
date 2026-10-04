@@ -274,6 +274,53 @@ Fresh-profile onboarding on the installed build passes: Brain exactly once, requ
 stage blocks, Ready showed `✅ Running on Ollama · llama3.2:3b`, `noProviderBanner:false`,
 `companion_provider`/`companion_model` persisted. Layout + macOS-copy fixes are installed.
 
+## 11d. ROOT CAUSE FOUND — ordinary Chat is unconditionally routed into the agent/tool path
+
+Read the persisted database (db + `-wal` + `-shm` must be copied together; the `.db`
+alone is a 4096-byte stub) on the onboarded Ollama profile. Every ordinary Chat prompt
+persisted an assistant message whose content was **tool-call syntax, not prose**:
+
+```
+computer:openApp(name="Google Chrome")
+computer:runShell(command=…)
+computer:osascript(script="tell application \"System Events\" to …")
+```
+
+Rows present for `OLLOK-9911`, `PLAIN-5529`, `STORK-3391`, `TRACE-5510` — i.e. the
+failure is universal for ordinary chat, not intermittent.
+
+**The break is in the REQUEST, not the response handling**, which is why every
+downstream boundary probed clean:
+
+- `ChatView.tsx:377-382` — `agentMode` defaults **ON** (`v === null ? true`).
+- `ChatView.tsx:1979` — with agentMode on, every turn sends
+  `tools: [{ name: 'henry-agent' }]` + `sessionId`.
+- The model answers with tool-call syntax instead of prose.
+- `src/henry/actionInterceptor.ts` regex-matches that syntax (`computer:runShell`,
+  `computer:openApp`, `computer:osascript`, …) and **executes it**, producing the task
+  card and leaving no normal assistant reply.
+
+### Ruled out (do not re-investigate)
+- `electron/ipc/platformCommands.ts` is correctly platform-gated (`IS_MAC`/`IS_WIN`/
+  Linux). The macOS-looking text is the model's emitted *syntax*, not a macOS command
+  executing on Windows. This is NOT a platform bug.
+- `sendMessage`, `streamMessage`, store accumulation, `interceptAndExecute` blocking,
+  and `assistantMsg` construction/`addMessage` are all verified working.
+
+### The fix required
+Ordinary Chat must attach tools only when the **selected model actually reports tool
+capability** (runtime-reported `capabilities` from `/api/show`, never parsed from a model
+name). Intentional agent/tool functionality must keep working. Do not disable tools
+globally, do not remove the action interceptor, do not bypass the store, and do not
+delete truthiness filters.
+
+### Tooling note for the next agent
+Monkey-patching `window.henryAPI.streamMessage` from CDP recorded **zero** calls — the
+renderer holds a destructured bridge reference, so patching the bridge object does not
+intercept ChatView's calls. To instrument ChatView's real stream you must either add
+temporary instrumentation to the source and rebuild, or read the persisted database.
+Reading the DB is faster and unambiguous; remember to copy `-wal` and `-shm` as well.
+
 ## 12. Next recommended task, in priority order
 
 1. **Rebuild, package, install** from `9eb73af`; re-run the fresh-profile acceptance end
