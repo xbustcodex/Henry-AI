@@ -48,7 +48,7 @@ export default function PanelsStage({ onNext, onSkip }: Props) {
       </StageHeading>
 
       <div>
-        <div className="bg-henry-surface/40 border border-henry-border/30 rounded-2xl p-6 min-h-[180px] flex flex-col justify-between">
+        <div className="bg-henry-surface/40 border border-henry-border/30 rounded-2xl p-6">
           <div>
             <div className="flex items-center gap-4 mb-4">
               <span className="text-4xl">{panel.icon}</span>
