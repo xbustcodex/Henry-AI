@@ -6,6 +6,18 @@ import MobileProviderStep from './MobileProviderStep';
 import type { OpencodeModelInfo } from '../../types';
 import { OPENCODE_ZEN_PROVIDER_ID, opencodeProviderIdForModel } from '../../../electron/providers/classification';
 import { AVAILABLE_MODELS } from '../../providers/models';
+import type { ReactNode } from 'react';
+import {
+  StageScreen,
+  StageCard,
+  StageActions,
+  StagePrimaryAction,
+  StageTextAction,
+  StageField,
+  STAGE_CONTROL,
+  STAGE_PROSE_LEADING,
+  STAGE_PROSE_WIDTH,
+} from '../onboarding/layout';
 
 /** Cloud is BYOK; Zen is credential-optional; Ollama needs no credential. */
 type ProviderMode = 'cloud' | 'zen' | 'ollama';
@@ -20,6 +32,12 @@ function isNativeMobile(): boolean {
 interface ProviderStepProps {
   onNext: () => void;
   onBack: () => void;
+  /**
+   * Why the stage cannot be left yet, shown with the action rather than after
+   * it — the sentence that explains a disabled button belongs beside the
+   * button, not below it.
+   */
+  note?: ReactNode;
 }
 
 type ProviderId = 'openrouter' | 'openai' | 'anthropic' | 'google' | 'ollama';
@@ -111,14 +129,14 @@ function openUrl(url: string) {
   try { window.open(url, '_blank', 'noopener,noreferrer'); } catch { /* ignore */ }
 }
 
-export default function ProviderStep({ onNext, onBack }: ProviderStepProps) {
+export default function ProviderStep({ onNext, onBack, note }: ProviderStepProps) {
   if (isNativeMobile()) {
     return <MobileProviderStep onNext={onNext} onBack={onBack} />;
   }
-  return <DesktopProviderStep onNext={onNext} onBack={onBack} />;
+  return <DesktopProviderStep onNext={onNext} onBack={onBack} note={note} />;
 }
 
-function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
+function DesktopProviderStep({ onNext, onBack, note }: ProviderStepProps) {
   const { setProviders, updateSetting, providers } = useStore();
 
   // Top-level mode: a BYOK cloud provider, the OpenCode Zen bridge (only when
@@ -371,32 +389,32 @@ function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
   }
 
   return (
-    <div className="animate-slide-up">
+    <StageScreen className="animate-slide-up">
       {/* Henry prompt */}
-      <div className="bg-henry-surface/40 border border-henry-border/30 rounded-2xl p-5 relative max-w-lg mx-auto mb-8">
+      <div className="bg-henry-surface/40 border border-henry-border/30 rounded-2xl p-6 relative">
         <div className="absolute -top-3 left-6 text-xs font-medium text-henry-text-muted bg-henry-bg px-2">Henry</div>
-        <p className="text-henry-text-dim leading-relaxed">
+        <p className={`text-henry-text-dim text-sm ${STAGE_PROSE_LEADING} ${STAGE_PROSE_WIDTH}`}>
           Two options.{' '}
           <span className="text-henry-text font-medium">OpenRouter has free models — grab a key in 60 seconds.</span>
-          {' '}Or run Ollama locally and nothing ever leaves your Mac.
+          {' '}Or run Ollama locally and nothing ever leaves this computer.
         </p>
       </div>
 
 
       {/* Mode cards — same layout as mobile */}
-      <div className="grid grid-cols-2 gap-3 mb-5">
+      <div className="grid grid-cols-2 gap-4">
         <button
           onClick={() => { setMode('cloud'); setKeyPageOpened(false); }}
-          className={`rounded-2xl border-2 p-4 text-left transition-all ${
+          className={`rounded-2xl border-2 p-5 text-left transition-all ${
             mode === 'cloud'
               ? 'border-henry-accent bg-henry-accent/8'
               : 'border-henry-border/30 bg-henry-surface/20 hover:border-henry-border'
           }`}
         >
-          <div className="text-2xl mb-2">☁️</div>
+          <div className="text-3xl mb-3">☁️</div>
           <div className="text-sm font-semibold text-henry-text">Cloud AI</div>
-          <div className="text-[11px] text-henry-success font-medium mt-0.5">OpenRouter · OpenAI · Anthropic · more</div>
-          <div className="text-[11px] text-henry-text-muted mt-1 leading-snug">Free options available — API key required</div>
+          <div className="text-[11px] text-henry-success font-medium mt-1">OpenRouter · OpenAI · Anthropic · more</div>
+          <div className="text-xs text-henry-text-muted mt-2 ${STAGE_PROSE_LEADING} ${STAGE_PROSE_WIDTH}">Free options available — API key required</div>
         </button>
 
         {/* Zen is offered only when opencode answered on this machine — never
@@ -404,16 +422,16 @@ function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
         {zenAvailable && (
           <button
             onClick={() => { setMode('zen'); setKeyPageOpened(false); }}
-            className={`rounded-2xl border-2 p-4 text-left transition-all ${
+            className={`rounded-2xl border-2 p-5 text-left transition-all ${
               mode === 'zen'
                 ? 'border-henry-accent bg-henry-accent/8'
                 : 'border-henry-border/30 bg-henry-surface/20 hover:border-henry-border'
             }`}
           >
-            <div className="text-2xl mb-2">✨</div>
+            <div className="text-3xl mb-3">✨</div>
             <div className="text-sm font-semibold text-henry-text">OpenCode Zen</div>
-            <div className="text-[11px] text-henry-success font-medium mt-0.5">Free models need no key</div>
-            <div className="text-[11px] text-henry-text-muted mt-1 leading-snug">
+            <div className="text-[11px] text-henry-success font-medium mt-1">Free models need no key</div>
+            <div className="text-xs text-henry-text-muted mt-2 ${STAGE_PROSE_LEADING} ${STAGE_PROSE_WIDTH}">
               Detected on this computer — add a key only if you want paid Zen models
             </div>
           </button>
@@ -422,39 +440,39 @@ function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
 
         <button
           onClick={() => { setMode('ollama'); setKeyPageOpened(false); }}
-          className={`rounded-2xl border-2 p-4 text-left transition-all ${
+          className={`rounded-2xl border-2 p-5 text-left transition-all ${
             mode === 'ollama'
               ? 'border-henry-success bg-henry-success/8'
               : 'border-henry-border/30 bg-henry-surface/20 hover:border-henry-border'
           }`}
         >
-          <div className="text-2xl mb-2">🏠</div>
+          <div className="text-3xl mb-3">🏠</div>
           <div className="text-sm font-semibold text-henry-text">Local (Ollama)</div>
-          <div className="text-[11px] text-henry-success font-medium mt-0.5">Free · Private · Offline</div>
-          <div className="text-[11px] text-henry-text-muted mt-1 leading-snug">Runs on your Mac — nothing leaves your machine</div>
+          <div className="text-[11px] text-henry-success font-medium mt-1">Free · Private · Offline</div>
+          <div className="text-xs text-henry-text-muted mt-2 ${STAGE_PROSE_LEADING} ${STAGE_PROSE_WIDTH}">Runs on your computer — nothing leaves this machine</div>
         </button>
       </div>
 
       {/* ── CLOUD MODE ── */}
       {mode === 'cloud' && (
-        <div className="animate-fade-in space-y-3 mb-5">
+        <div className="animate-fade-in space-y-6">
 
           {/* Provider list */}
-          <div className="space-y-2">
+          <div className="space-y-3">
             {CLOUD_OPTIONS.map((opt) => {
               const isSelected = selectedCloud.id === opt.id;
               return (
                 <button
                   key={opt.id}
                   onClick={() => handleSelectCloud(opt)}
-                  className={`w-full text-left px-4 py-3.5 rounded-xl border-2 transition-all ${
+                  className={`w-full text-left px-5 py-4 rounded-xl border-2 transition-all ${
                     isSelected
                       ? 'border-henry-accent bg-henry-accent/8'
                       : 'border-henry-border/30 bg-henry-surface/20 hover:border-henry-border hover:bg-henry-surface/40'
                   }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <span className="text-xl leading-none shrink-0">{opt.icon}</span>
+                  <div className="flex items-start gap-4">
+                    <span className="text-2xl leading-none shrink-0 mt-0.5">{opt.icon}</span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-semibold text-henry-text">{opt.label}</span>
@@ -471,10 +489,12 @@ function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
                           {opt.freeLabel}
                         </span>
                       </div>
-                      <p className="text-[11px] text-henry-text-muted mt-0.5 truncate">{opt.desc}</p>
+                      <p className={`text-xs text-henry-text-muted mt-1.5 ${STAGE_PROSE_LEADING} ${STAGE_PROSE_WIDTH}`}>
+                        {opt.desc}
+                      </p>
                     </div>
                     {isSelected && (
-                      <svg className="w-4 h-4 text-henry-accent shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <svg className="w-5 h-5 text-henry-accent shrink-0 mt-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                         <path d="M20 6L9 17l-5-5" />
                       </svg>
                     )}
@@ -485,10 +505,10 @@ function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
           </div>
 
           {/* Key flow panel */}
-          <div className="bg-henry-surface/40 border border-henry-border/30 rounded-2xl p-5 space-y-4">
+          <StageCard>
             {!keyPageOpened ? (
               <>
-                <p className="text-sm text-henry-text-dim">
+                <p className={`text-sm text-henry-text-dim ${STAGE_PROSE_LEADING} ${STAGE_PROSE_WIDTH}`}>
                   Henry will open{' '}
                   <span className="text-henry-text font-medium">{selectedCloud.label}'s API key page</span>
                   {' '}in your browser. Get your key, then come right back.
@@ -524,42 +544,39 @@ function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
                   onChange={(e) => setApiKey(e.target.value)}
                   placeholder={selectedCloud.placeholder}
                   autoFocus
-                  className="w-full bg-henry-bg border border-henry-border rounded-xl px-4 py-3.5 text-sm text-henry-text font-mono outline-none focus:border-henry-accent/60 focus:shadow-[0_0_0_3px_rgba(107,92,246,0.12)] transition-all"
+                  className={`${STAGE_CONTROL} font-mono focus:shadow-[0_0_0_3px_rgba(107,92,246,0.12)]`}
                   onKeyDown={(e) => { if (e.key === 'Enter' && apiKey.trim()) void handleNext(); }}
                 />
                 <div className="flex items-center justify-between">
                   <button onClick={() => setKeyPageOpened(false)}
-                    className="text-xs text-henry-text-muted hover:text-henry-text transition-colors">
+                    className="text-xs text-henry-text-muted hover:text-henry-text transition-colors px-2 py-1">
                     ← Reopen {selectedCloud.label}
                   </button>
-                  <span className="text-[11px] text-henry-text-muted">
+                  <span className="text-xs text-henry-text-muted">
                     {apiKey.trim() ? 'Key ready to save' : 'Paste your key to continue'}
                   </span>
                 </div>
               </>
             )}
-          </div>
+          </StageCard>
         </div>
       )}
 
       {/* ── ZEN MODE ── */}
       {mode === 'zen' && (
-        <div className="animate-fade-in space-y-3 mb-5">
-          <div className="bg-henry-surface/40 border border-henry-border/30 rounded-2xl p-5 space-y-4">
-            <p className="text-sm text-henry-text-dim leading-relaxed">
+        <div className="animate-fade-in space-y-6">
+          <StageCard>
+            <p className={`text-sm text-henry-text-dim ${STAGE_PROSE_LEADING} ${STAGE_PROSE_WIDTH}`}>
               OpenCode Zen was found on this computer. Its models come from the
               bridge itself, and the free ones answer without a key.
             </p>
 
             {zenModels.length > 0 ? (
-              <div>
-                <label className="text-[10px] uppercase tracking-wider text-henry-text-muted block mb-1.5">
-                  Model
-                </label>
+              <StageField label="Model">
                 <select
                   value={zenModel}
                   onChange={(e) => setZenModel(e.target.value)}
-                  className="w-full bg-henry-bg border border-henry-border rounded-xl px-4 py-3 text-sm text-henry-text outline-none focus:border-henry-accent/60 transition-all"
+                  className={STAGE_CONTROL}
                 >
                   <option value="">Pick a model…</option>
                   {zenModels
@@ -570,32 +587,35 @@ function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
                       </option>
                     ))}
                 </select>
-              </div>
+              </StageField>
             ) : (
-              <p className="text-xs text-henry-text-muted">
+              <p className={`text-sm text-henry-text-muted ${STAGE_PROSE_LEADING} ${STAGE_PROSE_WIDTH}`}>
                 {zenNotice || 'The bridge reported no Zen models right now.'}
               </p>
             )}
 
-            <div>
-              <label className="text-[10px] uppercase tracking-wider text-henry-text-muted block mb-1.5">
-                OpenCode key <span className="normal-case">(optional — only paid Zen models need one)</span>
-              </label>
+            <StageField
+              label={
+                <>
+                  OpenCode key <span className="normal-case">(optional — only paid Zen models need one)</span>
+                </>
+              }
+            >
               <input
                 type="password"
                 value={zenKey}
                 onChange={(e) => setZenKey(e.target.value)}
                 placeholder="Leave empty to use free Zen models"
-                className="w-full bg-henry-bg border border-henry-border rounded-xl px-4 py-3 text-sm text-henry-text font-mono outline-none focus:border-henry-accent/60 transition-all"
+                className={`${STAGE_CONTROL} font-mono`}
               />
-            </div>
-          </div>
+            </StageField>
+          </StageCard>
         </div>
       )}
 
       {/* ── OLLAMA MODE ── */}
       {mode === 'ollama' && (
-        <div className="space-y-4 mb-5 animate-fade-in">
+        <div className="space-y-6 animate-fade-in">
 
           {/* Electron auto-setup (downloads + installs Ollama automatically) */}
           {isElectron && !forceWebMode ? (
@@ -613,15 +633,14 @@ function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
           ) : (
             <>
               {/* Step-by-step guide — always shown */}
-              <div className="bg-henry-surface/40 border border-henry-border/30 rounded-2xl p-5 space-y-4">
-                <p className="text-xs font-semibold text-henry-text uppercase tracking-wide">Get Ollama running</p>
+              <StageCard label="Get Ollama running">
 
                 {/* Step 1 */}
-                <div className="flex gap-3">
+                <div className="flex gap-4">
                   <span className="shrink-0 w-6 h-6 rounded-full bg-henry-accent/15 text-henry-accent text-[11px] font-bold flex items-center justify-center mt-0.5">1</span>
                   <div>
                     <p className="text-sm font-medium text-henry-text">Download and install Ollama</p>
-                    <p className="text-[11px] text-henry-text-muted mt-0.5 mb-1.5">Free, open-source — runs locally on your Mac.</p>
+                    <p className={`text-xs text-henry-text-muted mt-1.5 mb-3 ${STAGE_PROSE_LEADING} ${STAGE_PROSE_WIDTH}`}>Free, open-source — runs locally on this computer.</p>
                     <button
                       onClick={() => openUrl('https://ollama.com/download')}
                       className="inline-flex items-center gap-1.5 text-xs text-henry-accent hover:underline"
@@ -635,11 +654,11 @@ function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
                 </div>
 
                 {/* Step 2 */}
-                <div className="flex gap-3">
+                <div className="flex gap-4">
                   <span className="shrink-0 w-6 h-6 rounded-full bg-henry-accent/15 text-henry-accent text-[11px] font-bold flex items-center justify-center mt-0.5">2</span>
                   <div className="flex-1">
                     <p className="text-sm font-medium text-henry-text">Start Ollama in Terminal</p>
-                    <p className="text-[11px] text-henry-text-muted mt-0.5 mb-1.5">Open Terminal and paste this:</p>
+                    <p className={`text-xs text-henry-text-muted mt-1.5 mb-3 ${STAGE_PROSE_LEADING} ${STAGE_PROSE_WIDTH}`}>Open Terminal and paste this:</p>
                     <div className="flex items-center gap-2">
                       <code className="flex-1 bg-henry-bg border border-henry-border/60 rounded-lg px-3 py-2 text-[11px] text-henry-accent font-mono break-all">
                         OLLAMA_HOST=0.0.0.0 OLLAMA_ORIGINS=* ollama serve
@@ -655,11 +674,11 @@ function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
                 </div>
 
                 {/* Step 3 */}
-                <div className="flex gap-3">
+                <div className="flex gap-4">
                   <span className="shrink-0 w-6 h-6 rounded-full bg-henry-accent/15 text-henry-accent text-[11px] font-bold flex items-center justify-center mt-0.5">3</span>
                   <div className="flex-1">
                     <p className="text-sm font-medium text-henry-text">Pull a model</p>
-                    <p className="text-[11px] text-henry-text-muted mt-0.5 mb-1.5">In a new Terminal tab:</p>
+                    <p className={`text-xs text-henry-text-muted mt-1.5 mb-3 ${STAGE_PROSE_LEADING} ${STAGE_PROSE_WIDTH}`}>In a new Terminal tab:</p>
                     <div className="flex items-center gap-2">
                       <code className="flex-1 bg-henry-bg border border-henry-border/60 rounded-lg px-3 py-2 text-[11px] text-henry-accent font-mono">
                         ollama pull llama3.2
@@ -669,7 +688,7 @@ function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
                         {copiedCmd === 'ollama pull llama3.2' ? '✓' : 'Copy'}
                       </button>
                     </div>
-                    <div className="flex flex-wrap gap-1.5 mt-2">
+                    <div className="flex flex-wrap gap-2 mt-3">
                       {OLLAMA_SUGGESTED.map((m) => (
                         <span key={m.name} className="text-[10px] px-2 py-1 rounded-lg bg-henry-bg border border-henry-border/40 text-henry-text-muted">
                           <span className="font-mono text-henry-text">{m.name}</span> · {m.desc}
@@ -678,10 +697,10 @@ function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
                     </div>
                   </div>
                 </div>
-              </div>
+              </StageCard>
 
               {/* Detection result panel */}
-              <div className="bg-henry-surface/40 border border-henry-border/30 rounded-2xl p-5 space-y-3">
+              <StageCard>
 
                 {/* Idle — invite to check */}
                 {ollamaPhase === 'detecting' && (
@@ -768,7 +787,7 @@ function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
                     </div>
                   </details>
                 )}
-              </div>
+              </StageCard>
             </>
           )}
         </div>
@@ -777,25 +796,25 @@ function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
       {/* Second Brain — the optional half of what used to be a whole second
           stage. It asks for nothing: the default is the model already chosen
           above, and the picker only offers providers this machine has. */}
-      <div className="rounded-xl border border-henry-border/30 bg-henry-surface/20 p-4 mb-5">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-lg">☁️</span>
+      <StageCard tone="quiet">
+        <div className="flex items-center gap-3">
+          <span className="text-xl">☁️</span>
           <h3 className="font-semibold text-henry-text text-sm">Second Brain</h3>
-          <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-henry-hover text-henry-text-muted">optional</span>
+          <span className="ml-auto text-[10px] px-2 py-1 rounded-full bg-henry-hover text-henry-text-muted">optional</span>
         </div>
-        <p className="text-xs text-henry-text-dim leading-relaxed mb-3">
+        <p className={`text-sm text-henry-text-dim ${STAGE_PROSE_LEADING} ${STAGE_PROSE_WIDTH}`}>
           Henry uses two engines. The one you chose above is your everyday brain — for a local
           provider it runs on your computer, free and private. A second brain is a stronger cloud AI
           he can call in for the questions that need one. Leave it alone and he uses the same model
           for everything.
         </p>
         {workerOptions.length > 0 ? (
-          <div className="space-y-2">
+          <div className="space-y-3">
             <select
               value={workerModel}
               onChange={(e) => setWorkerModel(e.target.value)}
               aria-label="Second brain"
-              className="w-full bg-henry-bg border border-henry-border rounded-xl px-3 py-2.5 text-sm text-henry-text outline-none focus:border-henry-accent/60"
+              className={STAGE_CONTROL}
             >
               <option value="">Same model for everything</option>
               {workerOptions.map((m) => (
@@ -807,48 +826,43 @@ function DesktopProviderStep({ onNext, onBack }: ProviderStepProps) {
             {workerModel && (
               <button
                 onClick={() => setWorkerModel('')}
-                className="text-[11px] text-henry-text-muted hover:text-henry-text underline underline-offset-4 transition-colors"
+                className="text-xs text-henry-text-muted hover:text-henry-text underline underline-offset-4 transition-colors px-2 py-1"
               >
                 Skip — use one model for everything for now
               </button>
             )}
           </div>
         ) : (
-          <p className="text-[11px] text-henry-text-muted leading-relaxed">
+          <p className={`text-sm text-henry-text-muted ${STAGE_PROSE_LEADING} ${STAGE_PROSE_WIDTH}`}>
             No cloud provider is set up yet, so there is no second brain to choose. You can add one
             later in Settings → AI Providers.
           </p>
         )}
-      </div>
+      </StageCard>
 
-      {error && <p className="text-center text-xs text-henry-error mb-4">{error}</p>}
+      {error && <p className="text-center text-sm text-henry-error">{error}</p>}
 
-      {/* Footer nav */}
-      <div className="flex items-center justify-between">
-        <button onClick={onBack}
-          className="px-6 py-2.5 text-henry-text-dim hover:text-henry-text transition-colors text-sm">
-          ← Back
-        </button>
+      {/* The actions, in a block of their own — with the reason this stage is
+          still holding the user, if there is one. */}
+      <StageActions>
+        {note}
+        <StageTextAction onClick={onBack}>← Back</StageTextAction>
 
         {!(mode === 'ollama' && isElectron && !forceWebMode) && (
-          <button
+          <StagePrimaryAction
             onClick={() => void handleNext()}
             disabled={!canContinue || saving}
-            className={`px-8 py-2.5 rounded-xl font-medium text-sm transition-all ${
-              canContinue && !saving
-                ? 'bg-henry-accent text-white hover:bg-henry-accent-hover'
-                : 'bg-henry-hover text-henry-text-muted cursor-not-allowed'
-            }`}
           >
             {saving ? (
-              <span className="flex items-center gap-2">
+              <span className="flex items-center justify-center gap-2">
                 <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 Saving…
               </span>
             ) : 'Continue →'}
-          </button>
+          </StagePrimaryAction>
         )}
-      </div>
-    </div>
+      </StageActions>
+
+    </StageScreen>
   );
 }

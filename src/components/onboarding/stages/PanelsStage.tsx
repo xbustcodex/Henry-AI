@@ -1,4 +1,14 @@
 import { useState } from 'react';
+import {
+  StageScreen,
+  StageHeading,
+  StageCard,
+  StageActions,
+  StagePrimaryAction,
+  StageSecondaryAction,
+  STAGE_PROSE_LEADING,
+  STAGE_PROSE_WIDTH,
+} from '../layout';
 
 interface Props {
   onNext: () => void;
@@ -32,40 +42,38 @@ export default function PanelsStage({ onNext, onSkip }: Props) {
   const panel = PANELS[index];
 
   return (
-    <div className="space-y-5">
-      <div className="text-center">
-        <p className="text-5xl mb-3">🗂</p>
-        <h2 className="text-2xl font-bold text-white">Everything in the sidebar</h2>
-        <p className="text-white/55 text-sm mt-2 leading-relaxed">
-          Henry has {PANELS.length} panels. Here is what each one does.
-        </p>
-      </div>
+    <StageScreen>
+      <StageHeading icon="🗂" title="Everything in the sidebar">
+        <p>Henry has {PANELS.length} panels. Here is what each one does.</p>
+      </StageHeading>
 
-      <div className="relative">
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-5 min-h-[140px] flex flex-col justify-between">
+      <div>
+        <div className="bg-henry-surface/40 border border-henry-border/30 rounded-2xl p-6 min-h-[180px] flex flex-col justify-between">
           <div>
-            <div className="flex items-center gap-3 mb-3">
-              <span className="text-3xl">{panel.icon}</span>
+            <div className="flex items-center gap-4 mb-4">
+              <span className="text-4xl">{panel.icon}</span>
               <div>
-                <p className="text-white font-bold text-base">{panel.name}</p>
-                <p className="text-white/40 text-[10px]">
+                <p className="text-henry-text font-bold text-lg">{panel.name}</p>
+                <p className="text-henry-text-muted text-[11px] mt-1">
                   {index + 1} of {PANELS.length}
                 </p>
               </div>
             </div>
-            <p className="text-white/70 text-sm leading-relaxed">{panel.desc}</p>
+            <p className={`text-henry-text-dim text-sm ${STAGE_PROSE_LEADING} ${STAGE_PROSE_WIDTH}`}>
+              {panel.desc}
+            </p>
           </div>
         </div>
 
-        <div className="flex items-center justify-between mt-3 px-1">
+        <div className="flex items-center justify-between mt-5 px-1">
           <button
             onClick={() => setIndex((i) => Math.max(0, i - 1))}
             disabled={index === 0}
-            className="w-9 h-9 rounded-full border border-white/15 text-white/60 hover:border-white/30 hover:text-white disabled:opacity-20 transition-all text-sm"
+            className="w-10 h-10 rounded-full border border-henry-border/40 text-henry-text-dim hover:border-henry-text-muted hover:text-henry-text disabled:opacity-20 transition-all text-sm"
           >
             ←
           </button>
-          <div className="flex gap-1 items-center">
+          <div className="flex gap-1.5 items-center">
             {PANELS.map((p, i) => (
               <button
                 key={p.name}
@@ -81,37 +89,34 @@ export default function PanelsStage({ onNext, onSkip }: Props) {
           <button
             onClick={() => setIndex((i) => Math.min(PANELS.length - 1, i + 1))}
             disabled={index === PANELS.length - 1}
-            className="w-9 h-9 rounded-full border border-white/15 text-white/60 hover:border-white/30 hover:text-white disabled:opacity-20 transition-all text-sm"
+            className="w-10 h-10 rounded-full border border-henry-border/40 text-henry-text-dim hover:border-henry-text-muted hover:text-henry-text disabled:opacity-20 transition-all text-sm"
           >
             →
           </button>
         </div>
       </div>
 
-      <div className="bg-white/3 border border-white/8 rounded-xl p-3">
-        <p className="text-white/30 text-[10px] uppercase tracking-wider mb-2">All panels at a glance</p>
-        <div className="flex flex-wrap gap-2">
+      <StageCard tone="quiet" label="All panels at a glance">
+        <div className="flex flex-wrap gap-3">
           {PANELS.map((p, i) => (
             <button
               key={p.name}
               onClick={() => setIndex(i)}
               title={p.name}
               className={
-                'text-lg transition-all ' + (i === index ? 'scale-125' : 'opacity-50 hover:opacity-100')
+                'text-xl transition-all ' + (i === index ? 'scale-125' : 'opacity-50 hover:opacity-100')
               }
             >
               {p.icon}
             </button>
           ))}
         </div>
-      </div>
+      </StageCard>
 
-      <button onClick={onNext} className="w-full py-3.5 rounded-xl bg-henry-accent text-white font-bold text-sm hover:bg-henry-accent/85 transition-all">
-        Got it — continue →
-      </button>
-      <button onClick={onSkip} className="block w-full text-center text-white/35 text-xs hover:text-white/60 transition-all">
-        Skip the tour
-      </button>
-    </div>
+      <StageActions>
+        <StagePrimaryAction onClick={onNext}>Got it — continue →</StagePrimaryAction>
+        <StageSecondaryAction onClick={onSkip}>Skip the tour</StageSecondaryAction>
+      </StageActions>
+    </StageScreen>
   );
 }

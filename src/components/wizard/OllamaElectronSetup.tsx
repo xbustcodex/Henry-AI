@@ -246,9 +246,9 @@ export default function OllamaElectronSetup({ onModelReady, onFallback }: Props)
   return (
     <div className="bg-henry-surface/40 border border-henry-border/30 rounded-2xl p-6 animate-fade-in">
       {/* Steps */}
-      <div className="space-y-3 mb-6">
+      <div className="space-y-5 mb-8">
         {steps.map((step) => (
-          <div key={step.id} className="flex items-start gap-3">
+          <div key={step.id} className="flex items-start gap-4">
             {/* Icon */}
             <div className="mt-0.5 shrink-0">
               {step.state === 'done' && (
@@ -276,7 +276,7 @@ export default function OllamaElectronSetup({ onModelReady, onFallback }: Props)
                 {step.label}
               </p>
               {step.detail && (
-                <p className="text-[11px] text-henry-text-muted mt-0.5">{step.detail}</p>
+                <p className="text-xs text-henry-text-muted mt-1.5">{step.detail}</p>
               )}
 
               {/* Download progress bar */}
@@ -319,7 +319,7 @@ export default function OllamaElectronSetup({ onModelReady, onFallback }: Props)
 
       {/* Model picker (if multiple found or pull failed) */}
       {phase === 'pick_model' && (
-        <div className="border-t border-henry-border/30 pt-4 space-y-3">
+        <div className="border-t border-henry-border/30 pt-6 space-y-4">
           <p className="text-xs text-henry-text-dim">
             {detectedModels.length > 0
               ? 'Pick a model to use:'
@@ -357,7 +357,7 @@ export default function OllamaElectronSetup({ onModelReady, onFallback }: Props)
 
       {/* Error state with fallback */}
       {phase === 'error' && (
-        <div className="border-t border-henry-border/30 pt-4 space-y-3">
+        <div className="border-t border-henry-border/30 pt-6 space-y-4">
           <p className="text-xs text-henry-error">{errorMsg}</p>
           <div className="flex gap-2">
             <button

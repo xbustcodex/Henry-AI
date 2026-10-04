@@ -8,6 +8,20 @@ import {
   suppliedValue,
   type UserProfileFields,
 } from '../../../henry/userProfile';
+import {
+  StageScreen,
+  StageHeading,
+  StageCard,
+  StageNote,
+  StageActions,
+  StagePrimaryAction,
+  StageSecondaryAction,
+  StageStep,
+  StageField,
+  STAGE_CONTROL,
+  STAGE_PROSE_LEADING,
+  STAGE_PROSE_WIDTH,
+} from '../layout';
 
 interface Props {
   /** Called only after the supplied values are stored. */
@@ -66,107 +80,75 @@ export default function MemoryStage({ onNext, onSkip }: Props) {
   }
 
   return (
-    <div className="space-y-5">
-      <div className="text-center">
-        <p className="text-5xl mb-3">🧠</p>
-        <h2 className="text-2xl font-bold text-white">Teach Henry about you</h2>
-        <p className="text-white/55 text-sm mt-2 leading-relaxed">
+    <StageScreen>
+      <StageHeading icon="🧠" title="Teach Henry about you">
+        <p>
           Memory is what makes Henry useful instead of generic. Fill in whatever is worth keeping —
           every field is optional.
         </p>
-      </div>
+      </StageHeading>
 
-      <div className="bg-henry-accent/10 border border-henry-accent/25 rounded-2xl p-4 space-y-3">
-        <p className="text-[10px] uppercase tracking-widest text-henry-accent/80">
-          Tell Henry about yourself right now
-        </p>
+      <StageCard tone="accent" label="Tell Henry about yourself right now">
         {PROFILE_FIELDS.map((field) => (
-          <div key={field.key}>
-            <label htmlFor={`profile-${field.key}`} className="text-[10px] text-white/50 uppercase tracking-wider block mb-1">
-              {field.label}
-            </label>
+          <StageField key={field.key} label={field.label} htmlFor={`profile-${field.key}`}>
             <input
               id={`profile-${field.key}`}
               value={values[field.key] ?? ''}
               onChange={(e) => setValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
               placeholder={field.placeholder}
-              className="w-full bg-white/5 border border-white/15 rounded-xl px-3 py-2 text-sm text-white placeholder-white/25 outline-none focus:border-henry-accent/50 transition-all"
+              aria-label={field.label}
+              className={`${STAGE_CONTROL} placeholder-white/25`}
             />
-          </div>
+          </StageField>
         ))}
-        <p className="text-[10px] text-white/35 leading-relaxed">
+        <p className={`text-henry-text-muted text-sm ${STAGE_PROSE_LEADING} ${STAGE_PROSE_WIDTH}`}>
           These save to your own memory, on this computer. The greyed-out text is an example only —
-          Henry never stores it. Add more anytime — say &ldquo;remember that&hellip;&rdquo; in chat or
-          open the Memory panel.
+          Henry never stores it. Add more anytime — say &ldquo;remember that&hellip;&rdquo; in chat
+          or open the Memory panel.
         </p>
-      </div>
+      </StageCard>
 
-      <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3">
-        <p className="text-[10px] uppercase tracking-widest text-white/40">Three ways to save a memory</p>
-        <ol className="space-y-4">
-          <li className="flex gap-3">
-            <Badge n={1} />
-            <p className="text-sm text-white/80 leading-relaxed">
-              <b className="text-white">Pin any AI response</b> — every response has a 📌 button.
-            </p>
-          </li>
-          <li className="flex gap-3">
-            <Badge n={2} />
-            <p className="text-sm text-white/80 leading-relaxed">
-              <b className="text-white">Tell Henry in chat</b> — &ldquo;remember I prefer direct answers&rdquo;.
-            </p>
-          </li>
-          <li className="flex gap-3">
-            <Badge n={3} />
-            <p className="text-sm text-white/80 leading-relaxed">
-              <b className="text-white">Open the Memory panel</b> and add facts directly.
-            </p>
-          </li>
+      <StageCard label="Three ways to save a memory">
+        <ol className="space-y-5">
+          <StageStep n={1}>
+            <b className="text-henry-text">Pin any AI response</b> — every response has a 📌 button.
+          </StageStep>
+          <StageStep n={2}>
+            <b className="text-henry-text">Tell Henry in chat</b> — &ldquo;remember I prefer
+            direct answers&rdquo;.
+          </StageStep>
+          <StageStep n={3}>
+            <b className="text-henry-text">Open the Memory panel</b> and add facts directly.
+          </StageStep>
         </ol>
-      </div>
+      </StageCard>
 
-      <div className="bg-white/3 border border-white/8 rounded-xl p-3">
-        <p className="text-white/50 text-[11px] leading-relaxed">
-          <b className="text-white/70">Back up your data:</b> everything Henry knows — memories, tasks,
-          journal, health, finance — lives in a SQLite database on your{' '}
-          {isMacOS() ? 'Mac' : 'computer'}. Use Settings → General → Export Backup any time.
-        </p>
-      </div>
+      <StageNote>
+        <b className="text-henry-text">Back up your data:</b> everything Henry knows — memories,
+        tasks, journal, health, finance — lives in a SQLite database on your{' '}
+        {isMacOS() ? 'Mac' : 'computer'}. Use Settings → General → Export Backup any time.
+      </StageNote>
 
       {error && (
-        <p role="alert" className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">
+        <p role="alert" className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-300">
           {error}
         </p>
       )}
 
-      <div className="space-y-2">
-        <button
-          onClick={() => void save()}
-          disabled={!canSave || saving}
-          className="w-full py-3.5 rounded-xl bg-henry-accent text-white font-bold text-sm hover:bg-henry-accent/85 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {saving ? 'Saving…' : 'Save & Continue →'}
-        </button>
-        <button
-          onClick={onSkip}
-          className="block w-full text-center text-white/45 text-xs hover:text-white/75 transition-all"
-        >
-          Skip — teach Henry later
-        </button>
+      <StageActions>
         {!canSave && (
-          <p className="text-center text-[11px] text-white/35">
+          <p className="text-center text-sm text-henry-text-muted">
             Nothing typed yet, so there is nothing to save.
           </p>
         )}
-      </div>
-    </div>
-  );
-}
-
-function Badge({ n }: { n: number }) {
-  return (
-    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-henry-accent/20 border border-henry-accent/40 text-henry-accent flex items-center justify-center text-[11px] font-bold mt-0.5">
-      {n}
-    </span>
+        <StagePrimaryAction
+          onClick={() => void save()}
+          disabled={!canSave || saving}
+        >
+          {saving ? 'Saving…' : 'Save & Continue →'}
+        </StagePrimaryAction>
+        <StageSecondaryAction onClick={onSkip}>Skip — teach Henry later</StageSecondaryAction>
+      </StageActions>
+    </StageScreen>
   );
 }

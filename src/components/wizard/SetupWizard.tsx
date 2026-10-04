@@ -9,6 +9,12 @@ import PanelsStage from '../onboarding/stages/PanelsStage';
 import MemoryStage from '../onboarding/stages/MemoryStage';
 import { discoverMachine } from '../onboarding/discoverMachine';
 import {
+  StageScreen,
+  StageNote,
+  STAGE_PROSE_WIDTH,
+  STAGE_PROSE_LEADING,
+} from '../onboarding/layout';
+import {
   buildStagePlan,
   availableStages,
   firstStageId,
@@ -114,11 +120,16 @@ export default function SetupWizard({ onComplete }: Props) {
   }
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-henry-bg overflow-hidden">
+    <div className="h-screen w-screen flex flex-col bg-henry-bg">
       <div className="titlebar-drag h-12 shrink-0" />
 
-      <div className="flex-1 flex flex-col items-center justify-center px-6 overflow-y-auto">
-        <div className="w-full max-w-2xl">
+      {/* The one place that scrolls. A stage is never given a viewport height of
+          its own: at 125% display scaling or a short window the content simply
+          grows and this frame — not the cards — takes the overflow. `min-h-0`
+          is what lets the flex child shrink and scroll instead of pushing the
+          titlebar off the window. */}
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+        <div className="w-full max-w-2xl mx-auto px-6 py-12">
           <StageProgress
             stages={walkable.filter((stage) => stage.id !== 'done')}
             current={stageId}
@@ -139,17 +150,22 @@ export default function SetupWizard({ onComplete }: Props) {
               <PermissionsStage kind="screen" onNext={advance} onSkip={() => skip('screen')} />
             )}
             {stageId === 'ai' && (
-              <div className="space-y-4">
+              <StageScreen>
                 {currentEntry?.requiredBecause && (
-                  <p className="text-center text-xs text-white/45 max-w-md mx-auto">
+                  <p
+                    className={`text-center text-sm text-henry-text-muted ${STAGE_PROSE_LEADING} ${STAGE_PROSE_WIDTH} mx-auto`}
+                  >
                     {currentEntry.requiredBecause}
                   </p>
                 )}
-                <ProviderStep onNext={advance} onBack={retreat} />
-                {blocked && (
-                  <p className="text-center text-xs text-yellow-400/80 max-w-md mx-auto">{blocked}</p>
-                )}
-              </div>
+                <ProviderStep
+                  onNext={advance}
+                  onBack={retreat}
+                  note={
+                    blocked ? <StageNote tone="warning">{blocked}</StageNote> : undefined
+                  }
+                />
+              </StageScreen>
             )}
             {stageId === 'companion' && (
               <CompanionStage onNext={advance} onSkip={() => skip('companion')} />
@@ -193,7 +209,7 @@ function StageProgress({
   const index = stages.findIndex((stage) => stage.id === current);
   if (index < 0) return null;
   return (
-    <div className="flex items-center justify-center gap-3 mb-10" aria-label="Setup progress">
+    <div className="flex items-center justify-center gap-3 mb-14" aria-label="Setup progress">
       {stages.map((stage, i) => (
         <div
           key={stage.id}

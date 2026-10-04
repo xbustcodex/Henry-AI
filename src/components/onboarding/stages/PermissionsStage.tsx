@@ -1,4 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
+import {
+  StageScreen,
+  StageHeading,
+  StageCard,
+  StageActions,
+  StagePrimaryAction,
+  StageSecondaryAction,
+  StageStep,
+  STAGE_PROSE_LEADING,
+  STAGE_PROSE_WIDTH,
+} from '../layout';
 import { isMacOS } from '../../../utils/platform';
 
 export type PermissionKind = 'accessibility' | 'screen';
@@ -94,75 +105,54 @@ export default function PermissionsStage({ kind, onNext, onSkip }: Props) {
   }
 
   return (
-    <div className="space-y-5">
-      <div className="text-center">
-        <p className="text-5xl mb-3">{copy.icon}</p>
-        <h2 className="text-2xl font-bold text-white">{copy.title}</h2>
-        <p className="text-white/55 text-sm mt-2 leading-relaxed">{copy.blurb}</p>
-      </div>
+    <StageScreen>
+      <StageHeading icon={copy.icon} title={copy.title}>
+        <p>{copy.blurb}</p>
+      </StageHeading>
 
       {granted === true ? (
-        <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-5 text-center space-y-3">
+        <StageCard tone="success" className="text-center">
           <p className="text-4xl">✓</p>
           <p className="text-green-400 font-semibold text-lg">{copy.title} enabled</p>
-          <p className="text-white/50 text-xs">Detected. Moving on automatically…</p>
-        </div>
+          <p className="text-henry-text-dim text-sm">Detected. Moving on automatically…</p>
+        </StageCard>
       ) : (
         <>
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-4">
-            <p className="text-[10px] uppercase tracking-widest text-white/40 mb-1">Step by step</p>
-            <ol className="space-y-4">
-              <li className="flex gap-3">
-                <StepBadge n={1} />
-                <p className="text-sm text-white/80 leading-relaxed">
-                  Click <b className="text-white">Open Settings</b> below. System Settings opens to the{' '}
-                  {kind === 'accessibility' ? 'Accessibility' : 'Screen Recording'} list.
-                </p>
-              </li>
-              <li className="flex gap-3">
-                <StepBadge n={2} />
-                <p className="text-sm text-white/80 leading-relaxed">
-                  Click the <b className="text-white">+</b> button and select <b className="text-white">Henry AI</b>.
-                </p>
-              </li>
-              <li className="flex gap-3">
-                <StepBadge n={3} />
-                <p className="text-sm text-white/80 leading-relaxed">
-                  Toggle it <b className="text-white">ON</b>.{' '}
-                  <span className="text-henry-accent">This stage detects it automatically</span> — nothing to click here.
-                </p>
-              </li>
+          <StageCard label="Step by step">
+            <ol className="space-y-5">
+              <StageStep n={1}>
+                Click <b className="text-henry-text">Open Settings</b> below. System Settings opens
+                to the {kind === 'accessibility' ? 'Accessibility' : 'Screen Recording'} list.
+              </StageStep>
+              <StageStep n={2}>
+                Click the <b className="text-henry-text">+</b> button and select{' '}
+                <b className="text-henry-text">Henry AI</b>.
+              </StageStep>
+              <StageStep n={3}>
+                Toggle it <b className="text-henry-text">ON</b>.{' '}
+                <span className="text-henry-accent">This stage detects it automatically</span> —
+                nothing to click here.
+              </StageStep>
             </ol>
-          </div>
+          </StageCard>
 
-          <button
-            onClick={openSettings}
-            className="w-full py-3.5 rounded-xl bg-henry-accent text-white font-bold text-sm hover:bg-henry-accent/85 transition-all"
-          >
-            {copy.openButton}
-          </button>
+          <StageActions>
+            <StagePrimaryAction onClick={openSettings}>{copy.openButton}</StagePrimaryAction>
 
-          <div className="flex items-center justify-center gap-2 text-xs text-white/40 py-1">
-            <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse flex-shrink-0" />
-            <span>Watching for the permission… auto-advances when detected</span>
-          </div>
+            <div className="flex items-center justify-center gap-2.5 text-xs text-henry-text-muted py-2">
+              <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse flex-shrink-0" />
+              <span className={`${STAGE_PROSE_LEADING} ${STAGE_PROSE_WIDTH}`}>
+                Watching for the permission… auto-advances when detected
+              </span>
+            </div>
 
-          <button onClick={onNext} className="w-full py-3 rounded-xl border border-white/15 text-white/70 font-medium text-sm hover:border-white/30 hover:text-white transition-all">
-            I enabled it — move on →
-          </button>
-          <button onClick={onSkip} className="block w-full text-center text-white/35 text-xs hover:text-white/60 transition-all">
-            Skip — grant later
-          </button>
+            <StageSecondaryAction onClick={onNext}>I enabled it — move on →</StageSecondaryAction>
+            <StageSecondaryAction onClick={onSkip} className="border-transparent">
+              Skip — grant later
+            </StageSecondaryAction>
+          </StageActions>
         </>
       )}
-    </div>
-  );
-}
-
-function StepBadge({ n }: { n: number }) {
-  return (
-    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-henry-accent/20 border border-henry-accent/40 text-henry-accent flex items-center justify-center text-[11px] font-bold mt-0.5">
-      {n}
-    </span>
+    </StageScreen>
   );
 }

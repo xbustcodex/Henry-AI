@@ -1,4 +1,15 @@
 import { isMacOS } from '../../../utils/platform';
+import {
+  StageScreen,
+  StageHeading,
+  StageCard,
+  StageNote,
+  StageActions,
+  StagePrimaryAction,
+  StageSecondaryAction,
+  STAGE_PROSE_LEADING,
+  STAGE_PROSE_WIDTH,
+} from '../layout';
 
 interface Props {
   onNext: () => void;
@@ -32,50 +43,43 @@ const WAYS = [
 
 export default function HowItWorksStage({ onNext, onSkip }: Props) {
   return (
-    <div className="space-y-5">
-      <div className="text-center">
-        <p className="text-5xl mb-3">⌨️</p>
-        <h2 className="text-2xl font-bold text-white">How to use Henry</h2>
-        <p className="text-white/55 text-sm mt-2 leading-relaxed">
-          Three ways to open him. Use whichever feels natural.
-        </p>
-      </div>
+    <StageScreen>
+      <StageHeading icon="⌨️" title="How to use Henry">
+        <p>Three ways to open him. Use whichever feels natural.</p>
+      </StageHeading>
 
-      <div className="space-y-3">
+      <div className="space-y-4">
         {WAYS.map((way) => (
           <div
             key={way.key}
-            className="bg-white/5 border border-white/10 rounded-xl p-4 flex gap-4 items-start"
+            className="bg-henry-surface/40 border border-henry-border/30 rounded-2xl p-5 flex gap-4 items-start"
           >
-            <div className="bg-henry-accent/20 border border-henry-accent/40 rounded-lg px-2.5 py-1.5 text-henry-accent font-mono font-bold text-sm flex-shrink-0 min-w-[52px] text-center">
+            <div className="bg-henry-accent/15 border border-henry-accent/40 rounded-lg px-3 py-2 text-henry-accent font-mono font-bold text-sm flex-shrink-0 min-w-[56px] text-center">
               {way.key}
             </div>
             <div>
-              <p className="text-white text-sm font-semibold">{way.label}</p>
-              <p className="text-white/50 text-xs mt-0.5 leading-relaxed">{way.desc}</p>
+              <p className="text-henry-text text-sm font-semibold">{way.label}</p>
+              <p className={`text-henry-text-dim text-sm mt-2 ${STAGE_PROSE_LEADING} ${STAGE_PROSE_WIDTH}`}>
+                {way.desc}
+              </p>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="bg-henry-accent/8 border border-henry-accent/20 rounded-xl p-4 space-y-2">
-        <p className="text-henry-accent text-xs font-bold uppercase tracking-wider">
-          {captureLabel} tip — try this right now
-        </p>
-        <p className="text-white/70 text-sm leading-relaxed">
+      <StageCard tone="accent" label="Tip — try this right now">
+        <p className={`text-henry-text-dim text-sm ${STAGE_PROSE_LEADING} ${STAGE_PROSE_WIDTH}`}>
           Find any text on your screen — an email, a website, anything.{' '}
-          <b className="text-white">Select it</b>, then press{' '}
-          <b className="text-white">{captureLabel}</b>. Henry opens with that text already loaded. Ask him to
-          summarize, reply, explain, or act on it.
+          <b className="text-henry-text">Select it</b>, then press{' '}
+          <b className="text-henry-text">{captureLabel}</b>. Henry opens with that text already
+          loaded. Ask him to summarize, reply, explain, or act on it.
         </p>
-      </div>
+      </StageCard>
 
-      <button onClick={onNext} className="w-full py-3.5 rounded-xl bg-henry-accent text-white font-bold text-sm hover:bg-henry-accent/85 transition-all">
-        Got it — continue →
-      </button>
-      <button onClick={onSkip} className="block w-full text-center text-white/35 text-xs hover:text-white/60 transition-all">
-        Skip — set up later
-      </button>
-    </div>
+      <StageActions>
+        <StagePrimaryAction onClick={onNext}>Got it — continue →</StagePrimaryAction>
+        <StageSecondaryAction onClick={onSkip}>Skip — set up later</StageSecondaryAction>
+      </StageActions>
+    </StageScreen>
   );
 }

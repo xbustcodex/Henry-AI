@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import QrCodeImage from '../../common/QrCodeImage';
+import {
+  StageScreen,
+  StageHeading,
+  StageCard,
+  StageActions,
+  StagePrimaryAction,
+  StageSecondaryAction,
+  StageStep,
+} from '../layout';
 
 interface Props {
   onNext: () => void;
@@ -118,64 +127,50 @@ export default function CompanionStage({ onNext, onSkip }: Props) {
     }
   }
 
-  return (
-    <div className="space-y-5">
-      <div className="text-center">
-        <p className="text-5xl mb-3">📱</p>
-        <h2 className="text-2xl font-bold text-white">Henry on your phone</h2>
-        <p className="text-white/55 text-sm mt-2 leading-relaxed">
-          Henry installs as a real app on your iPhone or iPad — no App Store, no TestFlight. Open the URL in
-          Safari and tap Add to Home Screen.
-        </p>
-      </div>
+  const linked = linkedDevices.length > 0;
 
-      <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-4">
-        <p className="text-[10px] uppercase tracking-widest text-white/40">Install on your phone</p>
-        <ol className="space-y-4">
-          <li className="flex gap-3">
-            <StepBadge n={1} />
-            <p className="text-sm text-white/80 leading-relaxed">
-              Put your phone on the same Wi-Fi as this computer.
-            </p>
-          </li>
-          <li className="flex gap-3">
-            <StepBadge n={2} />
-            <p className="text-sm text-white/80 leading-relaxed">
-              Open Safari on iOS, or Chrome on Android. On iOS it must be Safari.
-            </p>
-          </li>
-          <li className="flex gap-3">
-            <StepBadge n={3} />
-            <div className="text-sm text-white/80 leading-relaxed">
-              {lanUrl ? (
-                <div className="space-y-1.5">
-                  <p>Open this URL, or scan the QR code below:</p>
-                  <div className="flex items-center gap-2 bg-henry-bg border border-henry-accent/30 rounded-lg px-3 py-2">
-                    <code className="text-henry-accent text-sm flex-1 break-all">{lanUrl}</code>
-                    <button
-                      onClick={() => void copyUrl(lanUrl)}
-                      className="text-[10px] text-henry-accent hover:underline flex-shrink-0 font-bold"
-                    >
-                      {copied ? '✓ Copied' : 'Copy'}
-                    </button>
-                  </div>
+  return (
+    <StageScreen>
+      <StageHeading icon="📱" title="Henry on your phone">
+        <p>
+          Henry installs as a real app on your iPhone or iPad — no App Store, no TestFlight. Open
+          the URL in Safari and tap Add to Home Screen.
+        </p>
+      </StageHeading>
+
+      <StageCard label="Install on your phone">
+        <ol className="space-y-5">
+          <StageStep n={1}>Put your phone on the same Wi-Fi as this computer.</StageStep>
+          <StageStep n={2}>
+            Open Safari on iOS, or Chrome on Android. On iOS it must be Safari.
+          </StageStep>
+          <StageStep n={3}>
+            {lanUrl ? (
+              <div className="space-y-3">
+                <p>Open this URL, or scan the QR code below:</p>
+                <div className="flex items-center gap-3 bg-henry-bg border border-henry-accent/30 rounded-xl px-4 py-3">
+                  <code className="text-henry-accent text-sm flex-1 break-all">{lanUrl}</code>
+                  <button
+                    onClick={() => void copyUrl(lanUrl)}
+                    className="text-[11px] text-henry-accent hover:underline flex-shrink-0 font-bold px-2 py-1"
+                  >
+                    {copied ? '✓ Copied' : 'Copy'}
+                  </button>
                 </div>
-              ) : (
-                <p className="text-white/40">Waiting for the sync server…</p>
-              )}
-            </div>
-          </li>
-          <li className="flex gap-3">
-            <StepBadge n={4} />
-            <p className="text-sm text-white/80 leading-relaxed">
-              Tap the Share button, then <b className="text-white">Add to Home Screen</b>, then Add.
-            </p>
-          </li>
+              </div>
+            ) : (
+              <p className="text-henry-text-muted">Waiting for the sync server…</p>
+            )}
+          </StageStep>
+          <StageStep n={4}>
+            Tap the Share button, then <b className="text-henry-text">Add to Home Screen</b>, then
+            Add.
+          </StageStep>
         </ol>
-      </div>
+      </StageCard>
 
       {pairUrl && (
-        <div className="bg-white rounded-2xl p-4 flex flex-col items-center gap-2">
+        <div className="bg-white rounded-2xl p-6 flex flex-col items-center gap-3">
           <p className="text-black/60 text-xs font-medium">Scan with phone camera</p>
           <QrCodeImage value={pairUrl} size={200} />
           <p className="text-black/40 text-[10px]">
@@ -184,39 +179,33 @@ export default function CompanionStage({ onNext, onSkip }: Props) {
         </div>
       )}
       {generating && !pairUrl && (
-        <div className="bg-white/5 border border-white/10 rounded-2xl h-24 flex items-center justify-center text-white/40 text-sm">
+        <div className="bg-henry-surface/40 border border-henry-border/30 rounded-2xl py-10 flex items-center justify-center text-henry-text-dim text-sm">
           Generating QR…
         </div>
       )}
 
-      {linkedDevices.length > 0 && (
-        <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-3 flex items-center gap-3">
-          <span className="text-2xl">✓</span>
+      {linked && (
+        <StageCard tone="success" className="flex items-center gap-4">
+          <span className="text-2xl flex-shrink-0">✓</span>
           <div>
             <p className="text-green-400 font-semibold text-sm">
               {linkedDevices.length} device{linkedDevices.length > 1 ? 's' : ''} connected
             </p>
-            <p className="text-white/50 text-xs">
+            <p className="text-henry-text-dim text-sm mt-1">
               {linkedDevices.map((d) => d.name || 'Phone').join(', ')}
             </p>
           </div>
-        </div>
+        </StageCard>
       )}
 
-      <button
-        onClick={linkedDevices.length > 0 ? onNext : onSkip}
-        className="w-full py-3 rounded-xl border border-white/15 text-white/70 font-medium text-sm hover:border-white/30 hover:text-white transition-all"
-      >
-        {linkedDevices.length > 0 ? 'Done — continue →' : "Skip — I'll pair my phone later"}
-      </button>
-    </div>
-  );
-}
-
-function StepBadge({ n }: { n: number }) {
-  return (
-    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-henry-accent/20 border border-henry-accent/40 text-henry-accent flex items-center justify-center text-[11px] font-bold mt-0.5">
-      {n}
-    </span>
+      <StageActions>
+        {/* Pairing something is a different decision from not pairing: two
+            controls, never one button whose label flips between the two. */}
+        {linked && (
+          <StagePrimaryAction onClick={onNext}>Done — continue →</StagePrimaryAction>
+        )}
+        <StageSecondaryAction onClick={onSkip}>Skip — I'll pair my phone later</StageSecondaryAction>
+      </StageActions>
+    </StageScreen>
   );
 }
