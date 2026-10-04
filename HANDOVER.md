@@ -321,6 +321,46 @@ intercept ChatView's calls. To instrument ChatView's real stream you must either
 temporary instrumentation to the source and rebuild, or read the persisted database.
 Reading the DB is faster and unambiguous; remember to copy `-wal` and `-shm` as well.
 
+## 11e. ORDINARY CHAT DEFECT — FIXED AND VERIFIED INSTALLED (HEAD 5d0f0f4)
+
+Installed build `e960455b…` on Windows, Ollama / `llama3.2:3b`, real prompt:
+
+```
+tokenAfterPrompt : "🧠 Advisor\n\nI didn't see any issue to fix. What's the problem
+                    you're trying to resolve?\n\nSummarize → Tasks Shorter Simpler Copy …"
+hasToolSyntax    : false      <-- was true on every prior run
+tokenReturned    : false      (llama3.2:3b is small and did not echo the exact token)
+```
+
+**A normal assistant message now renders.** `hasToolSyntax:false` is the key signal: the
+`computer:openApp/runShell/osascript` transcripts are gone. `Summarize/Tasks/Shorter/
+Simpler` are standard per-message affordances shown on every assistant message, not the
+agent task card.
+
+Fix: `5d0f0f4` — one per-turn decision in `src/henry/agentRouting.ts` gates the request
+payload, the computer-action block of the lean system prompt, and the action interceptor
+together, using runtime-reported capability only.
+
+### Corrected root cause (the first hypothesis was wrong)
+`ChatView:1979` does attach `tools` when agentMode is on, but that spread is
+**unreachable for Ollama** — `useLeanPrompt` returns early for every
+`companionProvider === 'ollama'` turn except computer mode. That is why setting
+`henry_agent_mode=false` changed nothing. The actual producers were:
+
+1. `buildLeanSystemPrompt` (`src/henry/charter.ts`) teaching `computer:` syntax to every
+   local-model chat regardless of agent mode, and
+2. `interceptAndExecute(fullText)` being called unconditionally on every non-lean turn.
+
+### Still to verify
+- Restart persistence of ordinary Ollama chat.
+- **Zen** through the normal UI: select → prompt → visible non-empty response → restart →
+  persists → second visible response. Zen is still UNVERIFIED end to end.
+- Explicit agent/tool execution still works (must not have been collateral damage).
+- Note the behaviour change in `5d0f0f4`: providers with no capability channel
+  (OpenAI/Anthropic/Zen) resolve to `unknown`, so a fresh install now defaults agent mode
+  OFF there. Cloud agent turns need the toggle or a stored `true`. Worth confirming this
+  is acceptable product behaviour before release.
+
 ## 12. Next recommended task, in priority order
 
 1. **Rebuild, package, install** from `9eb73af`; re-run the fresh-profile acceptance end
