@@ -182,17 +182,18 @@ file's contents. Rebuild, the contents view and the exclusions live in
 `settings/SystemMapPanel.tsx`. Newly discovered agent runtimes are *offered* through
 `selectAgentRuntime` and are never auto-selected.
 
-Two scanner invariants that are load-bearing but read as arbitrary choices. Neither
-fails loudly if broken, so do not "tidy" either away:
-- **Test fixtures live under `$HOME`, never `/tmp`.** `/tmp` is excluded by the
-  default exclusions, so a fixture placed there is filtered out *before a single
-  assertion runs* — the test passes for the wrong reason, or fails for a reason that
-  points at the scanner rather than at the fixture.
-- **"Never reads file contents" is structural, not asserted.** It holds because
+Two scanner invariants that are load-bearing but read as arbitrary choices. They are not
+equivalent in how well they are protected — one is enforced by a test, one is not:
+- **"Never reads file contents" is structural, and now test-enforced.** It holds because
   `MetadataFs` (`electron/systemmap/fsMetadata.ts`) has exactly `readDir` and `stat`
-  and nothing else. Adding a third method removes the guarantee silently, in the same
-  commit, with no test failing. If one is ever added, update `CONTENTS_NEVER_READ` and
-  the on-screen copy in the same change — or do not add it.
+  and nothing else. `scanMetadata.test.ts` asserts that method count, so adding a third
+  method fails there — verified by mutation, not assumed. If one is ever added
+  deliberately, update `CONTENTS_NEVER_READ` and the on-screen copy in the same change.
+- **Test fixtures live under `$HOME`, never `/tmp` — and this one is NOT enforced.**
+  `/tmp` is excluded by the default exclusions, so a fixture placed there is filtered
+  out *before a single assertion runs*. Nothing fails to tell you; the test just stops
+  testing anything. Nothing guards this today, so it is worth the two lines it takes
+  to respect it.
 
 Rules that must hold:
 - Nothing scans without a button press. `systemMap:scan/start` is the only door, and the
@@ -598,6 +599,40 @@ the new runtime-adapter layer attributing the local model to a runtime. Worth re
 locally-running Ollama model should not present itself as belonging to the OpenCode runtime.
 Low severity (cosmetic attribution) but it could confuse users and is a symptom of runtime
 and provider identity still being entangled in that label.
+
+## 11j. ZEN GATEWAY — settled by direct CLI test, independent of Henry
+
+Tested the installed CLI directly with the corrected flags and **no credential**:
+
+```
+$ omp run --mode json --cwd /tmp -p --model deepseek-v4-flash-free "Say hello..."
+  {"provider":"opencode-zen","model":"deepseek-v4-flash-free", ...}
+  {"errorMessage":"400 Upstream request failed: Model is unavailable. (type=server_error)"}
+  auto_retry attempt 8/10 ... 9/10
+
+$ omp run --mode json --cwd /tmp -p --model hy3-free "Say hello."
+  {"errorMessage":"400 Upstream request failed: Model is unavailable. (type=server_error)"}
+```
+
+### What this settles
+- The request **reaches the Zen gateway anonymously**. `provider: opencode-zen` resolves and
+  the gateway answers.
+- The failure is **NOT authentication**. There is no 401, no auth challenge, no "key
+  required" — the gateway says the **model is unavailable**.
+- It is **not model-specific**: two different `*-free` models behave identically.
+- **Henry is not at fault.** The CLI is invoked correctly and the gateway's own error is
+  surfaced rather than masked.
+
+### Consequence needing an owner ruling
+The onboarding copy says Zen's free models "need no key", and §5a records Zen as
+credential-OPTIONAL. That remains true of *authentication* — nothing here shows a key is
+required — but in practice anonymous free Zen is currently non-functional. Either:
+1. the gateway is degraded and will recover, or
+2. Zen now needs a working credential to return anything.
+
+**A key was not tested and must not be fabricated.** Before release, decide whether the
+"free models need no key" copy should be softened until a Zen turn is proven to work, and
+whether Zen should still be offered as a no-key option while the gateway returns this.
 
 ## 12. Next recommended task, in priority order
 
