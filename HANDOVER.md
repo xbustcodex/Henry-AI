@@ -703,6 +703,46 @@ resolved the empty value to the local provider. That may be desirable under the 
 cost/auth policy (Ollama is the free path), but it is not what the migration doc says, and
 it should be confirmed as intended rather than inherited by accident.
 
+## 12a. BLOCKER — PrimeRoute has no inspectable implementation on this machine
+
+The PrimeRoute integration work **cannot proceed** and must not be guessed at. Evidence:
+
+```
+/mnt/c/Users/xkali/new_ai/PrimeRoute     EXISTS BUT IS EMPTY (0 entries, not a git repo)
+/mnt/c/Users/xkali/.primeroute/          contains only: operator-key.txt
+/mnt/c/Users/xkali/.local/share/opencode/primeroute.env   contains only: PRIMEROUTE_OPENCODE_KEY
+```
+
+An exhaustive search (`/home/buster`, `/mnt/c/Users/xkali`, `/mnt/d`, depth 4) found **no
+PrimeRoute source, no API definition, no route table, no OpenAPI document and no repository**
+— only that empty directory and two credential files.
+
+**Why this blocks rather than merely slows:**
+- The brief states the live PrimeRoute API contract is authoritative and forbids inventing
+  endpoints "because they seem likely to exist".
+- There is no contract to inspect, so any client written now would be fabricated.
+- There is no service to run, so success and failure paths could not be tested.
+
+### What exists and is usable
+`PRIMEROUTE_OPENCODE_KEY` is a real credential that presumably authenticates against the real
+PrimeRoute. It could reveal the API by probing, but probing an unknown service to discover its
+contract is exactly the invention the brief rules out. **Not attempted.**
+
+### PrimeTech Marketplace audit (owner-directed; NOT redesigned)
+`resources/marketplace/marketplace.json` — manifest `primetech-marketplace` v1, 6 entries:
+`primetech-terminal`, `buster`, `devtoolbox`, `termuxfm`, `ohmytermux`, `primetech-marketplace`.
+Each declares `capabilities` and `integrations`; `primetech-terminal` declares
+`integrations: ['buster','termux']`. Read by `electron/ipc/marketplace.ts`, surfaced by
+`src/components/marketplace/MarketplacePanel.tsx`.
+
+**PrimeRoute is NOT in the catalogue.** Adding a new PrimeTech app should go through this
+existing manifest mechanism — but that entry can only be written once the real PrimeRoute
+integration contract exists.
+
+### Owner decision required
+1. Locate/provide the PrimeRoute repository or its API specification, or
+2. Confirm PrimeRoute is not yet implemented and that this programme should proceed without it.
+
 ## 12. Next recommended task, in priority order
 
 1. **Rebuild, package, install** from `9eb73af`; re-run the fresh-profile acceptance end
