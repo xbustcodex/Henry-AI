@@ -158,8 +158,7 @@ export default function CostDashboard() {
                 </div>
                 {savings.freeTokens > 0 && (
                   <p className="text-[11px] text-henry-text-muted mt-2">
-                    {(savings.freeTokens / 1000).toFixed(1)}K tokens this month via Ollama (free)
-                    {savings.freeTierTokens > 0 && ` · ${(savings.freeTierTokens / 1000).toFixed(1)}K via free Zen models`}
+                    {(savings.freeTokens / 1000).toFixed(1)}K tokens this month via Ollama — the one AI path that costs you nothing
                   </p>
                 )}
               </div>

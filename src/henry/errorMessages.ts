@@ -41,14 +41,41 @@ export function isNetworkError(error: string): boolean {
   return /load failed|failed to fetch|networkerror|network request failed|couldn't reach|could not reach|connection error|network error|econnrefused|etimedout|socket hang|fetch error/i.test(error);
 }
 
-/** True if the error is an API auth/key rejection. */
+/** True if the error is an API auth/key rejection — the credential is missing or wrong. */
 export function isAuthError(error: string): boolean {
-  return /invalid.{0,10}api.?key|unauthorized|401|authentication|auth.?error|incorrect api/i.test(error);
+  return /invalid.{0,10}api.?key|unauthorized|401|authentication|auth.?error|incorrect api|api.?key.{0,20}(missing|required|not found|expired)/i.test(error);
 }
 
-/** True if the error is a rate-limit / quota problem. */
+/**
+ * True if the error is about money — a spent balance, exhausted quota, an
+ * expired plan, or a subscription that has run out.
+ *
+ * Deliberately narrower than "the provider said no": a plain 429 is a rate
+ * limit and gets its own message, because waiting is the correct advice there
+ * and "top up your credits" is not.
+ */
+export function isBillingError(error: string): boolean {
+  return /billing|payment|invoice|subscription|plan (has )?(expired|ended)|insufficient.{0,20}(credit|fund|balance|quota)|out of credit|add (more )?credits?|payment required|402|quota (exceeded|exhausted)|exceeded your quota|monthly limit reached/i.test(error);
+}
+
+/** True if the error is a rate-limit problem — transient, retry after a pause. */
 export function isRateLimitError(error: string): boolean {
   return /rate.?limit|too many requests|429|quota|token.?limit|exceeded/i.test(error);
+}
+
+/**
+ * True if the service itself failed or is down — a gateway error, an upstream
+ * failure, an overloaded or degraded backend, or a model the service cannot
+ * currently serve.
+ *
+ * This bucket must never be reported as a credential problem. OpenCode Zen's
+ * anonymous answer is the worked example: it replies
+ * `Upstream request failed: Model is unavailable (type=server_error)`, which is
+ * the service failing, not a missing key, and telling the user to go and enter
+ * an API key would send them to fix something that is not broken.
+ */
+export function isServiceUnavailableError(error: string): boolean {
+  return /server_error|server error|service unavailable|upstream|bad gateway|gateway timeout|\b50[234]\b|model is unavailable|model_unavailable|overloaded|temporarily unavailable|degraded|try again later|circuit breaker/i.test(error);
 }
 
 /** True if the error is a context/token-too-long problem. */
@@ -105,8 +132,13 @@ export function buildBothFailedError(
 
   if (isAuthError(primaryError) || isAuthError(fallbackError)) {
     lines.push(
-      `**Most likely cause:** Your ${primaryLabel} API key is missing or expired.`,
+      `**Most likely cause:** the credential for ${primaryLabel} is missing, wrong or expired.`,
       `→ Check it in **Settings → AI Providers**.`
+    );
+  } else if (isBillingError(primaryError) || isBillingError(fallbackError)) {
+    lines.push(
+      `**Most likely cause:** the account behind ${primaryLabel} has no quota or credits left.`,
+      `→ Top up the plan, or switch to a different provider in **Settings → AI Providers**.`
     );
   } else if (isRateLimitError(primaryError) || isRateLimitError(fallbackError)) {
     lines.push(
@@ -117,6 +149,11 @@ export function buildBothFailedError(
     lines.push(
       `**Most likely cause:** Network connectivity issue.`,
       `→ Check your internet connection and try again.`
+    );
+  } else if (isServiceUnavailableError(primaryError) || isServiceUnavailableError(fallbackError)) {
+    lines.push(
+      `**Most likely cause:** the service is unavailable or degraded — a failure at the provider, not a problem with your setup.`,
+      `→ Try again in a moment, or switch to a different provider in **Settings → AI Providers**.`
     );
   } else {
     lines.push(`→ Try again in a moment, or switch providers in **Settings → AI Providers**.`);
@@ -149,10 +186,19 @@ export function buildStreamError(
 
   if (isAuthError(error)) {
     return [
-      `**${label} rejected the API key.**`,
+      `**${label} needs a valid API key.**`,
       ``,
-      `The key for ${label} looks incorrect or has expired.`,
+      `The credential for ${label} is missing, incorrect or has expired.`,
       `→ Update it in **Settings → AI Providers** and try again.`,
+    ].join('\n');
+  }
+
+  if (isBillingError(error)) {
+    return [
+      `**${label}: out of quota or credit.**`,
+      ``,
+      `${label} refused the request because the account it runs on has no quota or credits left.`,
+      `→ Check your plan and add credits with ${label}, or switch to another provider in **Settings → AI Providers**.`,
     ].join('\n');
   }
 
@@ -196,6 +242,21 @@ export function buildStreamError(
     ].join('\n');
   }
 
+  // Checked AFTER auth, billing, rate limit and network, on purpose: a service
+  // that is down is not a credential problem, and this bucket must be reached
+  // only by errors that are genuinely about the service failing.
+  if (isServiceUnavailableError(error)) {
+    const detail = extractErrorDetail(error);
+    return [
+      `**${label} is unavailable right now.**`,
+      ``,
+      detail
+        ? `The service itself failed, not your setup: ${detail}`
+        : `The service itself failed — this is a problem at ${label}, not with your settings.`,
+      `→ Try again in a moment. If it keeps happening, switch to a different provider in **Settings → AI Providers**.`,
+    ].join('\n');
+  }
+
   // Unknown / generic.
   //
   // Keep the underlying reason. Discarding it is what made a CLI flag
@@ -223,7 +284,7 @@ export function buildStartError(err: unknown): string {
     return [
       `**No AI model is configured.**`,
       ``,
-      `→ Go to **Settings → Engines** and pick a provider and model — OpenCode Zen and Ollama are both free — or add an API key for OpenAI or Anthropic.`,
+      `→ Go to **Settings → Engines** and pick a provider and model — Ollama is the one free AI path, and every other provider needs your own key.`,
     ].join('\n');
   }
 
@@ -232,6 +293,15 @@ export function buildStartError(err: unknown): string {
       `**Couldn't connect to the AI provider.**`,
       ``,
       `→ Check your internet connection and try again.`,
+    ].join('\n');
+  }
+
+  if (isServiceUnavailableError(msg)) {
+    return [
+      `**The AI provider is unavailable right now.**`,
+      ``,
+      `The service failed on its side — this is not a problem with your setup.`,
+      `→ Try again in a moment, or pick a different provider in **Settings → AI Providers**.`,
     ].join('\n');
   }
 
@@ -251,6 +321,8 @@ export function buildStartError(err: unknown): string {
  */
 function summarizeError(provider: string, _model: string, error: string): string {
   if (isAuthError(error)) return 'API key rejected';
+  if (isBillingError(error)) return 'out of quota or credits';
+  if (isServiceUnavailableError(error)) return 'service unavailable';
   if (isRateLimitError(error)) return 'rate limit hit';
   if (isContextLengthError(error)) return 'conversation too long';
   if (isNetworkError(error)) return 'network error';

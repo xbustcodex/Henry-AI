@@ -273,8 +273,6 @@ export async function listPiModels(timeoutMs = 60_000): Promise<RuntimeModel[]> 
     // is Pi's own column — carried through as the group, never invented here.
     providerId: provider,
     group: provider,
-    provider,
-    isFree: /-free$/.test(id),
   }));
 }
 

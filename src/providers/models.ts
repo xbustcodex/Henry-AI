@@ -275,7 +275,9 @@ export const PROVIDERS = {
     icon: '🧩',
     description:
       'Any model the opencode CLI can reach — its own zen service and OpenRouter — ' +
-      'routed through a local loopback bridge. Needs the opencode CLI installed, not an API key here.',
+      'routed through a local loopback bridge. Needs the opencode CLI installed; it is not an ' +
+      'API key here. The models it reaches are external services: each one needs your own ' +
+      'account and key with that provider.',
     keyUrl: 'https://opencode.ai',
     keyPrefix: '',
     local: true,
@@ -285,8 +287,9 @@ export const PROVIDERS = {
     name: 'OpenCode Zen',
     icon: '✨',
     description:
-      "OpenCode Zen — tested models from the OpenCode team, reached through the local opencode " +
-      'bridge. Without a key you still get the free Zen models; a key unlocks the rest.',
+      'OpenCode Zen — tested models from the OpenCode team, reached through the local opencode ' +
+      'bridge. Zen is an external service that runs on your own OpenCode account: add your Zen ' +
+      'key to use it.',
     keyUrl: 'https://opencode.ai/docs/zen/',
     keyPrefix: '',
   },
@@ -294,7 +297,9 @@ export const PROVIDERS = {
     id: 'ollama',
     name: 'Ollama (Local)',
     icon: '🏠',
-    description: 'Run models locally on your machine. Free forever.',
+    description:
+      "Run models locally on your machine. Free — Henry's only cost-free AI path, and nothing " +
+      'leaves this computer.',
     keyUrl: 'https://ollama.ai',
     keyPrefix: '',
     local: true,

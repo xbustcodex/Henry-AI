@@ -37,7 +37,7 @@ Henry listens with **whisper.cpp** running locally on your machine — free, off
 
 ## Code
 
-In Code mode, Henry hands work to the **Claude Code CLI** — your Claude subscription, huge context window, real file edits in a sandboxed workspace with approval gating — or to **opencode**, whose full model catalogue (including the opencode zen gateway) appears in the same Settings model picker as every other provider. No CLI or offline? Henry falls back to a **free local coder** via Ollama (qwen2.5-coder). A chip in the chat picks: Auto / Claude Code / opencode / Local.
+In Code mode, Henry hands work to the **Claude Code CLI** — your Claude subscription, huge context window, real file edits in a sandboxed workspace with approval gating — or to **opencode**, whose full model catalogue (including the opencode zen gateway) appears in the same Settings model picker as every other provider. The opencode models are external services that run on your own account, so they need your own key there; discovering the CLI tells you they exist, not that they are free. No CLI or offline? Henry falls back to a **free local coder** via Ollama (qwen2.5-coder). A chip in the chat picks: Auto / Claude Code / opencode / Local.
 
 ## Books & Covers
 
@@ -107,7 +107,7 @@ Every chat request goes to the provider and model you chose in Settings → Engi
 | Voice in/out | whisper.cpp + system voice | **$0.00** |
 | Image generation | DALL-E 3 (optional key) | $0.04/image |
 
-No plan includes hosted AI. Nothing in Henry, paid or free, serves a model on your behalf — a license covers Henry itself, and the AI always runs on your own key, on free OpenCode Zen models through the local opencode bridge, or on Ollama on your own machine.
+No plan includes hosted AI. Nothing in Henry, paid or free, serves a model on your behalf — a license covers Henry itself, and the AI always runs on your own account: Ollama on your own machine (Henry's only cost-free AI path), or an external service like OpenRouter, Google or OpenCode Zen on your own key.
 
 ## Self-Repair
 
@@ -136,7 +136,7 @@ npm run dev:electron
 ## Optional
 
 - **Claude Code CLI** — best-in-class coding on your Claude subscription (`npm i -g @anthropic-ai/claude-code`)
-- **opencode** — a second first-class Coder Engine with its own model catalogue, including the opencode zen gateway
+- **opencode** — a second first-class Coder Engine with its own model catalogue, including the opencode zen gateway (external services, on your own account)
 - **Ollama** — free local chat + coding fallback
 - **Anthropic / OpenAI keys** — Claude vision for the 3D generator, DALL-E 3 for images and covers
 - **ElevenLabs key** — premium speaking voice (local voice works without it)

@@ -342,8 +342,6 @@ export interface OmpModel {
   name: string;
   /** True for this CLI's own hosted ("zen") models. */
   isZen: boolean;
-  /** True when the id ends in -free. */
-  isFree: boolean;
   /** Provider group the id was listed under, e.g. "opencode-zen". */
   group: string;
 }
@@ -420,7 +418,6 @@ function classifyModel(id: string, group?: string): OmpModel {
     name,
     group: group || idProvider || 'unknown',
     isZen,
-    isFree: /-free$/.test(name),
   };
 }
 
@@ -439,12 +436,10 @@ export function toRuntimeModel(model: OmpModel): RuntimeModel {
     id: model.id,
     name: model.name,
     providerId: opencodeProviderIdForModel(model),
-    group: model.group,
     provider: model.provider,
-    isFree: model.isFree,
+    group: model.group,
   };
 }
-
 /**
  * Ask the CLI which models it can reach, so Henry offers the real list instead
  * of a hardcoded one. This is what lets every provider it is configured for —
@@ -466,9 +461,8 @@ export async function listOmpModels(timeoutMs = 90_000): Promise<OmpModel[]> {
     maxBuffer: 8 * 1024 * 1024,
   });
   return parseModelList(stdout).sort((a, b) => {
-    // zen first, then free, then alphabetical
+    // zen first, then alphabetical
     if (a.isZen !== b.isZen) return a.isZen ? -1 : 1;
-    if (a.isFree !== b.isFree) return a.isFree ? -1 : 1;
     return a.id.localeCompare(b.id);
   });
 }

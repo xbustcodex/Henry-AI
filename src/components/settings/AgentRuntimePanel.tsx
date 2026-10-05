@@ -120,9 +120,8 @@ function RuntimeRow({
 
           {runtime.authHint?.optional && (
             <p className="text-[11px] text-henry-text-muted mt-1">
-              Works without a credential{runtime.authHint.envVar
-                ? `; ${runtime.authHint.envVar} unlocks the rest.`
-                : '.'}
+              Henry finds and starts this runtime without any credential
+              {runtime.authHint.envVar ? `. The models it reaches are separate services — ${runtime.authHint.envVar} is what they authenticate with.` : '. The models it reaches are separate services, and each one runs on your own account or key.'}
             </p>
           )}
         </div>

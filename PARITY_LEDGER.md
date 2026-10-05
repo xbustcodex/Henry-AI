@@ -100,7 +100,8 @@ Where a legitimate local equivalent exists, it is listed as our own implementati
 
 **Row 2.2 note:** a saved Zen key must reach the CLI's child environment — it was previously only
 readable from the OS environment, so a key typed into Henry would have been stored and silently
-ignored. The description is honest that a key is optional; free Zen models stay reachable.
+ignored. Zen is an external service on the user's own OpenCode account: Henry never advertises it
+as free, and onboarding asks for the user's own Zen key (see HANDOVER §5c).
 
 ---
 

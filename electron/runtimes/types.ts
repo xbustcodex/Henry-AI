@@ -95,7 +95,6 @@ export interface RuntimeModel {
   group: string;
   /** Provider prefix the runtime printed, when it prints one. */
   provider?: string;
-  isFree?: boolean;
 }
 
 /** One non-interactive turn. */

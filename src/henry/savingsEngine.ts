@@ -23,17 +23,15 @@ export interface MonthlySavingsSummary {
   totalSpent: number;
   totalBenchmark: number;
   totalSaved: number;
-  freeTokens: number;      // tokens via Ollama (cost = 0)
-  freeTierTokens: number;  // tokens via a credential-optional or free-tier provider
+  freeTokens: number;      // tokens via Ollama — the one cost-free path (cost = 0)
 }
 
 // Benchmark = what GPT-4o would have cost for same tokens
 const GPT4O_IN  = 2.5   / 1_000_000;  // $ per token
 const GPT4O_OUT = 10.0  / 1_000_000;
 
+/** Ollama is Henry's only cost-free AI path. */
 const FREE_PROVIDERS = ['ollama'];
-/** Providers that cost the user nothing: local, or free models with no key. */
-const ZERO_COST_PROVIDERS = ['ollama', 'opencode', 'opencode-zen'];
 
 function load(): SavingsEntry[] {
   try { return JSON.parse(localStorage.getItem(SAVINGS_KEY) || '[]'); } catch { return []; }
@@ -83,7 +81,6 @@ export function getMonthlySummary(month?: string): MonthlySavingsSummary {
     totalBenchmark: entries.reduce((s, e) => s + e.benchmarkCost, 0),
     totalSaved:     entries.reduce((s, e) => s + e.savedAmount, 0),
     freeTokens:     entries.filter(e => FREE_PROVIDERS.includes(e.provider)).reduce((s, e) => s + e.tokens, 0),
-    freeTierTokens: entries.filter(e => ZERO_COST_PROVIDERS.includes(e.provider)).reduce((s, e) => s + e.tokens, 0),
   };
 }
 
@@ -129,17 +126,17 @@ export function getBudgetAlert(): null | 'warning' | 'critical' {
 export function getCostSuggestion(): string | null {
   const entries = load().slice(0, 50);
   if (!entries.length) return null;
-  
+
   const openaiCost  = entries.filter(e => e.provider === 'openai').reduce((s, e) => s + e.cost, 0);
+  const zeroCostSpend = entries.filter(e => FREE_PROVIDERS.includes(e.provider)).reduce((s, e) => s + e.cost, 0);
   const anthropicCost = entries.filter(e => e.provider === 'anthropic').reduce((s, e) => s + e.cost, 0);
-  const zeroCostSpend = entries.filter(e => ZERO_COST_PROVIDERS.includes(e.provider)).reduce((s, e) => s + e.cost, 0);
   const ollamaCost  = entries.filter(e => e.provider === 'ollama').reduce((s, e) => s + e.cost, 0);
 
   if (openaiCost > 1 && zeroCostSpend === 0) {
-    return "You're spending on OpenAI — OpenRouter's free models handle most everyday tasks just as well.";
+    return "You're spending on OpenAI — Ollama runs routine tasks on this machine for nothing, and OpenRouter has free models on your own account.";
   }
   if (anthropicCost > 2) {
-    return "Claude is great for long documents, but for quick chats OpenRouter's free models cost nothing.";
+    return "Claude is great for long documents, but for quick chats Ollama on this machine costs nothing.";
   }
   if (ollamaCost === 0 && (openaiCost + anthropicCost + zeroCostSpend) > 0.5) {
     return "Ollama lets you run AI completely free and offline. Consider pulling llama3.1:8b for routine tasks.";

@@ -38,7 +38,7 @@ export default function AutoSetupPanel() {
       { id:'accessibility', icon:'⌨', label:controlLabel,                description:`Lets Henry control your ${platformName.toLowerCase()}`, status:'checking', autoFix:true },
       { id:'screen',        icon:'📸', label:screenLabel,                description:`Needed for screenshot feature in Henry HQ`,     status:'checking', autoFix:true },
       { id:'ai',            icon:'◉', label:'AI Provider',              description:'A provider key, OpenCode Zen, or Ollama for chat + smart capture', status:'checking', autoFix:true },
-      { id:'ollama',        icon:'⚡', label:'Ollama (free local AI)',   description:'Optional: free offline AI — runs on your computer (not required)',  status:'checking' },
+      { id:'ollama',        icon:'⚡', label:'Ollama (free local AI)',   description:'Optional: the one AI path that costs nothing — runs on your computer (not required)',  status:'checking' },
       { id:'hotkeys',       icon:'⌥', label:'Global Hotkeys',           description:'Global hotkeys for capture and navigation',       status:'checking' },
       { id:'sync',          icon:'⊚', label:'Henry Sync Server',        description:'Connects desktop app, mobile + browser capture', status:'checking' },
     ];
@@ -77,10 +77,10 @@ export default function AutoSetupPanel() {
       }
     } catch { patch('screen', { status:'missing' }); }
 
-    // AI provider — any REAL backend counts: a BYOK key, OpenCode Zen
-    // (credential-optional), or local Ollama. A license key does not: no
-    // hosted AI backend is enabled in Henry, so a license backs nothing and
-    // must never report this install as ready to answer.
+    // AI provider — any REAL backend counts: a BYOK key, an installed OpenCode
+    // runtime with its own Zen account, or local Ollama. A license key does
+    // not: no hosted AI backend is enabled in Henry, so a license backs
+    // nothing and must never report this install as ready to answer.
     const hasKey = (id: string) => (providers||[]).some((p:any) => p.id===id && (p.apiKey||p.api_key||'').length > 10);
     const isOllama = settings?.companion_provider === 'ollama';
     const hasOpenRouter = hasKey('openrouter');
@@ -92,7 +92,7 @@ export default function AutoSetupPanel() {
     patch('ai', {
       status: hasAnyBackend ? 'ok' : 'missing',
       description: isOllama ? 'Ollama connected — local, private, free ✓' :
-                   hasZen ? 'OpenCode Zen connected — free Zen models, no key needed ✓' :
+                   hasZen ? 'OpenCode Zen detected ✓ — Zen models run on your own OpenCode account' :
                    hasOpenRouter ? 'OpenRouter key connected ✓' :
                    hasAnthropic ? 'Anthropic key connected ✓' :
                    hasOpenAI ? 'OpenAI key connected ✓' :

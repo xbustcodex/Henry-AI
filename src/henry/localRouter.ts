@@ -96,7 +96,7 @@ const INTENTS: Handler[] = [
         `**Coder brain (auto for code):** ${coderModel} via ${brain1Provider}`,
         ``,
         `**Keys I have:**`,
-        `• OpenCode Zen: ${hasZen ? '✓ configured' : '✗ not set — free at opencode.ai'}`,
+        `• OpenCode Zen: ${hasZen ? '✓ configured' : '✗ not set — needs your own key at opencode.ai'}`,
         `• Ollama (local): ${hasOllama ? '✓ configured' : '✗ not set — free at ollama.com'}`,
         `• OpenAI: ${hasOpenAi ? '✓ configured' : '✗ not set'}`,
         `• Anthropic: ${hasAnthropic ? '✓ configured' : '✗ not set'}`,
@@ -105,7 +105,7 @@ const INTENTS: Handler[] = [
       ];
 
       if (!hasOllama && !hasZen && !hasOpenAi && !hasAnthropic && !hasGoogle) {
-        lines.push(``, `No AI provider is set up yet. Add one in Settings → AI Providers — OpenCode Zen and Ollama are both free.`);
+        lines.push(``, `No AI provider is set up yet. Add one in Settings → AI Providers — Ollama runs free on this machine, and every other provider needs your own account and key.`);
       }
 
       return lines.join('\n');

@@ -172,12 +172,21 @@ describe('the required stage blocks until it is satisfied', () => {
     expect(isAiStageSatisfied(configuredByUser)).toBe(true);
   });
 
-  it('accepts a free Zen model with no credential — Zen is credential-optional', () => {
+  it('blocks a Zen selection until the user has entered their own Zen key', () => {
+    // Zen is an external service: the wizard reports credentialRequired for it
+    // like any other BYOK provider, and a discovered runtime is not a free
+    // fallback that satisfies the stage by itself.
     expect(isAiStageSatisfied({
       providerId: 'opencode-zen',
       modelId: 'grok-code-fast-1',
-      credentialRequired: false,
+      credentialRequired: true,
       hasCredential: false,
+    })).toBe(false);
+    expect(isAiStageSatisfied({
+      providerId: 'opencode-zen',
+      modelId: 'grok-code-fast-1',
+      credentialRequired: true,
+      hasCredential: true,
     })).toBe(true);
   });
 

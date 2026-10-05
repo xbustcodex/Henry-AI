@@ -22,8 +22,8 @@
  * excluded before any assertion ran.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { createFixtureRoot, removeFixtureRoot } from './_fixture';
 import path from 'node:path';
 
 import {
@@ -72,15 +72,15 @@ async function scannedPaths(
   return outcome.nodes.map((node) => node.path);
 }
 
-beforeEach(() => {
-  root = mkdtempSync(path.join(homedir(), 'systemmap-excl-'));
+beforeEach(async () => {
+  root = await createFixtureRoot('excl');
   home = path.join(root, 'home', 'buster');
   mkdirSync(home, { recursive: true });
   setUsersProbe(() => []);
 });
 
 afterEach(() => {
-  if (root) rmSync(root, { recursive: true, force: true });
+  if (root) removeFixtureRoot(root);
 });
 
 describe('credential stores are excluded', () => {

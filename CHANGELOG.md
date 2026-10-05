@@ -1,5 +1,46 @@
 # Changelog
 
+## One free AI path: Ollama (2026-10-05)
+
+Ollama is the only cost-free AI path in Henry. Every other service — opencode,
+OpenCode Zen, the models a Prime Pi install can reach, every cloud API — runs on
+the user's own account, key, subscription or credits. The copy said otherwise in
+a dozen places, so it now says this in all of them.
+
+- **`electron/providers/classification.ts`** is the single authority and states
+  the policy. `requiresApiKey()` answering `false` means one thing only — "a
+  missing Henry-stored key does not block this call" — and nothing may read it as
+  a price. `isOllamaProvider()` is documented as the only free path.
+- **Copy corrected** across onboarding (`ProviderStep`, `SetupWizard`,
+  `CompleteStep`, the AI-stage blocked reason), Settings (`SettingsView`,
+  `AgentRuntimePanel`), `AutoSetupPanel`, `backendStatus`, `chatPreflight`,
+  `localRouter`, `henrySelfKnowledge`, `henryAI`, `savingsEngine`,
+  `CostDashboard` and the provider registry. "Free models need no key",
+  "credential-optional", "paid Zen models" and "still get the free Zen models" are
+  gone; the Zen step asks for the user's own Zen key and links to where it comes
+  from. Ollama keeps every "free, private, offline" claim, which is true.
+- **A `-free` in a model id is a name, not a price.** The `isFree` flag derived
+  from `/-free$/` is removed from `OmpModel`, `RuntimeModel` and
+  `OpencodeModelInfo`, along with the `· free` label it fed and the free-first
+  catalogue sort.
+- **Three failure classes stay three messages.** `errorMessages.ts` gained
+  `isBillingError` and `isServiceUnavailableError`, and both `buildStreamError`
+  and `buildBothFailedError` now branch on them: a missing credential asks for a
+  credential, exhausted quota or credits ask for payment, and a gateway or
+  upstream failure says the service is unavailable — never "you need a key". The
+  Zen `Upstream request failed: Model is unavailable (type=server_error)` answer
+  lands in that third bucket.
+- **Two panels no longer demand a key they never needed.** `HQPanel` and
+  `TodayPanel` gated on `provider !== 'ollama'`, which told an opencode-backed
+  user their Zen install needed a key it does not read. Both call
+  `requiresApiKey()` now.
+- **Tests.** `src/henry/costPolicy.test.ts` is a repo guard, shaped like the
+  secret scan: every `.ts`/`.tsx` under `src/` and `electron/` is scanned for
+  claims that an external service is free or keyless, with a known-bad dummy per
+  rule so the matcher cannot pass vacuously, and an assertion that Ollama's free
+  wording is still there. `src/henry/errorMessages.seam.test.ts` proves the three
+  buckets produce three different messages for one provider surface.
+
 ## Agent runtimes are discovered, not hardcoded (2026-10-05)
 
 Henry no longer treats any particular external agent CLI as its backend. Each

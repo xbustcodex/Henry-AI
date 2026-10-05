@@ -19,8 +19,8 @@
  * assertion ran.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, utimesSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { mkdirSync, writeFileSync, rmSync, utimesSync } from 'node:fs';
+import { createFixtureRoot, removeFixtureRoot } from './_fixture';
 import path from 'node:path';
 
 import { defaultExclusions } from '../../src/henry/systemMap';
@@ -62,15 +62,15 @@ function deepChain(relative: string, depth: number): string {
   return current;
 }
 
-beforeEach(() => {
-  root = mkdtempSync(path.join(homedir(), 'systemmap-budget-'));
+beforeEach(async () => {
+  root = await createFixtureRoot('budget');
   home = path.join(root, 'home');
   mkdirSync(home, { recursive: true });
   setUsersProbe(() => []);
 });
 
 afterEach(() => {
-  if (root) rmSync(root, { recursive: true, force: true });
+  if (root) removeFixtureRoot(root);
 });
 
 describe('caps are respected on a large tree', () => {

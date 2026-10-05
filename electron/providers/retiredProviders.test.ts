@@ -14,9 +14,8 @@
  *
  * The classification assertions live here too rather than in
  * `classification.test.ts`: retiring a provider must not disturb the gating
- * rules for the providers that remain, and `opencode-zen` must stay
- * credential-optional (free Zen models run unauthenticated — a key only widens
- * the catalogue).
+ * rules for the providers that remain, and opencode-backed providers must stay
+ * ungated on a Henry-stored key (they authenticate inside their own CLI).
  */
 import { describe, it, expect } from 'vitest';
 import {
@@ -230,7 +229,7 @@ describe('gating the providers that remain', () => {
     }
   });
 
-  it('keeps opencode-zen credential-optional — a key widens the catalogue, it does not enable it', () => {
+  it('keeps opencode-backed providers ungated on a Henry-stored key', () => {
     expect(requiresApiKey({ id: 'opencode-zen', name: 'OpenCode Zen', api_key: '' })).toBe(false);
     expect(requiresApiKey({ id: 'opencode-zen', name: 'OpenCode Zen', api_key: '' })).toBe(false);
     expect(requiresApiKey({ id: 'opencode', name: 'OpenCode (CLI)', api_key: '' })).toBe(false);

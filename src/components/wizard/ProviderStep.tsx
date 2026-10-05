@@ -19,7 +19,7 @@ import {
   STAGE_PROSE_WIDTH,
 } from '../onboarding/layout';
 
-/** Cloud is BYOK; Zen is credential-optional; Ollama needs no credential. */
+/** Cloud and Zen are external services on the user's own account; Ollama is the local, free one. */
 type ProviderMode = 'cloud' | 'zen' | 'ollama';
 
 function isNativeMobile(): boolean {
@@ -143,7 +143,7 @@ function DesktopProviderStep({ onNext, onBack, note }: ProviderStepProps) {
   // opencode is genuinely installed on this machine), or local Ollama.
   const [mode, setMode] = useState<ProviderMode | null>('cloud');
 
-  // Cloud state — default to the free OpenRouter option
+  // Cloud state — default to the first BYOK option
   const [selectedCloud, setSelectedCloud] = useState<CloudOption>(CLOUD_OPTIONS[0]);
   const [apiKey, setApiKey] = useState('');
   const [keyPageOpened, setKeyPageOpened] = useState(false);
@@ -151,8 +151,8 @@ function DesktopProviderStep({ onNext, onBack, note }: ProviderStepProps) {
 
   // ── OpenCode Zen ────────────────────────────────────────────────────────
   // Zen is only offered when the opencode CLI answered on this machine. Its
-  // models are discovered at runtime, and its credential is OPTIONAL: free Zen
-  // models run unauthenticated, so no key is ever demanded for them.
+  // models are discovered at runtime; Zen itself is an external service that
+  // runs on the user's own OpenCode account, so the wizard asks for their key.
   const [zenAvailable, setZenAvailable] = useState(false);
   const [zenModels, setZenModels] = useState<OpencodeModelInfo[]>([]);
   const [zenModel, setZenModel] = useState('');
@@ -270,13 +270,13 @@ function DesktopProviderStep({ onNext, onBack, note }: ProviderStepProps) {
   // A BYOK provider needs the user's own key. Continuing without one used to
   // write a provider row with an empty credential and mark the provider
   // selected — which reads, everywhere downstream, as "configured" while
-  // nothing can actually answer. Zen is offered without a key because its free
-  // models genuinely do not need one.
+  // nothing can actually answer. Zen is an external service too, so it needs
+  // the user's own Zen key for the same reason.
   const canContinue =
     mode === 'cloud'
       ? apiKey.trim().length > 0
       : mode === 'zen'
-      ? zenModel.trim().length > 0
+      ? zenModel.trim().length > 0 && zenKey.trim().length > 0
       : mode === 'ollama'
       ? selectedModel.trim().length > 0
       : false;
@@ -430,9 +430,9 @@ function DesktopProviderStep({ onNext, onBack, note }: ProviderStepProps) {
           >
             <div className="text-3xl mb-3">✨</div>
             <div className="text-sm font-semibold text-henry-text">OpenCode Zen</div>
-            <div className="text-[11px] text-henry-success font-medium mt-1">Free models need no key</div>
+            <div className="text-[11px] text-henry-success font-medium mt-1">Zen · your own OpenCode account</div>
             <div className="text-xs text-henry-text-muted mt-2 ${STAGE_PROSE_LEADING} ${STAGE_PROSE_WIDTH}">
-              Detected on this computer — add a key only if you want paid Zen models
+              Detected on this computer — an external service, so it needs your Zen key
             </div>
           </button>
         )}
@@ -567,8 +567,8 @@ function DesktopProviderStep({ onNext, onBack, note }: ProviderStepProps) {
         <div className="animate-fade-in space-y-6">
           <StageCard>
             <p className={`text-sm text-henry-text-dim ${STAGE_PROSE_LEADING} ${STAGE_PROSE_WIDTH}`}>
-              OpenCode Zen was found on this computer. Its models come from the
-              bridge itself, and the free ones answer without a key.
+              OpenCode Zen was found on this computer. Its models come from OpenCode's own
+              service, so Zen needs the key on your OpenCode account — add it below.
             </p>
 
             {zenModels.length > 0 ? (
@@ -583,7 +583,7 @@ function DesktopProviderStep({ onNext, onBack, note }: ProviderStepProps) {
                     .filter((m) => opencodeProviderIdForModel(m) === OPENCODE_ZEN_PROVIDER_ID)
                     .map((m) => (
                       <option key={m.id} value={m.id}>
-                        {m.name}{m.isFree ? ' · free' : ''}
+                        {m.name}
                       </option>
                     ))}
                 </select>
@@ -597,7 +597,7 @@ function DesktopProviderStep({ onNext, onBack, note }: ProviderStepProps) {
             <StageField
               label={
                 <>
-                  OpenCode key <span className="normal-case">(optional — only paid Zen models need one)</span>
+                  OpenCode Zen key <span className="normal-case">(your own Zen account)</span>
                 </>
               }
             >
@@ -605,9 +605,15 @@ function DesktopProviderStep({ onNext, onBack, note }: ProviderStepProps) {
                 type="password"
                 value={zenKey}
                 onChange={(e) => setZenKey(e.target.value)}
-                placeholder="Leave empty to use free Zen models"
+                placeholder="Your Zen key"
                 className={`${STAGE_CONTROL} font-mono`}
               />
+              <button
+                onClick={() => openUrl('https://opencode.ai/docs/zen/')}
+                className="mt-2 inline-flex items-center gap-1.5 text-xs text-henry-accent hover:underline"
+              >
+                Where do I get a Zen key?
+              </button>
             </StageField>
           </StageCard>
         </div>

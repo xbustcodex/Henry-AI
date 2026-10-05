@@ -30,7 +30,7 @@ export function buildSetupRequiredMessage(kinds: readonly BackendKind[]): string
   const availableOptions: string[] = [];
   if (!kinds.includes('ollama')) {
     availableOptions.push(
-      '**Local Ollama (fully private, fully free)** — Install from [ollama.com](https://ollama.com/download), then pick one of the models it reports in **Settings → AI Providers**.',
+      '**Local Ollama (private, offline, and the only free AI path)** — Install from [ollama.com](https://ollama.com/download), then pick one of the models it reports in **Settings → AI Providers**.',
     );
   }
   if (!kinds.includes('openrouter')) {
@@ -40,7 +40,7 @@ export function buildSetupRequiredMessage(kinds: readonly BackendKind[]): string
   }
   if (!kinds.includes('opencode-zen')) {
     availableOptions.push(
-      '**OpenCode Zen** — Free Zen models run through the local opencode bridge with no key at all. Add **Settings → AI Providers → OpenCode Zen** to pick one.',
+      '**OpenCode Zen** — an external service on your own OpenCode account. Add your Zen key in **Settings → AI Providers → OpenCode Zen**, then pick a model.',
     );
   }
   if (!kinds.includes('openai')) {
@@ -63,6 +63,8 @@ export function buildSetupRequiredMessage(kinds: readonly BackendKind[]): string
       : 'No providers configured.',
     '',
     ...availableOptions.map((opt, i) => `${i + 1}. ${opt}`),
+
+    '_Ollama is the only AI path in Henry that costs nothing. Every other option is an external service that runs on your own account or key._',
     '',
     '_Henry will not pick one of these for you. Once you choose, your selection is saved and used from then on._',
   ].join('\n');

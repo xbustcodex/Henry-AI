@@ -182,6 +182,28 @@ export async function computeIncrementalDelta(
   let recheckedDirectories = 0;
   let cancelled = false;
 
+  /**
+   * Record a path as gone, exactly once, and only at the TOP of its tree.
+   *
+   * Two different discoveries can name the same removal: a `stat` that fails
+   * because the directory itself is gone, and a parent's re-listing that no
+   * longer lists it. Both pushed independently, so a removed folder could land
+   * in the delta twice — and, when its own children were visited first, it could
+   * be reported alongside its own descendants.
+   *
+   * Duplicates are not cosmetic. `applyDelta` issues one DELETE per removal, so
+   * the second is a wasted statement; and a descendant recorded separately
+   * alongside its removed ancestor contradicts the design, which records only
+   * the top precisely so one delete takes the whole subtree.
+   */
+  const recordRemoval = (target: string): void => {
+    if (removed.some((gone) => pathIsAtOrUnder(target, gone))) return;
+    for (let index = removed.length - 1; index >= 0; index -= 1) {
+      if (pathIsAtOrUnder(removed[index], target)) removed.splice(index, 1);
+    }
+    removed.push(target);
+  };
+
   /** Deepest-first order, so a change above is applied before its children. */
   const queue: string[] = [...previous.directories]
     .sort((a, b) => b.depth - a.depth || b.path.length - a.path.length)
@@ -230,7 +252,7 @@ export async function computeIncrementalDelta(
       stat = await fs.stat(dirPath);
     } catch {
       // The directory is gone: it and everything under it are removed.
-      removed.push(dirPath);
+      recordRemoval(dirPath);
       continue;
     }
 
@@ -318,11 +340,7 @@ export async function computeIncrementalDelta(
     // removed tree is recorded: deleting one path takes its descendants with it.
     for (const childPath of knownChildren) {
       if (presentChildren.has(childPath)) continue;
-      const isDescendantOfSomethingAlreadyRemoved = removed.some(
-        (gone) => childPath !== gone && pathIsAtOrUnder(childPath, gone),
-      );
-      if (isDescendantOfSomethingAlreadyRemoved) continue;
-      removed.push(childPath);
+      recordRemoval(childPath);
     }
 
     // ── Additions and metadata moves ──────────────────────────────────────

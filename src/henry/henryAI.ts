@@ -49,8 +49,8 @@ export class NoBackendAvailableError extends Error {
     this.userFacingMessage = detail
       ? detail
       : "Henry needs an AI provider to answer that. Open **Settings → AI Providers** and add one — " +
-        "OpenRouter and Google have free tiers, OpenCode Zen runs through the opencode bridge, " +
-        "and **Ollama** runs fully local and fully free.";
+        "**Ollama** runs fully local and is the only AI path in Henry that costs nothing, and " +
+        "OpenRouter, Google and OpenCode Zen are external services that run on your own account or key.";
   }
 }
 

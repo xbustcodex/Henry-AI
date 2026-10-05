@@ -216,8 +216,10 @@ export interface AiChoiceState {
  * that user's own credential.
  *
  * Deliberately strict: a row that exists is not enough, and neither is a model
- * name typed into a field when the provider needs a key. Local Ollama and free
- * Zen models pass without one because they genuinely do not need one.
+ * name typed into a field when the provider needs a key. Local Ollama passes
+ * without one because it genuinely does not need one — and it is the only AI
+ * path in Henry that is free. Every other provider, OpenCode Zen included,
+ * runs on the user's own account.
  */
 export function isAiStageSatisfied(state: AiChoiceState): boolean {
   if (!state.providerId.trim() || !state.modelId.trim()) return false;
@@ -226,7 +228,7 @@ export function isAiStageSatisfied(state: AiChoiceState): boolean {
 
 /** The sentence shown when the required stage is blocking. */
 export const AI_STAGE_BLOCKED_REASON =
-  'Choose a provider and a model before continuing — Henry has nothing to answer with until you do. Local Ollama and free OpenCode Zen models need no key.';
+  'Choose a provider and a model before continuing — Henry has nothing to answer with until you do. Local Ollama is the one free AI path; every other provider needs your own key.';
 
 /**
  * The reason `current` cannot be left yet, or null when it can.

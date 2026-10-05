@@ -20,19 +20,18 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
-  mkdtempSync,
   mkdirSync,
   writeFileSync,
   rmSync,
   utimesSync,
   renameSync,
 } from 'node:fs';
-import { homedir } from 'node:os';
 import path from 'node:path';
 
 import { defaultExclusions } from '../../src/henry/systemMap';
 import { buildExclusionPolicy, setUsersProbe } from './exclusions';
 import { nodeMetadataFs, type MetadataFs } from './fsMetadata';
+import { createFixtureRoot, removeFixtureRoot } from './_fixture';
 import {
   computeIncrementalDelta,
   type KnownDirectory,
@@ -157,16 +156,16 @@ function bumpDirectoryTimes(relativeDir: string): void {
   stamp(path.join(home, relativeDir), mtimeClock);
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   mtimeClock = 1_900_000_000;
-  root = mkdtempSync(path.join(homedir(), 'systemmap-inc-'));
+  root = await createFixtureRoot('inc');
   home = path.join(root, 'home');
   mkdirSync(home, { recursive: true });
   setUsersProbe(() => []);
 });
 
 afterEach(() => {
-  if (root) rmSync(root, { recursive: true, force: true });
+  if (root) removeFixtureRoot(root);
 });
 
 describe('an incremental update finds what changed', () => {
@@ -224,6 +223,36 @@ describe('an incremental update finds what changed', () => {
     // …and no removal is recorded twice for the same subtree.
     const nestedRemovals = result.delta.removed.filter((entry) => entry.includes('/nested'));
     expect(nestedRemovals).toEqual([]);
+  });
+
+  it('records a removed folder exactly once, however it was discovered', async () => {
+    // Two code paths can notice the same removal: the folder's own `stat` fails
+    // because it is gone, AND its parent no longer lists it. Both used to push,
+    // so the delta could name the same path twice — which reached `applyDelta`
+    // as two identical DELETE statements, and put the delta in conflict with
+    // its own design of recording only the TOP of a removed tree.
+    //
+    // Whether the duplicate actually appears depended on queue order, which is
+    // why this was an intermittent rather than a consistent failure: whichever
+    // discovery ran second re-added the path.
+    const folder = path.join(home, 'projects/gone');
+    mkdirSync(path.join(folder, 'nested'), { recursive: true });
+    writeFileSync(path.join(folder, 'a.txt'), 'a');
+    writeFileSync(path.join(folder, 'nested/b.txt'), 'b');
+    write('projects/keep/file.txt');
+    const previous = await baseline();
+    rmSync(folder, { recursive: true, force: true });
+    bumpDirectoryTimes('projects');
+
+    const result = await computeIncrementalDelta(nodeMetadataFs(), previous, { policy: await policy() });
+
+    // Exactly one entry for the folder…
+    const matching = result.delta.removed.filter((entry) => entry === folder);
+    expect(matching).toHaveLength(1);
+    // …and no duplicates anywhere in the delta at all.
+    expect(new Set(result.delta.removed).size).toBe(result.delta.removed.length);
+    // …and still no descendant recorded alongside its removed ancestor.
+    expect(result.delta.removed.filter((entry) => entry.includes('/nested'))).toEqual([]);
   });
 
   it('walks INTO a newly added folder, not just its top level', async () => {

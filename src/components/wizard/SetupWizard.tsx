@@ -29,6 +29,7 @@ import {
 } from '../onboarding/stages';
 import { markFirstRunComplete } from '../../firstRun';
 import { useStore } from '../../store';
+import { isOllamaProvider } from '../../../electron/providers/classification';
 
 export type { StageId } from '../onboarding/stages';
 
@@ -86,9 +87,9 @@ export default function SetupWizard({ onComplete }: Props) {
     const modelId = settings.companion_model?.trim() ?? '';
     const row = providers.find((p) => p.id === providerId);
     const hasCredential = Boolean(row?.apiKey?.trim());
-    // Local Ollama answers without a credential, and so do free Zen models —
-    // those are the only two that may satisfy this stage without a key.
-    const credentialRequired = Boolean(providerId) && providerId !== 'ollama' && providerId !== 'opencode-zen' && !hasCredential;
+    // Local Ollama is the only provider that answers without a credential —
+    // every other one, OpenCode Zen included, runs on the user's own account.
+    const credentialRequired = Boolean(providerId) && !isOllamaProvider(providerId) && !hasCredential;
     return { providerId, modelId, credentialRequired, hasCredential };
   }, [settings.companion_provider, settings.companion_model, providers]);
 

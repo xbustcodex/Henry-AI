@@ -96,9 +96,9 @@ describe('a Zen selection survives the send-time router', () => {
   });
 
   it('does not fall back to another provider because the Zen row has no key', () => {
-    // Zen is credential-optional: free Zen models run unauthenticated. Treating
-    // the empty key as "unusable" silently rerouted the turn to a different
-    // provider, so the user asked Zen and got something else.
+    // An empty Henry-side key is not what stops Zen, so treating it as
+    // "unusable" silently rerouted the turn to a different provider: the user
+    // asked Zen and got something else.
     const route = resolveChat('hello', ZEN_SETTINGS, [ZEN_PROVIDER_ROW]);
     expect(route.provider).toBe(OPENCODE_ZEN_PROVIDER_ID);
     expect(route.reason).not.toMatch(/fell back/);

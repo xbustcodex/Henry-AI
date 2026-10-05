@@ -16,8 +16,8 @@
  * that DID read them would produce a node carrying those bytes and be caught.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { mkdirSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
+import { createFixtureRoot, removeFixtureRoot } from './_fixture';
 import path from 'node:path';
 import { promises as fsp } from 'node:fs';
 
@@ -85,18 +85,18 @@ function allKeys(nodes: readonly SystemMapNode[]): Set<string> {
   return keys;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   // Deliberately NOT under /tmp: Henry's defaults exclude /tmp as a temporary
   // area, and a fixture that lived there would be excluded before a single
   // assertion ran — a test that passes because it scanned nothing.
-  root = mkdtempSync(path.join(homedir(), 'systemmap-scan-'));
+  root = await createFixtureRoot('scan');
   home = path.join(root, 'home');
   mkdirSync(home, { recursive: true });
   setUsersProbe(() => []);
 });
 
 afterEach(() => {
-  if (root) rmSync(root, { recursive: true, force: true });
+  if (root) removeFixtureRoot(root);
 });
 
 describe('the capability itself is metadata-only', () => {

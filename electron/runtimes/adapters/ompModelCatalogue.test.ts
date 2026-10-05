@@ -104,9 +104,9 @@ describe('a discovered model resolves to the provider it belongs to', () => {
 
 describe('list ordering keeps Zen findable', () => {
   it('puts Zen ahead of the bulk catalogue', () => {
-    // Mirrors the sort in listOpencodeModels: Zen first, then free, then
-    // alphabetical. Asserted here so the ordering contract has a home even
-    // though sorting itself lives in the shelling-out layer.
+    // Mirrors the sort in listOmpModels: Zen first, then alphabetical.
+    // Asserted here so the ordering contract has a home even though sorting
+    // itself lives in the shelling-out layer.
     const sorted = [...models].sort((a, b) => {
       if (a.isZen !== b.isZen) return a.isZen ? -1 : 1;
       return a.id.localeCompare(b.id);

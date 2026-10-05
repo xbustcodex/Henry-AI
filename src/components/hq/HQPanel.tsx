@@ -7,6 +7,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useStore } from '../../store';
 import { isMacOS, isLinux, isWindows } from '../../utils/platform';
 import GatedChannelHost, { runGatedShell } from '../computer/GatedChannelHost';
+import { requiresApiKey } from '../../../electron/providers/classification';
 
 const getApi = () => (window as any).henryAPI as any;
 
@@ -176,8 +177,12 @@ export default function HQPanel() {
     const provider = providers?.find((p) => p.id === companionProvider);
     const apiKey = provider?.apiKey || '';
 
-    if (!apiKey && companionProvider !== 'ollama') {
-      setChatLog(l => [...l, { role: 'henry', text: `No API key saved for **${companionProvider}**. Add it in **Settings → AI Providers**.` }]);
+    // Gated on the shared classification, not on a literal `!== 'ollama'`: that
+    // inline check demanded a key from opencode-backed providers, which read no
+    // Henry-stored credential at all, and sent the user off to fix something
+    // that was never broken.
+    if (requiresApiKey({ id: companionProvider, name: provider?.name, apiKey })) {
+      setChatLog(l => [...l, { role: 'henry', text: `**${companionProvider}** needs an API key. Add your own key for it in **Settings → AI Providers**.` }]);
       setChatBusy(false);
       return;
     }

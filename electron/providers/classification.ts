@@ -9,26 +9,40 @@
  *   - the background broker  (electron/ipc/taskBroker.ts)
  *   - the model picker       (src/components/settings/SettingsView.tsx)
  *   - provider metadata      (src/providers/models.ts, `local: true`)
- *
  * Each wrote its own check, all of them reduced to "is the id literally
  * `ollama`". OpenCode-backed providers therefore looked key-required to the
- * scheduler even though they authenticate through the opencode CLI and use no
- * Henry API key at all, so a Routine on an OpenCode model failed at the gate
- * before a single model call was made. A fifth caller now lives here too.
+ * scheduler even though a missing Henry-side key cannot make their call fail,
+ * so a Routine on an OpenCode model failed at the gate before a single model
+ * call was made. A fifth caller now lives here too.
  *
  * The two questions are deliberately separate:
  *
  *   isOpencodeProvider()  — reached through the local opencode CLI, so the
  *                           engine is `opencode`, not an HTTP provider.
  *   requiresApiKey()      — whether a missing `api_key` must block the call.
- *                           Ollama and OpenCode both answer false, and they
- *                           answer false for genuinely different reasons: Ollama
- *                           is a local HTTP server with no account, OpenCode
- *                           authenticates inside its own CLI (OPENCODE_API_KEY in
- *                           the child environment, injected by the OpenCode
- *                           runtime adapter). Neither reads Henry's provider
- *                           table for a key, so gating them on one is simply
- *                           a classification bug.
+ *                           Ollama and OpenCode both answer false, and `false`
+ *                           means ONE thing only: "a missing Henry-stored key is
+ *                           not this provider's problem". It does NOT mean the
+ *                           provider is free, and nothing may read it as a
+ *                           price claim. Ollama is free because it is a local
+ *                           HTTP server on the user's own machine; OpenCode is
+ *                           free of a Henry-side key because it authenticates
+ *                           inside its own CLI (OPENCODE_API_KEY in the child
+ *                           environment, injected by the OpenCode runtime
+ *                           adapter) against a remote service that bills the
+ *                           user's own account.
+ *
+ * COST POLICY (owner-ruled, enforced here):
+ *
+ *   {@link isOllamaProvider} is true for Ollama and NOTHING else. Ollama is
+ *   Henry's only free AI path, and that is the only question this module
+ *   answers about money. Every other provider — opencode, OpenCode Zen, the
+ *   models a Prime Pi install can reach, every cloud API — needs the user's own
+ *   account, credential, subscription or credits. Runtime discovery is
+ *   automatic and credential-free; using the models a discovered runtime can
+ *   reach is a separate, user-selected configuration step. A model whose name
+ *   contains "free" is a name, not a price.
+ *
  * This module is deliberately dependency-free so the renderer can import it.
  */
 
@@ -81,7 +95,11 @@ export function isOpencodeProvider(
   return nameLower === OPENCODE_PROVIDER_ID || nameLower === OPENCODE_ZEN_PROVIDER_ID;
 }
 
-/** Ollama runs a local HTTP server and has no account of any kind. */
+/**
+ * Ollama runs a local HTTP server on the user's own machine and has no account
+ * of any kind — so it is also Henry's ONLY cost-free AI path. Every caller that
+ * has to say whether something is free asks here.
+ */
 export function isOllamaProvider(
   id: string | null | undefined,
   name?: string | null,

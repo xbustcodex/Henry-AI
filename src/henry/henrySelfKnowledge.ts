@@ -278,7 +278,7 @@ export const PANELS: PanelInfo[] = [
     ],
     tips: [
       'Smart code routing (AI Providers tab) auto-switches to Qwen Coder for code questions',
-      'Add an OpenCode Zen model — free ones need no key at all',
+      'Add an OpenCode Zen model — Zen is an external service, so it runs on your own OpenCode account and key',
       'Export Backup saves everything to your Desktop as a zip',
     ],
     phoneAvailable: false,
@@ -301,7 +301,7 @@ export const POWER_TIPS = [
   { tip: 'Use ⌥Space constantly', detail: 'Select any text anywhere on your Mac — an email, article, contract — and press ⌥Space. Henry opens with that text already loaded. Ask him to summarize, reply, explain, or act on it.' },
   { tip: 'Talk to Henry like a person', detail: 'You don\'t need special commands. "Remind me to call Sarah on Friday" works. "What should I focus on today?" works. "Write a reply to this email" works.' },
   { tip: 'Install Henry on your phone', detail: 'Open your companion URL in Safari on iPhone/iPad. Tap Share → Add to Home Screen. Henry installs as a real app — log health, add tasks, write journal entries from anywhere.' },
-  { tip: 'Get unlimited free AI', detail: 'Go to aistudio.google.com and get a free Gemini key (no card), or aistudio-free alternatives like OpenRouter. Paste it in Settings → AI Providers. Unlimited responses.' },
+  { tip: 'Get AI on a provider’s free tier', detail: 'Go to aistudio.google.com or openrouter.ai and get your own key — Google and OpenRouter both offer free tiers on your own account. Paste it in Settings → AI Providers. Ollama is the one path that costs nothing at all.' },
   { tip: 'Ask Henry about his memory', detail: 'Say "what do you know about me?" and Henry shows his memory. Edit it in the Memory panel — delete wrong facts, add important ones.' },
 ];
 

@@ -30,9 +30,10 @@ describe('a credential-free provider is not gated on an API key', () => {
   });
 
   it('does not require a key for opencode-zen', () => {
-    // Zen is credential-OPTIONAL, not credential-required: free Zen models run
-    // unauthenticated and a saved key only widens the catalogue. Gating it made
-    // the provider unusable for exactly the users who had no key yet.
+    // The question `requiresApiKey` answers is "does a MISSING Henry-stored key
+    // block this call", not "is this provider free". Zen authenticates inside the
+    // opencode CLI, so an empty Henry row is not what stops it — and gating on
+    // one made the provider unusable for exactly the users who had no key yet.
     expect(requiresApiKey({ id: OPENCODE_ZEN_PROVIDER_ID, name: 'OpenCode Zen', api_key: '' })).toBe(false);
   });
 

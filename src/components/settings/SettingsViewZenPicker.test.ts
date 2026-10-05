@@ -32,9 +32,9 @@ import { OPENCODE_PROVIDER_ID, OPENCODE_ZEN_PROVIDER_ID } from '../../../electro
  * entries carry a real `provider/` prefix.
  */
 const DISCOVERED: OpencodeModelInfo[] = [
-  { id: 'deepseek-v4-flash-free', provider: 'opencode-zen', name: 'deepseek-v4-flash-free', isZen: true, isFree: true, group: 'opencode-zen' },
-  { id: 'hy3-free', provider: 'opencode-zen', name: 'hy3-free', isZen: true, isFree: true, group: 'opencode-zen' },
-  { id: 'openrouter/qwen3-235b-a22b', provider: 'openrouter', name: 'qwen3-235b-a22b', isZen: false, isFree: false, group: 'openrouter' },
+  { id: 'deepseek-v4-flash-free', provider: 'opencode-zen', name: 'deepseek-v4-flash-free', isZen: true, group: 'opencode-zen' },
+  { id: 'hy3-free', provider: 'opencode-zen', name: 'hy3-free', isZen: true, group: 'opencode-zen' },
+  { id: 'openrouter/qwen3-235b-a22b', provider: 'openrouter', name: 'qwen3-235b-a22b', isZen: false, group: 'openrouter' },
 ];
 
 /** Every saveSetting call, in order, as `(key, value)`. */

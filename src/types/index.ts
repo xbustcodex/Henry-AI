@@ -77,7 +77,6 @@ export interface OpencodeModelInfo {
   name: string;
   /** True for opencode's own hosted ("zen") service. */
   isZen: boolean;
-  isFree: boolean;
   /**
    * Provider group the id was listed under, e.g. "opencode-zen". Zen ids carry
    * no `provider/` prefix, so `provider` alone cannot identify them — this is

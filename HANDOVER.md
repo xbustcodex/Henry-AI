@@ -92,8 +92,9 @@ accepting the layout and macOS-copy fixes on the installed app.
    them, but they contradict this rule.)
 6. **No stage may pick a provider, model or key.** Detection is allowed; authentication
    fabrication or inheritance is not.
-7. **Zen is credential-OPTIONAL.** Free Zen models run unauthenticated; a key only
-   widens the catalogue. Do not reintroduce a key requirement.
+7. **Zen is an external service, not a free one.** See §5c — it is NOT to be
+   advertised as Henry's free provider, and "Free models need no key" is the copy to
+   delete, not restore.
 8. **Never commit a real credential.** Credential-shaped fixtures are assembled from
    fragments at runtime (`src/henry/secretScan.ts`) because GitHub push protection
    rejects verbatim literals — the Slack token shape specifically.
@@ -160,7 +161,7 @@ backend.
 `opencode` and `opencode-zen` are **model services reached through a runtime**. Runtime
 identity (which agent software is installed) is separate from provider identity (which
 model service is selected). `opencode-zen` keeps its distinct provider id, its own
-catalogue, and its credential-optional status.
+catalogue, and its own credential. It is not a free provider — see §5c.
 
 ## 5c. PRODUCT DECISION — provider cost & authentication policy (owner-ruled)
 
@@ -213,18 +214,26 @@ file's contents. Rebuild, the contents view and the exclusions live in
 `settings/SystemMapPanel.tsx`. Newly discovered agent runtimes are *offered* through
 `selectAgentRuntime` and are never auto-selected.
 
-Two scanner invariants that are load-bearing but read as arbitrary choices. They are not
-equivalent in how well they are protected — one is enforced by a test, one is not:
-- **"Never reads file contents" is structural, and now test-enforced.** It holds because
-  `MetadataFs` (`electron/systemmap/fsMetadata.ts`) has exactly `readDir` and `stat`
-  and nothing else. `scanMetadata.test.ts` asserts that method count, so adding a third
-  method fails there — verified by mutation, not assumed. If one is ever added
-  deliberately, update `CONTENTS_NEVER_READ` and the on-screen copy in the same change.
-- **Test fixtures live under `$HOME`, never `/tmp` — and this one is NOT enforced.**
-  `/tmp` is excluded by the default exclusions, so a fixture placed there is filtered
-  out *before a single assertion runs*. Nothing fails to tell you; the test just stops
-  testing anything. Nothing guards this today, so it is worth the two lines it takes
-  to respect it.
+Three scanner invariants that are load-bearing but read as arbitrary choices. Each is now
+enforced by a test rather than merely documented — the absence only means something while
+something is checking it:
+- **"Never reads file contents" is structural.** It holds because `MetadataFs`
+  (`electron/systemmap/fsMetadata.ts`) has exactly `readDir` and `stat` and nothing else.
+  `scanMetadata.test.ts` asserts that method count, so adding a third method fails there —
+  verified by mutation, not assumed. If one is ever added deliberately, update
+  `CONTENTS_NEVER_READ` and the on-screen copy in the same change.
+- **Test fixtures live under `$HOME`, never `/tmp`.** `/tmp` is excluded by the default
+  exclusions, so a fixture placed there is filtered out *before a single assertion runs* —
+  the test does not go red, it silently stops testing anything. `createFixtureRoot`
+  (`electron/systemmap/_fixture.ts`) therefore asks the real exclusion policy whether it
+  would scan the root and throws naming the rule that refused it; `_fixture.test.ts` also
+  asserts `/tmp` is still excluded and that no test calls `mkdtempSync` directly, so the
+  convention cannot be reintroduced file by file.
+- **`recordRemoval` owns "record only the top of a removed tree."** It lives in
+  `electron/systemmap/incremental.ts`. This invariant used to live inside one of its two
+  callers, which is exactly how a deleted folder was noticed by both paths and reached
+  `applyDelta` as two identical DELETE statements. Any *new* way of noticing a removal
+  must go through `recordRemoval`; do not push into `removed[]` directly.
 
 Rules that must hold:
 - Nothing scans without a button press. `systemMap:scan/start` is the only door, and the

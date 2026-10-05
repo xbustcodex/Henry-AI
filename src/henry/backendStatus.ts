@@ -13,8 +13,10 @@
  * `resolveChat` — the same function that decides where a sent message actually
  * goes. Anything the router cannot send to is not reported as configured:
  *
- *   - a selected, available Ollama model IS a backend, and needs no API key;
- *   - so is an OpenCode-backed selection, whose free models run unauthenticated;
+ *   - a selected, available Ollama model IS a backend, and needs no API key —
+ *     it is also the only cost-free AI path there is;
+ *   - so is an OpenCode-backed selection: it reads no Henry-side key, and the
+ *     models it reaches are external services on the user's own account;
  *   - a retired provider (Groq) is named and refused, never substituted;
  *   - a provider row on disk is NOT a selection — nothing is routed from a key
  *     the user never chose;
@@ -97,11 +99,12 @@ interface ProviderRow extends RoutedProviderRow {
 /**
  * Which opencode-backed provider this install is actually configured for, or
  * null. Zen stays distinct from the plain opencode group — it is its own
- * provider id with its own catalogue and its own (optional) credential.
+ * provider id with its own catalogue and its own credential.
  *
- * A row counts as configured on its own: Zen's free models run
- * unauthenticated, so demanding a key here is exactly what made a fully
- * working Zen install report "no AI provider".
+ * A row counts as configured on its own: an installed runtime with no
+ * Henry-stored key is still a reachable route. That is a statement about
+ * credentials, not about price — the services behind these models bill the
+ * user's own account, and Henry never supplies one.
  */
 function opencodeProviderId(providers: ProviderRow[], settings?: Record<string, string>): string | null {
   const rows = providers.filter((p) => isOpencodeProvider(p.id, p.name));
@@ -173,8 +176,8 @@ export function configuredBackendKinds(
   if (ollamaConfigured(rows, s)) kinds.push('ollama');
 
   // opencode / OpenCode Zen reach a real model through the local opencode
-  // bridge and need no Henry-side key — the free Zen models run
-  // unauthenticated.
+  // bridge and read no Henry-side key. What they reach is a remote service on
+  // the user's own account — discovered free of charge, billed by its owner.
   const opencode = opencodeProviderId(rows, s);
   if (opencode === OPENCODE_ZEN_PROVIDER_ID) kinds.push('opencode-zen');
   else if (opencode === OPENCODE_PROVIDER_ID) kinds.push('opencode');

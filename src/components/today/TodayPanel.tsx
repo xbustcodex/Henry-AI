@@ -6,7 +6,7 @@ import type { DailyBriefing } from '../../henry/proactiveBriefing';
 import { getDailyIntention, setDailyIntention, clearDailyIntention } from '../../henry/dailyIntention';
 import { PANEL_QUICK_ASK } from '../../henry/henryQuickAsk';
 import { isMacOS, isLinux, isWindows } from '../../utils/platform';
-import { isOpencodeProvider } from '../../../electron/providers/classification';
+import { isOpencodeProvider, requiresApiKey } from '../../../electron/providers/classification';
 
 const HENRY_LAST_GREETING_KEY = 'henry:last_greeting_date';
 const HENRY_OPERATING_MODE_KEY = 'henry_operating_mode';
@@ -492,8 +492,10 @@ Keep it brief and encouraging.`;
       }
       const prov = providers.find((p) => p.id === provider);
       const apiKey = prov?.apiKey || '';
-      if (!apiKey && provider !== 'ollama') {
-        setHenryReply(`No API key saved for ${provider}. Add one in Settings → AI Providers.`);
+      // Same shared classification as HQ and the scheduler: a provider that
+      // reads no Henry-stored credential must never be told it needs one.
+      if (requiresApiKey({ id: provider, name: prov?.name, apiKey })) {
+        setHenryReply(`${provider} needs an API key. Add your own key for it in Settings → AI Providers.`);
         setHenryStreaming(false);
         return;
       }

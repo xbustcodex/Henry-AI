@@ -106,14 +106,15 @@ export default function CompleteStep({ onBack, onDone, outcome }: CompleteStepPr
           <p className="text-sm text-henry-text">{outcome.provider ? `${brainDescription ?? outcome.provider} ` : 'No provider selected'}</p>
           <p className={`text-sm text-henry-text-muted ${STAGE_PROSE_LEADING} ${STAGE_PROSE_WIDTH}`}>
             {outcome.provider === 'ollama'
-              ? `Running locally — ${outcome.localModels} model${outcome.localModels === 1 ? '' : 's'} found on this machine, nothing sent anywhere.`
+              ? `Running locally — ${outcome.localModels} model${outcome.localModels === 1 ? '' : 's'} found on this machine, nothing sent anywhere. Ollama is the one AI path in Henry that costs you nothing.`
               : outcome.hasCredential
-              ? 'Using your own key, stored on this machine.'
-              : 'Running without a key.'}
+              ? 'Using your own key for this external service, stored on this machine.'
+              : 'No key is stored for this provider, so it may refuse to answer.'}
           </p>
           {outcome.opencodeInstalled && (
             <p className={`text-sm text-henry-text-muted ${STAGE_PROSE_LEADING} ${STAGE_PROSE_WIDTH}`}>
-              OpenCode was detected on this machine.
+              OpenCode was detected on this machine. Its models are external services that run on your
+              own account.
             </p>
           )}
           {outcome.skipped.length > 0 && (

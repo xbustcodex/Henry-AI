@@ -13,9 +13,11 @@
  * actually goes. These assertions therefore pin the property that matters: what
  * the router can send to is what the UI calls configured, and nothing else.
  *
- *   - OpenCode Zen counts WITH NO KEY — its free models run unauthenticated, and
- *     demanding one is what made a working Zen install read as unconfigured.
- *   - Local Ollama counts with no key either, for the same reason.
+ *   - OpenCode Zen counts with no Henry-stored key: the opencode CLI
+ *     authenticates on its own, so demanding one here is what made a working
+ *     Zen install read as unconfigured. That is a fact about credentials, not
+ *     about price — Zen's models are external services on the user's account.
+ *   - Local Ollama counts with no key, and is the one cost-free AI path.
  *   - A retired provider (Groq) counts for nothing, ever.
  *   - A provider row on disk is an inventory entry, not a selection: a key the
  *     user never chose cannot make an install look ready.

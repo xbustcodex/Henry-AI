@@ -296,8 +296,10 @@ export function EngineRow({ engine, label, hint }: { engine: 'companion' | 'work
 
   // opencode models are discovered at runtime and shown in this same list, so
   // they sit alongside every other model rather than behind a separate picker.
-  // opencode is listed whenever its CLI is present — it needs no API key of its
-  // own, so it is not gated on `configuredIds`.
+  // opencode is listed whenever its CLI is present — it reads no Henry-stored
+  // key, so it is not gated on `configuredIds`. The models it reaches are
+  // external services that need the user's own account; discovering the runtime
+  // says nothing about what using them costs.
   const [opencodeModels, setOpencodeModels] = useState<import('../../types').OpencodeModelInfo[]>([]);
   const [opencodeReady, setOpencodeReady] = useState(false);
   const [testingModel, setTestingModel] = useState<string | null>(null);
@@ -385,10 +387,10 @@ export function EngineRow({ engine, label, hint }: { engine: 'companion' | 'work
     [opencodeModels],
   );
 
-  // Order: what the user's own machine holds (free, offline, already here),
-  // then opencode Zen (free, no key), then the rest of opencode, then the
-  // statically-known cloud providers. Every one of these lists is the runtime's
-  // or the user's, never a set of names somebody typed out in advance.
+  // Order: what the user's own machine holds (the one free, offline path),
+  // then opencode Zen, then the rest of opencode, then the statically-known
+  // cloud providers. Every one of these lists is the runtime's or the user's,
+  // never a set of names somebody typed out in advance.
   const localAsModels = useMemo(() => localModelsToAIModels(localModels), [localModels]);
   const zenModels = opencodeAsModels.filter((m) => m.provider === OPENCODE_ZEN_PROVIDER_ID);
   const otherOpencodeModels = opencodeAsModels.filter((m) => m.provider !== OPENCODE_ZEN_PROVIDER_ID);
