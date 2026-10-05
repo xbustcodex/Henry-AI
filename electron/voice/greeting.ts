@@ -46,25 +46,33 @@ export { DEFAULT_ASSISTANT_NAME } from '../../src/henry/assistantName';
  * up", "All systems online") and carry neither, which is what keeps them
  * correct for any name without editing the copy.
  */
+/**
+ * Every variant MUST carry a `{name}` placeholder.
+ *
+ * Four of these once did not, so when `pickVariant` chose one the configured assistant
+ * name could not appear at all — the greeting silently ignored the setting for roughly a
+ * third of launches. The rendered name is the point of the setting; a variant that omits
+ * the placeholder is a bug, not a stylistic choice.
+ */
 export const GREETING_VARIANTS: Record<GreetingPeriod, readonly string[]> = {
   morning: [
     'Good morning{address}. {name} is up and ready.',
-    'Morning{address}. All systems online and ready when you are.',
-    'Good morning{address}. The day is yours — what are we doing?',
+    'Morning{address}. {name} is online and ready when you are.',
+    'Good morning{address}. {name} here — the day is yours. What are we doing?',
   ],
   afternoon: [
     'Good afternoon{address}. {name} here, ready to help.',
-    'Afternoon{address}. Systems are online.',
+    'Afternoon{address}. {name} here — systems are online.',
     'Hey{address} — {name} is up and listening.',
   ],
   evening: [
     'Good evening{address}. {name} is at your service.',
-    'Evening{address}. All systems online — what do you need?',
+    'Evening{address}. {name} is online — what do you need?',
     'Good evening{address}. {name} here, ready to get things done.',
   ],
   lateNight: [
     'Burning the midnight oil{address}. {name} is here with you.',
-    'Late night{address}. I am up — what shall we do?',
+    'Late night{address}. {name} is up — what shall we do?',
     'Still going{address}. {name} is awake and ready.',
   ],
 };
