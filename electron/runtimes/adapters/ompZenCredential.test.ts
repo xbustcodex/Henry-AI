@@ -15,8 +15,8 @@ import {
   getOpencodeZenCredential,
   rehydrateOpencodeZenCredential,
   setOpencodeZenCredential,
-} from './opencode';
-import { encryptKey } from '../ipc/_keyStorage';
+} from './omp';
+import { encryptKey } from '../../ipc/_keyStorage';
 
 function providersDb(): DatabaseSync {
   const db = new DatabaseSync(':memory:');

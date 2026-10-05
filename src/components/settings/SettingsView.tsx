@@ -43,6 +43,7 @@ import GoogleConnectionPanel from './GoogleConnectionPanel';
 import SecurityPanel from './SecurityPanel';
 import PrivacyPanel from './PrivacyPanel';
 import LogsPanel from './LogsPanel';
+import AgentRuntimePanel from './AgentRuntimePanel';
 import AppLockGate from '../lock/AppLockGate';
 import KnowledgePanel from '../knowledge/KnowledgePanel';
 import { isMacOS, getPlatformName } from '../../utils/platform';
@@ -1269,6 +1270,8 @@ export default function SettingsView() {
         <ProvidersSection />
         <EnginesSection />
         <CoderEngineSection />
+        <AgentRuntimePanel />
+
         <VoiceSection />
 
         <div className={cardCls}>

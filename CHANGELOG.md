@@ -1,5 +1,49 @@
 # Changelog
 
+## Agent runtimes are discovered, not hardcoded (2026-10-05)
+
+Henry no longer treats any particular external agent CLI as its backend. Each
+runtime is an implementation behind one adapter interface, and which runtimes
+exist on a machine is a fact discovered at runtime rather than a decision baked
+into the app.
+
+- **`electron/runtimes/`** — `types.ts` defines `AgentRuntimeAdapter`, the single
+  interface every runtime is reached through. Executable names, install
+  locations, argument construction, authentication, stdout event parsing, model
+  catalogue parsing and capability detection are all adapter business; no core
+  module knows that one runtime spells its machine-readable mode `--mode json`.
+- **Adapters** — `omp.ts` covers the OpenCode product under either binary name
+  (`opencode` or `omp`, the latter being the vendor's own Windows bundle) and
+  keeps the corrected flag contract exactly: `run --mode json --cwd <dir> -p`,
+  authentication through `OPENCODE_API_KEY` in the child environment, and the
+  Zen credential rehydration. `pi.ts` covers Prime Pi; its CLI contract was read
+  from the installed package's own source and confirmed by running the binary,
+  and its adapter notes that Pi has no `--cwd` flag (the working directory is
+  applied in the spawn) and no `run` subcommand.
+- **Discovery is read-only.** It probes every registered adapter and returns
+  what is genuinely installed, with capabilities marked verified only where this
+  machine demonstrated them and a model count only where a real listing
+  produced one. A runtime that is not installed is reported as unavailable with
+  a reason — never omitted, never faked. It never changes the stored selection,
+  never sets a default, and never activates anything: it takes a read-only
+  selection reader with no writer in scope.
+- **The user chooses.** Settings gains an "Agent runtimes" panel listing each
+  runtime with its version, verified capabilities and install reason. Selecting
+  one is an explicit action that persists through `agentRuntimes:select`;
+  nothing is selected until it is pressed.
+- **Runtime identity and provider identity stay apart.** `opencode` and
+  `opencode-zen` remain distinct model services with their own catalogue and
+  (optional) credential, carried on `RuntimeModel.providerId`. Collapsing them
+  into the runtime would have erased Zen's provider row.
+- **Adding a runtime** now means: write an adapter, register it. No change to
+  chat, routing, the provider table or the renderer. `architecture.test.ts`
+  fails if a core module imports adapter internals or hardcodes a CLI spelling,
+  so the coupling cannot creep back in one branch at a time.
+
+Both existing call sites — the coder engine and the loopback OpenAI-shaped
+bridge — now call the same adapter method, so the route `ai:send` actually takes
+can no longer drift from the coder-engine route.
+
 ## Ordinary chat is no longer routed to the agent tool runner (2026-10-04)
 
 Every ordinary chat turn on a local model came back as tool-call syntax —

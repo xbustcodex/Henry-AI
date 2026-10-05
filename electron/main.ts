@@ -13,6 +13,7 @@ import { registerMarketplaceHandlers } from './ipc/marketplace';
 import { registerSourceFileHandlers } from './ipc/sourceFiles';
 import { registerHenryLocalBrainGatewayIpc } from './ipc/henryLocalBrainGateway';
 import { registerOpencodeBridgeHandlers, stopOpencodeBridge } from './ipc/opencodeBridge';
+import { registerAgentRuntimeHandlers } from './ipc/agentRuntimes';
 import { registerRuntimeHandlers, recordStartupFailure, clearStartupFailure, setRuntimeWindowGetter } from './ipc/runtimeDiagnostics';
 import { registerTaskBrokerHandlers } from './ipc/taskBroker';
 import { registerMemoryHandlers } from './ipc/memory';
@@ -568,6 +569,7 @@ app.whenReady().then(() => {
   // returned undefined and the gateway URL was never used.
   registerHenryLocalBrainGatewayIpc(db);
   registerOpencodeBridgeHandlers(getMainWindow);
+  registerAgentRuntimeHandlers(db);
   registerTaskBrokerHandlers(db, getMainWindow, henryDir);
   registerMemoryHandlers(db);
   registerMemoryGraphHandlers(db);

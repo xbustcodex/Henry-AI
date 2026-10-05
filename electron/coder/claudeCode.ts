@@ -24,7 +24,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { createLineBuffer, parseClaudeStreamJsonLine, type CoderStreamEvent } from './streamJson';
-import { buildCoderChildEnv } from './opencode';
+import { buildRuntimeChildEnv } from '../runtimes/childEnv';
 
 const execFileP = promisify(execFile);
 
@@ -93,8 +93,8 @@ function candidateBinaries(): string[] {
  * PATH) and NO Claude Code session vars, so headless runs never think they're
  * nested inside another Claude Code session.
  */
-/** Child env for detection + runs. Shared with the opencode engine. */
-const buildClaudeChildEnv = buildCoderChildEnv;
+/** Child env for detection + runs. Shared with the agent runtime adapters. */
+const buildClaudeChildEnv = buildRuntimeChildEnv;
 
 let cachedCli: ClaudeCliInfo | null = null;
 

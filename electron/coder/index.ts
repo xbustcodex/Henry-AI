@@ -26,7 +26,7 @@ import {
   runClaudeCode,
 } from './claudeCode';
 import { getLocalCoderStatus, runLocalCoder, LOCAL_CODER_PULL_HINT } from './localCoder';
-import { detectOpencodeCli, runOpencode, type OpencodeCliInfo } from './opencode';
+import { runtimeForLegacyEngineSetting } from '../runtimes/registry';
 
 type WindowGetter = () => BrowserWindow | null;
 
@@ -78,7 +78,17 @@ export function registerCoderHandlers(db: Database.Database, getWindow: WindowGe
   ipcMain.handle('coder:status', async (_e, opts?: { refresh?: boolean }) => {
     const engine = readEngineSetting(db);
     const claude = await detectClaudeCli(Boolean(opts?.refresh));
-    const opencode: OpencodeCliInfo = await detectOpencodeCli(Boolean(opts?.refresh));
+    // Which runtime serves this engine is the registry's knowledge, not this
+    // file's: the engine setting is a persisted user choice and its value is
+    // mapped to a runtime adapter in exactly one place.
+    const runtime = runtimeForLegacyEngineSetting(engine);
+    const probe = runtime ? await runtime.probe() : null;
+    const opencode = {
+      available: probe?.available ?? false,
+      path: probe?.binaryPath,
+      version: probe?.version,
+      error: probe?.unavailableReason,
+    };
     const local = await getLocalCoderStatus(readSetting(db, 'ollama_base_url') ?? undefined);
 
     let active: CoderActiveEngine;
@@ -107,18 +117,20 @@ export function registerCoderHandlers(db: Database.Database, getWindow: WindowGe
 
     const engineSetting = readEngineSetting(db);
     const claude = await detectClaudeCli();
-    const opencode = await detectOpencodeCli();
+    const runtime = runtimeForLegacyEngineSetting(engineSetting);
+    const probe = runtime ? await runtime.probe() : null;
+    const runtimeAvailable = probe?.available ?? false;
 
     // Resolve which engine actually runs this task.
     let engine: CoderActiveEngine = 'none';
     if (engineSetting === 'claude-code') {
       engine = claude.available ? 'claude-code' : 'none';
     } else if (engineSetting === 'opencode') {
-      engine = opencode.available ? 'opencode' : 'none';
+      engine = runtimeAvailable ? 'opencode' : 'none';
     } else if (engineSetting === 'local') {
       engine = 'local'; // availability is verified below with a precise hint
     } else {
-      engine = claude.available ? 'claude-code' : opencode.available ? 'opencode' : 'local';
+      engine = claude.available ? 'claude-code' : runtimeAvailable ? 'opencode' : 'local';
     }
 
     if (engine === 'none') {
@@ -143,17 +155,23 @@ export function registerCoderHandlers(db: Database.Database, getWindow: WindowGe
       return { started: true, channelId, engine: 'claude-code' as const };
     }
 
-    if (engine === 'opencode' && opencode.path) {
-      const child = runOpencode({
-        cliPath: opencode.path,
+    if (engine === 'opencode' && runtime && probe?.binaryPath) {
+      const controller = new AbortController();
+      void runtime.run({
         prompt: params.prompt,
         cwd: params.cwd?.trim() || ensureCoderWorkspace(),
         sessionId: params.sessionId,
         model: readSetting(db, 'coder_opencode_model') ?? undefined,
         agent: readSetting(db, 'coder_opencode_agent') ?? undefined,
+        signal: controller.signal,
         onEvent: (event) => sendEvent(channelId, event),
+      }).catch((err: unknown) => {
+        sendEvent(channelId, {
+          kind: 'error',
+          message: err instanceof Error ? err.message : String(err),
+        });
       });
-      activeRuns.set(channelId, { cancel: () => child.kill('SIGTERM') });
+      activeRuns.set(channelId, { cancel: () => controller.abort() });
       return { started: true, channelId, engine: 'opencode' as const };
     }
 

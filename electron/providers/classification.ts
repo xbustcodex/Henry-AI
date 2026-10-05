@@ -25,10 +25,10 @@
  *                           answer false for genuinely different reasons: Ollama
  *                           is a local HTTP server with no account, OpenCode
  *                           authenticates inside its own CLI (OPENCODE_API_KEY in
- *                           the child environment, see coder/opencode.ts). Neither
- *                           reads Henry's provider table for a key, so gating
- *                           them on one is simply a classification bug.
- *
+ *                           the child environment, injected by the OpenCode
+ *                           runtime adapter). Neither reads Henry's provider
+ *                           table for a key, so gating them on one is simply
+ *                           a classification bug.
  * This module is deliberately dependency-free so the renderer can import it.
  */
 

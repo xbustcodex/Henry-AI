@@ -19,7 +19,15 @@ import * as http from 'http';
 import { ipcMain } from 'electron';
 import crypto from 'crypto';
 import type { BrowserWindow } from 'electron';
-import { detectOpencodeCli, listOpencodeModels, readOpencodeError, CODER_WORKSPACE_DIR, type OpencodeModel } from '../coder/opencode';
+import { mkdirSync } from 'fs';
+import {
+  listOmpModels,
+  probeOmp,
+  ompAdapter,
+  readOmpError,
+  type OmpModel,
+} from '../runtimes/adapters/omp';
+import { CODER_WORKSPACE_DIR } from '../coder/claudeCode';
 
 const BRIDGE_PORT = 11540;
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
@@ -27,9 +35,14 @@ const RUN_TIMEOUT_MS = 600_000;
 
 let server: http.Server | null = null;
 let token = '';
-let modelsCache: { at: number; models: OpencodeModel[] } | null = null;
-/** Spawned CLI processes, so an aborted request can stop them. */
-const activeChildren = new Set<import('child_process').ChildProcess>();
+let modelsCache: { at: number; models: OmpModel[] } | null = null;
+/**
+ * In-flight run cancellations, so an aborted HTTP request stops the turn.
+ *
+ * The adapter owns the child process; this side only holds the abort handle it
+ * was given, which is the seam between the HTTP layer and the runtime.
+ */
+const activeRuns = new Set<AbortController>();
 
 export interface BridgeInfo {
   running: boolean;
@@ -120,149 +133,70 @@ export function messagesToPrompt(messages: Array<{ role?: string; content?: unkn
   return parts.join('\n\n').trim();
 }
 
-/**
- * Turn the CLI's NDJSON event stream into plain assistant text.
- *
- * A failed run emits a top-level `error` event and no text, so it must throw —
- * otherwise the caller sees an empty string and reports success.
- */
-export function extractTextFromEventLines(stdout: string): string {
-  let text = '';
-  for (const line of stdout.split(/\r?\n/)) {
-    const t = line.trim();
-    if (!t.startsWith('{')) continue;
-    let ev: {
-      error?: unknown;
-      part?: { type?: string; text?: string; error?: unknown };
-    };
-    try { ev = JSON.parse(t); } catch { continue; }
-    if (ev.error) throw new Error(readOpencodeError(ev.error));
-    const p = ev.part;
-    if (!p) continue;
-    if (p.type === 'text' && typeof p.text === 'string') text += p.text;
-    else if (p.type === 'error') throw new Error(readOpencodeError(p.error ?? p));
-  }
-  return text.trim();
-}
 
 interface RunOutcome { content: string; usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number } }
 
-/**
- * Pull the token counts the CLI emits on its step_finish part, so the
- * OpenAI-shaped response carries real usage instead of zeros. The last part
- * wins, which is the final tally for the run.
- */
-export function extractUsage(stdout: string): RunOutcome['usage'] {
-  let out: RunOutcome['usage'];
-  for (const line of stdout.split(/\r?\n/)) {
-    const t = line.trim();
-    if (!t.startsWith('{')) continue;
-    let ev: { part?: { type?: string; tokens?: { input?: number; output?: number; total?: number } } };
-    try { ev = JSON.parse(t); } catch { continue; }
-    const p = ev.part;
-    if (p?.type !== 'step-finish' || !p.tokens) continue;
-    const input = Number(p.tokens.input ?? 0);
-    const output = Number(p.tokens.output ?? 0);
-    const total = Number(p.tokens.total ?? input + output);
-    out = { prompt_tokens: input, completion_tokens: output, total_tokens: total };
-  }
-  return out;
-}
 
 /**
- * Run `opencode run` and collect the answer.
+ * Run one turn through the OpenCode runtime adapter and collect the answer.
+ *
+ * The argument vector, the child environment, the credential injection and the
+ * event parsing all live inside the adapter — this function deliberately does
+ * not know that the CLI is invoked as `run --mode json --cwd <dir> -p`, or even
+ * that it has a `run` subcommand. That is the whole reason the adapter exists,
+ * and it is why this route (which is the one `ai:send` actually takes) cannot
+ * drift from the coder-engine route: both call the same adapter method.
  *
  * `onTextPart` is called with each text part the moment the CLI writes it,
  * which is what makes `stream: true` real: the HTTP response can be written
- * while the CLI is still running instead of after it exits. Granularity is
- * one part per assistant message — the CLI does not emit token-level text
- * deltas, so this cannot be finer without changing opencode itself.
+ * while the CLI is still running instead of after it exits.
  */
 async function runModel(model: string, prompt: string, onTextPart?: (text: string) => void): Promise<RunOutcome> {
-  const cli = await detectOpencodeCli();
-  if (!cli.available || !cli.path) {
-    throw new Error(cli.error ?? 'opencode is not installed.');
-  }
-  const { spawn } = await import('child_process');
-  const { buildCoderChildEnv } = await import('../coder/opencode');
   // process.cwd() is wherever the app happened to be launched; use Henry's own
   // workspace so a run never depends on the launch directory.
-  const { mkdirSync } = await import('fs');
   try { mkdirSync(CODER_WORKSPACE_DIR, { recursive: true }); } catch { /* best effort */ }
 
-  return new Promise<RunOutcome>((resolve, reject) => {
-    // Flag names follow the installed CLI's own contract. `--format` and `--dir` are
-    // not `omp` flags at all: it rejects them and exits 2 with
-    // "unknown flags: --format, --dir", so every OpenCode/Zen turn failed at launch
-    // before a token was ever requested. The correct spellings are `--mode json` for
-    // machine-readable output and `--cwd` for the working directory. `-p` (`--print`)
-    // makes the run non-interactive so it processes the prompt and exits rather than
-    // waiting on a TTY.
-    const child = spawn(
-      cli.path!,
-      ['run', '--mode', 'json', '--cwd', CODER_WORKSPACE_DIR, '-p', '--model', model, prompt],
-      {
-        env: buildCoderChildEnv(),
-        stdio: ['ignore', 'pipe', 'pipe'],
+  const controller = new AbortController();
+  activeRuns.add(controller);
+  const timer = setTimeout(
+    () => controller.abort(),
+    RUN_TIMEOUT_MS,
+  );
+  try {
+    const outcome = await ompAdapter.run({
+      prompt,
+      cwd: CODER_WORKSPACE_DIR,
+      model,
+      signal: controller.signal,
+      onEvent: (event) => {
+        if (event.kind === 'text') onTextPart?.(event.text);
       },
-    );
-    let stdout = '';
-    let stderr = '';
-    activeChildren.add(child);
-    const timer = setTimeout(() => {
-      try { child.kill('SIGTERM'); } catch { /* already gone */ }
-      reject(new Error(`opencode timed out after ${Math.round(RUN_TIMEOUT_MS / 1000)}s.`));
-    }, RUN_TIMEOUT_MS);
-
-    // Chunk boundaries do not align with event boundaries, so a partial line
-    // stays buffered until the rest of it arrives.
-    let stdoutPending = '';
-    child.stdout?.on('data', (d: Buffer) => {
-      stdout += d.toString();
-      if (!onTextPart) return;
-      stdoutPending += d.toString();
-      const lines = stdoutPending.split('\n');
-      stdoutPending = lines.pop() ?? '';
-      for (const line of lines) {
-        const t = line.trim();
-        if (!t.startsWith('{')) continue;
-        try {
-          const ev = JSON.parse(t) as { part?: { type?: string; text?: string } };
-          if (ev.part?.type === 'text' && typeof ev.part.text === 'string' && ev.part.text) {
-            onTextPart(ev.part.text);
+    });
+    if (!outcome.ok) {
+      throw new Error(
+        outcome.error ?? `opencode produced no text for ${model} (exit ${outcome.exitCode}).`,
+      );
+    }
+    return {
+      content: outcome.text,
+      usage: outcome.usage
+        ? {
+            prompt_tokens: outcome.usage.promptTokens,
+            completion_tokens: outcome.usage.completionTokens,
+            total_tokens: outcome.usage.totalTokens,
           }
-        } catch { /* a split or malformed line is not a reason to fail the run */ }
-      }
-    });
-    child.stderr?.on('data', (d: Buffer) => { stderr += d.toString(); });
-    child.on('error', (e: Error) => { clearTimeout(timer); reject(e); });
-    child.on('close', (code: number | null) => {
-      clearTimeout(timer);
-      activeChildren.delete(child);
-      if (code !== 0 && !stdout.includes('"type":"text"')) {
-        reject(new Error(`opencode exited with code ${code}: ${stderr.slice(-300)}`));
-        return;
-      }
-      try {
-        const text = extractTextFromEventLines(stdout);
-        if (!text) {
-          // Include the tail of both streams so the cause is visible in the UI
-          // rather than an opaque "no text".
-          reject(new Error(
-            `opencode produced no text for ${model} (exit ${code}). ` +
-            `stderr: ${stderr.slice(-200) || '(empty)'} | stdout tail: ${stdout.slice(-200) || '(empty)'}`,
-          ));
-        } else {
-          // Real token counts when the CLI reported them on step_finish.
-          resolve({ content: text, usage: extractUsage(stdout) });
-        }
-      } catch (e) {
-        reject(e);
-      }
-    });
-  });
+        : undefined,
+    };
+  } catch (e: unknown) {
+    if (controller.signal.aborted) {
+      throw new Error(`opencode timed out after ${Math.round(RUN_TIMEOUT_MS / 1000)}s.`);
+    }
+    throw e instanceof Error ? e : new Error(String(e));
+  } finally {
+    clearTimeout(timer);
+    activeRuns.delete(controller);
+  }
 }
-
 export interface BridgeChatPlan {
   model: string;
   prompt: string;
@@ -361,7 +295,7 @@ export function chatCompletionChunk(
 async function handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   // If the caller (Henry) aborts or the connection drops, kill the spawned CLI
   // rather than leaving it running for the rest of its 10-minute timeout.
-  const killOnClose = () => { for (const c of activeChildren) c.kill('SIGTERM'); };
+  const killOnClose = () => { for (const c of activeRuns) c.abort(); };
   res.on('close', killOnClose);
   const url = new URL(req.url ?? '/', 'http://127.0.0.1');
   const path = url.pathname.replace(/\/+$/, '') || '/';
@@ -378,7 +312,7 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
   }
 
   if (req.method === 'GET' && (path === '/v1/models' || path === '/models')) {
-    const { models } = await listOpencodeModels();
+    const models = await listOmpModels().catch(() => [] as OmpModel[]);
     return json(res, 200, {
       object: 'list',
       data: models.map((m) => ({
@@ -479,7 +413,7 @@ export async function ensureOpencodeBridge(): Promise<BridgeInfo> {
       error: e instanceof Error ? e.message : String(e),
     };
   }
-  const { models } = await listOpencodeModels().catch(() => ({ models: [] as OpencodeModel[] }));
+  const models = await listOmpModels().catch(() => [] as OmpModel[]);
   return {
     running: true,
     port: BRIDGE_PORT,
@@ -495,10 +429,10 @@ export function stopOpencodeBridge(): void {
 }
 
 /** Cached model list, so the settings list does not shell out on every render. */
-export async function bridgeModels(maxAgeMs = 60_000): Promise<OpencodeModel[]> {
+export async function bridgeModels(maxAgeMs = 60_000): Promise<OmpModel[]> {
   const now = Date.now();
   if (modelsCache && now - modelsCache.at < maxAgeMs) return modelsCache.models;
-  const { models } = await listOpencodeModels();
+  const models = await listOmpModels();
   modelsCache = { at: now, models };
   return models;
 }
@@ -521,16 +455,19 @@ export function registerOpencodeBridgeHandlers(getWindow: () => BrowserWindow | 
   void getWindow; // the bridge is a plain loopback server, no window needed
 
   ipcMain.handle('opencode:status', async () => {
-    const cli = await detectOpencodeCli();
-    if (!cli.available) {
-      return { available: false, version: undefined, path: undefined, error: cli.error };
+    const probe = await probeOmp();
+    if (!probe.available) {
+      return { available: false, version: undefined, path: undefined, error: probe.unavailableReason };
     }
-    return { available: true, version: cli.version, path: cli.path, error: undefined };
+    return { available: true, version: probe.version, path: probe.binaryPath, error: undefined };
   });
 
   ipcMain.handle('opencode:models', async () => {
-    const { ok, models, error } = await listOpencodeModels();
-    return { ok, models, error };
+    try {
+      return { ok: true, models: await listOmpModels(), error: undefined };
+    } catch (e: unknown) {
+      return { ok: false, models: [] as OmpModel[], error: e instanceof Error ? e.message : String(e) };
+    }
   });
 
   ipcMain.handle('opencode:bridgeStatus', async () => ensureOpencodeBridge());

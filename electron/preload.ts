@@ -660,6 +660,17 @@ contextBridge.exposeInMainWorld('henryAPI', {
   // optional probe always came back undefined.
   getLocalGatewayStatus: () => ipcRenderer.invoke('henry:localGatewayStatus'),
 
+  // ── Agent runtime discovery ─────────────────────────────
+  //
+  // Probing for installed agent software happens in the main process; the
+  // renderer asks over IPC and never touches a Node built-in. `discover` is
+  // read-only — it reports what is installed and what the user has selected,
+  // and changes neither. Only `selectAgentRuntime` writes, and only because the
+  // user pressed a button.
+  discoverAgentRuntimes: (opts?: { includeModels?: boolean }) =>
+    ipcRenderer.invoke('agentRuntimes:discover', opts),
+  getAgentRuntimeSelection: () => ipcRenderer.invoke('agentRuntimes:selection'),
+  selectAgentRuntime: (runtimeId: string) => ipcRenderer.invoke('agentRuntimes:select', runtimeId),
   // ── OpenCode (models + loopback bridge) ───────────────
   opencodeStatus: () => ipcRenderer.invoke('opencode:status'),
   opencodeModels: () => ipcRenderer.invoke('opencode:models'),

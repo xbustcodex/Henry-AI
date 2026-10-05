@@ -12,7 +12,7 @@ import { ipcMain } from 'electron';
 import type Database from 'better-sqlite3';
 import { encryptKey, decryptKey, migrateProviderKeys, canEncrypt } from './_keyStorage';
 import { guardedEvent, revokeChannelApprovals } from './validation';
-import { rehydrateOpencodeZenCredential, setOpencodeZenCredential } from '../coder/opencode';
+import { rehydrateOpencodeZenCredential, setOpencodeZenCredential } from '../runtimes/adapters/omp';
 import { OPENCODE_ZEN_PROVIDER_ID } from '../providers/classification';
 import { migrateRetiredProviders } from '../providers/retiredProviders';
 import { log } from '../lib/log';

@@ -19,6 +19,8 @@ import type {
   CatalogEntryState,
   CatalogListing,
 } from './types';
+
+import type { RuntimeDiscovery, SelectRuntimeResult } from './henry/agentRuntimes';
 import type { OllamaModelCatalogue } from '../electron/ipc/ollamaCapabilities';
 
 declare global {
@@ -832,6 +834,15 @@ declare global {
     opencodeModels?: () => Promise<{ ok: boolean; models: OpencodeModelInfo[]; error?: string }>;
     opencodeBridgeStatus?: () => Promise<{ running: boolean; port: number; baseUrl: string; modelCount: number; error?: string }>;
     opencodeTest?: (model: string) => Promise<{ ok: boolean; reply?: string; error?: string }>;
+    // ── Agent runtime discovery ───────────────────────────────────────────
+    //
+    // Probing installed agent CLIs is privileged work: it runs binaries. The
+    // renderer asks over IPC; it never imports child_process. `discover` is
+    // read-only — it reports what is installed and what the user already
+    // selected, and changes neither. Only `selectAgentRuntime` writes.
+    discoverAgentRuntimes?: (opts?: { includeModels?: boolean }) => Promise<RuntimeDiscovery>;
+    getAgentRuntimeSelection?: () => Promise<string | null>;
+    selectAgentRuntime?: (runtimeId: string) => Promise<SelectRuntimeResult>;
     /**
      * The models the running Ollama instance actually holds, with the
      * capabilities it reports for each. There is no static list behind this:

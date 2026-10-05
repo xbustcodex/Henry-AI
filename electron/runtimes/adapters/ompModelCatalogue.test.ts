@@ -12,8 +12,8 @@
  * a picker can act on.
  */
 import { describe, it, expect } from 'vitest';
-import { parseModelList } from './opencode';
-import { opencodeProviderIdForModel, OPENCODE_ZEN_PROVIDER_ID, OPENCODE_PROVIDER_ID } from '../providers/classification';
+import { parseModelList } from './omp';
+import { opencodeProviderIdForModel, OPENCODE_ZEN_PROVIDER_ID, OPENCODE_PROVIDER_ID } from '../../providers/classification';
 
 /**
  * Real `opencode models` table shape, including the three observed Zen ids from
