@@ -162,6 +162,37 @@ identity (which agent software is installed) is separate from provider identity 
 model service is selected). `opencode-zen` keeps its distinct provider id, its own
 catalogue, and its credential-optional status.
 
+## 5c. PRODUCT DECISION — provider cost & authentication policy (owner-ruled)
+
+- **Ollama is Henry's ONLY free AI-service path.** If Ollama is installed and usable models
+  are discovered, Henry may offer those local models with **no external API key and no
+  service fee**.
+- Henry **dynamically discovers** the user's actual Ollama installation/models. Never
+  bundle or invent models.
+- **Every non-Ollama AI/provider service requires the user's own** account,
+  credentials/API key, subscription, credits, or other provider-required payment.
+- **OpenCode/OMP/Zen is NOT to be advertised as Henry's free provider.** Remove claims such
+  as "Free models need no key" from OpenCode/Zen onboarding and help text.
+- **A model whose name containing `free` does not override this policy.**
+- **Runtime discovery remains automatic and credential-free.** Using a discovered
+  paid/external service is a **separate user-selected configuration step**.
+- Never bundle developer credentials, silently inherit them, fabricate them, or silently
+  substitute another provider.
+- If there is **no Ollama installation and no external provider configured**, Henry must
+  clearly explain that the user must configure a supported external service.
+- **Authentication, billing and availability errors must remain distinct. A gateway/server
+  outage must never be reported as "you need a key."**
+- **Prime Pi follows the same rule** when discovered: discovering the runtime does not imply
+  the remote models it can reach are free.
+- Onboarding, Settings, provider descriptions and active help documentation must all express
+  this same policy. Preserve the **runtime/provider separation** from `dc4ea4a`.
+
+### Supersedes earlier text
+This replaces §5a's statement that Zen is "credential-OPTIONAL — free Zen models run
+unauthenticated". That was true of *authentication* (verified: the Zen gateway answers
+anonymous requests without a 401), but it was being used to imply Zen was a free provider.
+It is not one. See §11j for the direct-CLI evidence.
+
 ## 6. Onboarding state machine
 
 `src/components/onboarding/stages.ts` = the ordered plan (pure data).
