@@ -674,6 +674,35 @@ required — but in practice anonymous free Zen is currently non-functional. Eit
 "free models need no key" copy should be softened until a Zen turn is proven to work, and
 whether Zen should still be offered as a no-key option while the gateway returns this.
 
+## 11k. UPGRADE-PROFILE ACCEPTANCE — PASS (installed build `3e95a31b…`)
+
+Took a copy of a genuinely configured profile, planted a retired Groq provider row
+(holding a fake key) and `companion_provider=groq`, then launched the installed build
+against that copy.
+
+| Requirement | Result |
+|---|---|
+| legitimate settings survive | `companion_provider=ollama`, `companion_model=llama3.2:3b`, `worker_provider=ollama` all intact |
+| legitimate provider rows survive | `providers` = `ollama`, `opencode-zen` |
+| retired Groq state NOT resurrected | planted `groq` row **deleted**; absent from every live table |
+| hosted/commercial state not fabricated | none created |
+| first-run onboarding does not re-run | `onboardingShown:false`, `setupWizardShown:false` — straight to the main Henry UI |
+| existing user data survives | 20 messages preserved |
+| planted credential never logged | not present in any log file |
+
+### Real defect this acceptance exposed
+The credential was **still recoverable from `henry.db` itself** after the row was deleted —
+SQLite leaves deleted content in freed pages without `PRAGMA secure_delete`. Fixed in
+`24f5b3a`: `initDatabase` now sets `secure_delete = ON`, with a regression test carrying a
+negative control so the guarantee cannot pass vacuously.
+
+### One behaviour to confirm is intended
+The planted `companion_provider=groq` ended up as **`ollama`**, not blanked. The migration
+is documented as *blanking* retired ids so no default is silently re-picked. Something then
+resolved the empty value to the local provider. That may be desirable under the new
+cost/auth policy (Ollama is the free path), but it is not what the migration doc says, and
+it should be confirmed as intended rather than inherited by accident.
+
 ## 12. Next recommended task, in priority order
 
 1. **Rebuild, package, install** from `9eb73af`; re-run the fresh-profile acceptance end
