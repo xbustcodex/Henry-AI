@@ -21,6 +21,12 @@ import type {
 } from './types';
 
 import type { RuntimeDiscovery, SelectRuntimeResult } from './henry/agentRuntimes';
+import type {
+  SystemMapExclusions,
+  SystemMapContents,
+  SystemMapScanProgress,
+  SystemMapScanOutcome,
+} from './henry/systemMap';
 import type { OllamaModelCatalogue } from '../electron/ipc/ollamaCapabilities';
 
 declare global {
@@ -843,6 +849,18 @@ declare global {
     discoverAgentRuntimes?: (opts?: { includeModels?: boolean }) => Promise<RuntimeDiscovery>;
     getAgentRuntimeSelection?: () => Promise<string | null>;
     selectAgentRuntime?: (runtimeId: string) => Promise<SelectRuntimeResult>;
+    // ── System Map ────────────────────────────────────────────────────────
+    //
+    // A consent-based, one-time inventory of this machine. `startSystemMapScan`
+    // is the only writer, and only ever because the user pressed a button; the
+    // exclusions it receives are the ones the user reviewed on screen. The map
+    // holds file names, types, sizes and dates — never file contents.
+    getSystemMapExclusions?: () => Promise<SystemMapExclusions>;
+    saveSystemMapExclusions?: (exclusions: SystemMapExclusions) => Promise<boolean>;
+    startSystemMapScan?: (exclusions: SystemMapExclusions) => Promise<SystemMapScanOutcome>;
+    cancelSystemMapScan?: () => Promise<void>;
+    getSystemMapContents?: () => Promise<SystemMapContents | null>;
+    onSystemMapProgress?: (cb: (progress: SystemMapScanProgress) => void) => () => void;
     /**
      * The models the running Ollama instance actually holds, with the
      * capabilities it reports for each. There is no static list behind this:

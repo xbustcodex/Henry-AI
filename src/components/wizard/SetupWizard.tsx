@@ -7,6 +7,7 @@ import PermissionsStage from '../onboarding/stages/PermissionsStage';
 import CompanionStage from '../onboarding/stages/CompanionStage';
 import PanelsStage from '../onboarding/stages/PanelsStage';
 import MemoryStage from '../onboarding/stages/MemoryStage';
+import SystemMapStage from '../onboarding/stages/SystemMapStage';
 import { discoverMachine } from '../onboarding/discoverMachine';
 import {
   StageScreen,
@@ -166,6 +167,9 @@ export default function SetupWizard({ onComplete }: Props) {
                   }
                 />
               </StageScreen>
+            )}
+            {stageId === 'systemMap' && (
+              <SystemMapStage onNext={advance} onSkip={() => skip('systemMap')} />
             )}
             {stageId === 'companion' && (
               <CompanionStage onNext={advance} onSkip={() => skip('companion')} />

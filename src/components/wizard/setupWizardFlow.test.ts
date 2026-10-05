@@ -141,6 +141,12 @@ describe('the whole sequence, end to end', () => {
     const keyField = await screen.findByPlaceholderText('sk-or-…');
     fireEvent.change(keyField, { target: { value: 'sk-or-not-a-real-key' } });
     fireEvent.click(screen.getByText('Continue →'));
+
+    // The optional System Map stage, declined on the way through — the walk is
+    // unchanged by it existing.
+    await waitFor(() => expect(text()).toContain('Build Henry'));
+    fireEvent.click(screen.getByText('Skip'));
+
     await waitFor(() => expect(text()).toContain('Henry on your phone'));
 
     fireEvent.click(screen.getByText("Skip — I'll pair my phone later"));

@@ -169,9 +169,34 @@ catalogue, and its credential-optional status.
 `src/components/onboarding/OnboardingWizard.tsx` = the overlay frame, **not a gate**.
 
 Stage order: `welcome, howItWorks, accessibility (macOS), screen (macOS), ai ('Your
-brain', REQUIRED), companion, panels, memory, done`.
+brain', REQUIRED), systemMap (desktop only, optional), companion, panels, memory, done`.
+
+`systemMap` is the System Map: an optional, explicitly-skippable, consent-based one-time
+inventory of this computer. Its UI is `src/components/systemMap/` + `stages/SystemMapStage.tsx`
+and its renderer contract is `src/henry/systemMap.ts`, which `electron/ipc/systemMap.ts`
+imports directly so both sides share one set of types. The exclusions are reviewed *before*
+the scan and the reviewed set is what is sent; nothing is read on mount, on refresh, or
+without a button press. Cancelling keeps nothing — a partial map is never presented as a
+map. `electron/systemmap/` records names, types, sizes and dates only; it never reads a
+file's contents. Rebuild, the contents view and the exclusions live in
+`settings/SystemMapPanel.tsx`. Newly discovered agent runtimes are *offered* through
+`selectAgentRuntime` and are never auto-selected.
+
+Two scanner invariants that are load-bearing but read as arbitrary choices. Neither
+fails loudly if broken, so do not "tidy" either away:
+- **Test fixtures live under `$HOME`, never `/tmp`.** `/tmp` is excluded by the
+  default exclusions, so a fixture placed there is filtered out *before a single
+  assertion runs* — the test passes for the wrong reason, or fails for a reason that
+  points at the scanner rather than at the fixture.
+- **"Never reads file contents" is structural, not asserted.** It holds because
+  `MetadataFs` (`electron/systemmap/fsMetadata.ts`) has exactly `readDir` and `stat`
+  and nothing else. Adding a third method removes the guarantee silently, in the same
+  commit, with no test failing. If one is ever added, update `CONTENTS_NEVER_READ` and
+  the on-screen copy in the same change — or do not add it.
 
 Rules that must hold:
+- Nothing scans without a button press. `systemMap:scan/start` is the only door, and the
+  exclusions it receives are the ones the user reviewed — never re-merged with defaults.
 - The AI stage is the **only** required stage and blocks until provider + model exist.
 - Unavailable stages carry a **reason**; never advance past one by index.
 - Every optional stage has an explicit `Skip — set up later`.

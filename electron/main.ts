@@ -14,6 +14,7 @@ import { registerSourceFileHandlers } from './ipc/sourceFiles';
 import { registerHenryLocalBrainGatewayIpc } from './ipc/henryLocalBrainGateway';
 import { registerOpencodeBridgeHandlers, stopOpencodeBridge } from './ipc/opencodeBridge';
 import { registerAgentRuntimeHandlers } from './ipc/agentRuntimes';
+import { registerSystemMapHandlers, selectionReaderFor, type SystemMapHost } from './ipc/systemMap';
 import { registerRuntimeHandlers, recordStartupFailure, clearStartupFailure, setRuntimeWindowGetter } from './ipc/runtimeDiagnostics';
 import { registerTaskBrokerHandlers } from './ipc/taskBroker';
 import { registerMemoryHandlers } from './ipc/memory';
@@ -570,6 +571,13 @@ app.whenReady().then(() => {
   registerHenryLocalBrainGatewayIpc(db);
   registerOpencodeBridgeHandlers(getMainWindow);
   registerAgentRuntimeHandlers(db);
+
+  // The System Map is a consent-based inventory of this machine. Registering the
+  // handlers does NOT start a scan: `systemMap:scan/start` is the only door, and
+  // it is opened by a button the user presses after reviewing the exclusions. An
+  // app that silently started walking the disk on launch would be exactly the
+  // behaviour this feature promises it does not have.
+  registerSystemMapHandlers(db, systemMapHost(db), getMainWindow);
   registerTaskBrokerHandlers(db, getMainWindow, henryDir);
   registerMemoryHandlers(db);
   registerMemoryGraphHandlers(db);
@@ -611,6 +619,42 @@ app.whenReady().then(() => {
   registerSchedulerHandlers(henryScheduler, db);
   henryScheduler.init();
 
+
+  // ── The machine the System Map describes ──────────────────────────────────
+  //
+  // Built here rather than inside the map module so that everything about the
+  // host — which folders are scanned, which PATH is in play, who the user is —
+  // is decided in one visible place, and so a test can construct the same shape
+  // without an Electron runtime.
+  //
+  // The roots are deliberately modest. A map of the whole disk would be mostly
+  // operating-system files, which the exclusions drop anyway, and the folders a
+  // user asks Henry about are their own: their home, and their applications.
+  function systemMapHost(database: typeof db): SystemMapHost {
+    const homeDir = app.getPath('home');
+    const platform = process.platform;
+    const roots = [
+      homeDir,
+      ...(platform === 'darwin'
+        ? [path.join(homeDir, 'Applications')]
+        : platform === 'win32'
+          ? [path.join(app.getPath('appData'), 'Roaming')]
+          : [path.join(homeDir, '.local/share/applications')]),
+    ].filter((dir) => fs.existsSync(dir));
+
+    return {
+      platform,
+      homeDir,
+      // The folder holding every home directory, so "someone else's folder" can
+      // be decided structurally rather than by guessing at name patterns.
+      usersRoot: path.dirname(homeDir),
+      pathDirectories: (process.env.PATH ?? '').split(path.delimiter).filter(Boolean),
+      roots,
+      // Reads the user's chosen agent runtime and nothing else. A scan can offer
+      // a newly installed runtime; it has no writer and so cannot select one.
+      readSelectedRuntimeId: selectionReaderFor(database).readSelectedRuntimeId,
+    };
+  }
   // ── Companion Sync Bridge ────────────────────────────────────────────────
   setSyncDb(db);
   registerSyncBridgeIpc();

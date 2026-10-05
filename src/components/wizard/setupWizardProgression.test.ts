@@ -44,9 +44,16 @@ const discoveredModel: LocalModelInfo = {
 
 const saveSetting = vi.fn(async (_key: string, _value: string) => true);
 
+/**
+ * The one call in this flow that would read the user's disk if it were ever
+ * pressed. Declared on the bridge so the walk can prove that it was not.
+ */
+const startSystemMapScan = vi.fn(async () => ({ status: 'cancelled' as const }));
+
 beforeEach(() => {
   localStorage.clear();
   saveSetting.mockClear();
+  startSystemMapScan.mockClear();
   window.henryAPI = {
     ollamaModels: async () => ({ models: [discoveredModel], baseUrl: 'http://127.0.0.1:11434', runtime: 'ollama' as const }),
     ollamaIsInstalled: async () => ({ installed: true, running: true }),
@@ -58,6 +65,7 @@ beforeEach(() => {
     getSettings: async () => ({}),
     saveMemoryFact: async () => ({ ok: true }),
     computerRunShell: async () => undefined,
+    startSystemMapScan,
   } as unknown as typeof window.henryAPI;
   useStore.setState({ providers: [], settings: {}, setupComplete: false });
 });
@@ -95,8 +103,16 @@ async function walkForward(): Promise<string[]> {
     target: { value: 'sk-or-not-a-real-key' },
   });
   fireEvent.click(screen.getByText('Continue →'));
+
+  // The System Map stage sits directly after the required one and is optional.
+  // Declining it is one click, and it reads the disk not at all.
+  await waitFor(() => expect(text()).toContain('Build Henry'));
+  seen.push(text());
+  fireEvent.click(screen.getByText('Skip'));
+
   await waitFor(() => expect(text()).toContain('Henry on your phone'));
   seen.push(text());
+  expect(startSystemMapScan).not.toHaveBeenCalled();
 
   fireEvent.click(screen.getByText("Skip — I'll pair my phone later"));
   await waitFor(() => expect(text()).toContain('Everything in the sidebar'));
@@ -198,7 +214,9 @@ describe('the optional second brain, on the one brain stage', () => {
 
     await waitFor(() => expect(saveSetting).toHaveBeenCalledWith('worker_model', 'gpt-4o'));
     expect(saveSetting).toHaveBeenCalledWith('worker_provider', 'openai');
-    // Forward navigation continues past it — it is not another stage.
+    // Forward navigation continues past it — it is not another stage. The
+    // optional System Map stage is declined on the way, as it is everywhere.
+    fireEvent.click(screen.getByText('Skip'));
     await waitFor(() => expect(text()).toContain('Henry on your phone'));
   }, 30_000);
 

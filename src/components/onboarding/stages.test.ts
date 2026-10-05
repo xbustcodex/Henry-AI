@@ -59,6 +59,7 @@ describe('a fresh profile reaches the first stage', () => {
       'welcome',
       'howItWorks',
       'ai',
+      'systemMap',
       'companion',
       'panels',
       'memory',
@@ -111,7 +112,7 @@ describe('stages this machine does not need', () => {
     // macOS-only stage — which renders nothing off macOS. A blank screen with no
     // way forward was the symptom; walking the available list is the fix.
     expect(nextStageId(plan, 'howItWorks')).toBe('ai');
-    expect(nextStageId(plan, 'ai')).toBe('companion');
+    expect(nextStageId(plan, 'ai')).toBe('systemMap');
   });
 });
 
@@ -183,6 +184,6 @@ describe('the required stage blocks until it is satisfied', () => {
   it('lets the flow leave the required stage once the choice is satisfied', () => {
     const plan = buildStagePlan(LINUX_DESKTOP);
     expect(blockingReason(plan, 'ai', configuredByUser)).toBeNull();
-    expect(nextStageId(plan, 'ai')).toBe('companion');
+    expect(nextStageId(plan, 'ai')).toBe('systemMap');
   });
 });

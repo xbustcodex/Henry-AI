@@ -671,6 +671,31 @@ contextBridge.exposeInMainWorld('henryAPI', {
     ipcRenderer.invoke('agentRuntimes:discover', opts),
   getAgentRuntimeSelection: () => ipcRenderer.invoke('agentRuntimes:selection'),
   selectAgentRuntime: (runtimeId: string) => ipcRenderer.invoke('agentRuntimes:select', runtimeId),
+
+  // ── System Map ────────────────────────────────────────────────────
+  //
+  // The scan walks the disk in the main process and reports METADATA ONLY:
+  // names, kinds, sizes, dates and containment. No file's contents are read,
+  // opened or stored, and the exclusions the user reviewed are the exclusions
+  // that are enforced.
+  //
+  // Every function here is OPTIONAL so a web build, or any renderer running
+  // without the main process, degrades to "the map is unavailable" instead of
+  // throwing. `startSystemMapScan` resolves with a terminal outcome — completed,
+  // cancelled or failed — so completion is never inferred from the absence of
+  // progress events.
+  getSystemMapExclusions: () => ipcRenderer.invoke('systemMap:exclusions'),
+  saveSystemMapExclusions: (exclusions: unknown) =>
+    ipcRenderer.invoke('systemMap:exclusions/save', exclusions),
+  startSystemMapScan: (exclusions: unknown) =>
+    ipcRenderer.invoke('systemMap:scan/start', exclusions),
+  cancelSystemMapScan: () => ipcRenderer.invoke('systemMap:scan/cancel'),
+  getSystemMapContents: () => ipcRenderer.invoke('systemMap:contents'),
+  onSystemMapProgress: (cb: (progress: unknown) => void) => {
+    const handler = (_: IpcRendererEvent, progress: unknown) => cb(progress);
+    ipcRenderer.on('systemMap:progress', handler);
+    return () => ipcRenderer.removeListener('systemMap:progress', handler);
+  },
   // ── OpenCode (models + loopback bridge) ───────────────
   opencodeStatus: () => ipcRenderer.invoke('opencode:status'),
   opencodeModels: () => ipcRenderer.invoke('opencode:models'),

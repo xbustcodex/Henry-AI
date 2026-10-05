@@ -36,6 +36,7 @@ export type StageId =
   | 'accessibility'
   | 'screen'
   | 'ai'
+  | 'systemMap'
   | 'companion'
   | 'panels'
   | 'memory'
@@ -87,13 +88,26 @@ export interface StagePlanEntry {
  * ordinary forward walk: once on `ai`, then again on `engines`. Brain
  * selection happens on `ai` and nowhere else; the optional second-brain
  * assignment it used to own is part of that one stage now.
+ *
+ * `systemMap` sits directly after the required stage. It is optional and
+ * explicitly skippable, but it is offered early on purpose: it is the one
+ * stage that stops Henry starting every conversation from scratch, and the
+ * further down the walk it sits the less a first-launch user is likely to see
+ * it at all.
  */
-const STAGE_ORDER: readonly { id: StageId; title: string; required: boolean; macOnly?: boolean }[] = [
+const STAGE_ORDER: readonly {
+  id: StageId;
+  title: string;
+  required: boolean;
+  macOnly?: boolean;
+  desktopOnly?: boolean;
+}[] = [
   { id: 'welcome', title: 'Welcome', required: false },
   { id: 'howItWorks', title: 'How to use Henry', required: false },
   { id: 'accessibility', title: 'Accessibility access', required: false, macOnly: true },
   { id: 'screen', title: 'Screen recording', required: false, macOnly: true },
   { id: 'ai', title: 'Your brain', required: true },
+  { id: 'systemMap', title: 'Build Henry’s system map', required: false, desktopOnly: true },
   { id: 'companion', title: 'Henry on your phone', required: false },
   { id: 'panels', title: 'Sidebar tour', required: false },
   { id: 'memory', title: 'Teach Henry about you', required: false },
@@ -105,6 +119,15 @@ const STAGE_ORDER: readonly { id: StageId; title: string; required: boolean; mac
  *
  * Availability is a property of the machine, not of the user: a Linux user is
  * never asked to grant Accessibility, because there is no such toggle to grant.
+ */
+/**
+ * Build the stages this launch will actually walk, in order.
+ *
+ * Availability is a property of the machine, not of the user: a Linux user is
+ * never asked to grant Accessibility, because there is no such toggle to grant,
+ * and a browser build is never asked to scan a disk, because there is no disk
+ * to scan. Both are marked unavailable with a reason and taken off the walk
+ * rather than shown as a stage that cannot do its one job.
  */
 export function buildStagePlan(discovery: MachineDiscovery): StagePlanEntry[] {
   const stages: StagePlanEntry[] = [];
@@ -118,6 +141,18 @@ export function buildStagePlan(discovery: MachineDiscovery): StagePlanEntry[] {
         available: false,
         unavailableReason:
           'macOS asks the user to grant this. On this platform the equivalent capability is detected automatically, so there is nothing to grant.',
+      });
+      continue;
+    }
+
+    if (stage.desktopOnly && discovery.platform === 'web') {
+      stages.push({
+        id: stage.id,
+        title: stage.title,
+        required: false,
+        available: false,
+        unavailableReason:
+          'This build runs in a browser, so there is no local disk to inventory. Build the system map from the desktop app.',
       });
       continue;
     }
