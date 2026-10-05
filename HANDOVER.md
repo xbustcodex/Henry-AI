@@ -867,6 +867,56 @@ target build died at the Vite step; and a builder flag with a separate value wor
 that word to Vite as a bare positional. Fixed by filtering builder-only flags (and their
 value words) out of the Vite arguments. Without this the new target system was unusable.
 
+## 12e. BLOCKER — installed 3.0.8 cannot start: wrong-architecture better-sqlite3
+
+**The owner's machine is currently in a FAILED state and needs this resolved.**
+
+### Symptom
+Installed Henry 3.0.8 writes `startup-failure.json` and never reaches a window:
+```
+Error: ...\Henry AI\resources\app.asar.unpacked\node_modules\better-sqlite3\build\Release\
+better_sqlite3.node is not a valid Win32 application.
+```
+
+### Root cause (diagnosed to the exact mechanism)
+The packaged native binding is **ARM64** while the machine is x64:
+```
+packaged : PE32+ executable for MS Windows 6.02 (DLL), ARM64
+required : PE32+ executable for MS Windows 6.00 (DLL), x86-64
+```
+The correct binary is obtainable and verified:
+```
+cd node_modules/better-sqlite3
+npx prebuild-install --platform=win32 --arch=x64 --runtime=electron --target=31.7.7
+  -> PE32+ ... x86-64   (correct)
+```
+…but it is **overwritten before packaging completes**. `package.json` has
+`"postinstall": "npx @electron/rebuild || true"`. On this Linux build host that script
+reinstalls a foreign prebuild, so the verified x64 Windows binary is clobbered. Setting
+`build.npmRebuild: false` does NOT stop it, because the clobber comes from the postinstall
+hook, not from electron-builder's own rebuild step. Confirmed by md5: `node_modules` and
+the packaged copy share the same ARM64 hash after a full build.
+
+### Fix to apply
+1. Make the native binding correct for the packaging host's TARGET, not the host: either
+   remove/neutralise the blanket `postinstall` electron-rebuild, or have it target
+   `--platform=win32 --arch=x64 --target=31.7.7` when cross-packaging for Windows.
+2. Add a **packaging guard** that asserts the architecture of every unpacked `.node` in the
+   built artifact matches the target. This bug shipped silently through a green package
+   guard — the guard checked presence, not architecture. That is the real lesson.
+3. Rebuild Owner, reinstall, then re-run first-run acceptance.
+
+### State of the owner's machine
+- Old 3.0.7 was backed up to `C:\Users\xkali\henry-backup-20261005` (159 MB) and uninstalled;
+  its install directory is fully removed (0 residual files). The earlier historical backup
+  is retained.
+- Previous live user data was moved aside to
+  `AppData\Roaming\henry-ai-desktop.superseded-20261005` (not deleted) and a fresh empty
+  profile created, so 3.0.8 runs a genuine first run when it starts.
+- **3.0.8 is installed but will not start** until the binding is corrected. Nothing else on
+  the machine was touched: Ollama, OMP, PrimePi, PrimeRoute, projects and other
+  applications' credentials were not modified.
+
 ## 12. Next recommended task, in priority order
 
 1. **Rebuild, package, install** from `9eb73af`; re-run the fresh-profile acceptance end

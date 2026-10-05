@@ -280,7 +280,7 @@
         ]
       }
     ],
-    "npmRebuild": true,
+    "npmRebuild": false,
     "deb": {
       "depends": [
         "libgtk-3-0 | libgtk-3-0t64",
