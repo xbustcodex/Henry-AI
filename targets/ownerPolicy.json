@@ -1,0 +1,47 @@
+{
+  "_comment": [
+    "THE single source of truth for Henry's Owner / Standard split, as data so",
+    "that TypeScript (targets/ownerPolicy.ts, the guards), the Vite plugin",
+    "(targets/viteOwnerTarget.ts) and the plain-Node build wrapper",
+    "(scripts/henry-build.mjs) all read the same bytes. There is no second",
+    "place to update and therefore no way for the build and its guard to",
+    "disagree about what is owner-only.",
+    "",
+    "Nothing under src/ or electron/ may import this file: it names owner-only",
+    "markers, so bundling it into an artifact would defeat the mechanism.",
+    "targets/ownerBoundary.test.ts enforces that.",
+    "",
+    "The *_MARKERS lists are EMPTY. That is the honest state: there is no",
+    "owner-only PrimeTech implementation in the repository today (ledger §8.2).",
+    "The first owner-only feature must add its identifiers here in the same",
+    "commit that adds the code."
+  ],
+
+  "ownerOnlyDirs": ["electron/owner", "src/owner"],
+
+  "ownerImportRoots": ["electron/main.ts", "electron/preload.ts", "src/main.tsx"],
+
+  "ownerOnlyResourceDirs": [],
+
+  "ownerSpecifierMain": "@henry/owner",
+
+  "ownerSpecifierRenderer": "@henry/owner-ui",
+
+  "ownerOnlyIdentifiers": [],
+
+  "ownerOnlyEndpointPrefixes": [],
+
+  "ownerOnlySecretMarkers": [],
+
+  "forbiddenInEveryArtifact": ["/api/admin/", "/api/security/"],
+
+  "sharedMarketplaceIpcChannels": ["marketplace:list", "marketplace:states", "marketplace:fetch"],
+
+  "sharedMarketplaceManifestId": "primech-marketplace",
+
+  "sharedMarketplaceSources": [
+    "electron/ipc/marketplace.ts",
+    "src/components/marketplace/MarketplacePanel.tsx",
+    "resources/marketplace/marketplace.json"
+  ]
+}

@@ -55,6 +55,12 @@ import { registerVoiceSttHandlers } from './voice/stt';
 import { registerVoiceGreetingHandlers } from './voice/greeting';
 import { registerVoiceTtsHandlers } from './voice/tts';
 import { registerIntegrationHandlers } from './integrations/ipc';
+// The owner seam. `@henry/owner` is `electron/owner/index.ts` in an OWNER
+// build and `targets/ownerStub.ts` in a STANDARD one — the choice is made by
+// the bundler, not by a runtime branch, so this line is identical in both and
+// no owner-only code is reachable from a Standard artifact. Shared code must
+// not branch on the target; see targets/ownerPolicy.ts.
+import { ownerSeam } from '@henry/owner';
 import { log } from './lib/log';
 import type Database from 'better-sqlite3';
 import {
@@ -610,6 +616,13 @@ app.whenReady().then(() => {
   // `integration:status` reads credentials and must not force the database open
   // at registration time.
   registerIntegrationHandlers(getDb, getMainWindow);
+  // Owner's private capabilities, if this is an owner build. Unconditional
+  // call, empty result in a standard build. Owner-only IPC channels land in
+  // the same `ipcMain` namespace as everything else and therefore inherit the
+  // same installIpcBoundary gate — an owner-only channel is not a way around
+  // the approval model.
+  ownerSeam.register({ registerHandler: (channel, handler) => ipcMain.handle(channel, (_e, ...args) => handler(...args)) });
+
 
   // ── Agent Scheduler (Henry's Routines) ───────────────────────────────────
   // Registered after the agent tool kit so the registry is populated before any

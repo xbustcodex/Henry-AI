@@ -28,6 +28,9 @@
       ],
       "@capacitor-mlkit/barcode-scanning": [
         "./src/stubs/barcodeScanning.ts"
+      ],
+      "@henry/owner-ui": [
+        "./src/owner/index.ts"
       ]
     },
     "typeRoots": [

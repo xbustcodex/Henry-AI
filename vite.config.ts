@@ -4,14 +4,38 @@ import electron from 'vite-plugin-electron';
 import electronRenderer from 'vite-plugin-electron-renderer';
 import path from 'path';
 import { buildSync } from 'esbuild';
+import { ownerTargetPlugin } from './targets/viteOwnerTarget';
+import { resolveTarget } from './targets/ownerPolicy';
+
+// Henry builds two targets from this one config. The plugin reads HENRY_TARGET
+// and, for a standard build, resolves `@henry/owner` to an empty stub so no
+// owner-only module is read. It must come first so it sees imports before any
+// other resolver. See targets/viteOwnerTarget.ts.
+const ownerTarget = ownerTargetPlugin({ root: __dirname });
+
+/**
+ * Which target this build is producing, resolved once from HENRY_TARGET.
+ * The vite plugin reads it itself; this exists for the esbuild preload
+ * re-emit, which runs outside vite and therefore outside the plugin.
+ */
+function ownerTargetPathForBuild(): 'owner' | 'standard' {
+  return resolveTarget(process.env.HENRY_TARGET);
+}
 
 export default defineConfig({
   plugins: [
     react(),
+    ownerTarget,
     electron([
       {
         entry: 'electron/main.ts',
         vite: {
+          // vite-plugin-electron runs each entry as its OWN vite build and does
+          // not inherit the top-level plugin array, so the owner-target
+          // exclusion has to be repeated per entry. Without this the main and
+          // preload bundles would resolve `@henry/owner` themselves — or fail
+          // to resolve it at all in a standard build.
+          plugins: [ownerTargetPlugin({ root: __dirname })],
           build: {
             outDir: 'dist-electron',
             rollupOptions: {
@@ -48,7 +72,13 @@ export default defineConfig({
               },
             },
           },
+          // vite-plugin-electron runs each entry as its OWN vite build and does
+          // not inherit the top-level plugin array, so the owner-target
+          // exclusion has to be repeated per entry. Without this the main and
+          // preload bundles would resolve `@henry/owner` themselves — or fail
+          // to resolve it at all in a standard build.
           plugins: [
+            ownerTargetPlugin({ root: __dirname }),
             {
               // vite-plugin-electron under vite 8 (rolldown) IGNORES the
               // output.format above and emits ESM (`import ... from "electron"`)
@@ -63,6 +93,22 @@ export default defineConfig({
                   bundle: true,
                   format: 'cjs',
                   platform: 'node',
+                  // The esbuild re-emit bypasses vite entirely, so it needs its
+                  // own alias for the owner seam. Without this, a preload that
+                  // imports `@henry/owner` fails to resolve — or, worse, an
+                  // esbuild-resolved owner path would ship unexcluded into
+                  // preload.cjs. Resolved the way vite resolves it: the stub for
+                  // a standard build, the real module for an owner one.
+                  alias: {
+                    '@henry/owner': path.resolve(
+                      __dirname,
+                      ownerTargetPathForBuild() === 'owner' ? 'electron/owner/index.ts' : 'targets/ownerStub.ts'
+                    ),
+                    '@henry/owner-ui': path.resolve(
+                      __dirname,
+                      ownerTargetPathForBuild() === 'owner' ? 'src/owner/index.ts' : 'targets/ownerStub.ts'
+                    ),
+                  },
                   external: ['electron'],
                   outfile: 'dist-electron/preload.cjs',
                 });

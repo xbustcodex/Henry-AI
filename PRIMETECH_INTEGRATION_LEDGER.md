@@ -712,3 +712,289 @@ provider is an arbitrary user-supplied OpenAI-compatible endpoint:
 
 **Workstream A is documentation only. No PrimeRoute client is implemented here, and none should
 be until §7.6 blocker 1 and §7.7 G12–G14 have been decided.**
+
+---
+
+## 8. Owner Henry / Standard Henry — the separation architecture
+
+Sections 1–7 inventory what Henry has and map the PrimeRoute API. This section records how the
+two production targets are kept apart, **what is owner-only today (which is: nothing), and exactly
+what the guards do and do not prove.**
+
+Extends the ledger; replaces nothing in it. §7.4's `NEVER IN HENRY` marking is load-bearing here
+and is enforced by this architecture (§8.5).
+
+### 8.1 The rule, and why it is not a fork
+
+**ONE Henry core. Two production targets.**
+
+| | Owner Henry | Standard Henry |
+|---|---|---|
+| Who receives it | the owner | everyone else |
+| PrimeTech Marketplace | present | **present** |
+| Authorised private PrimeTech integration | may be present | **structurally absent** |
+| Owner credentials, infrastructure config, machine identity, financial credentials | may be present | **structurally absent** |
+| Owner-only control commands, private admin interfaces, business-control implementation | may be present | **structurally absent** |
+
+There is no second codebase, no forked directory, no branch, no `henry-standard/` tree. The
+Owner build *is* the Standard build plus the owner's private modules. That is the only shape in
+which "Standard excludes owner code" is a property of the build rather than a promise about two
+trees staying in sync.
+
+**Why "structurally absent" and not "hidden".** A hidden owner feature is still in the artifact:
+discoverable by unzipping an AppImage, present in a source map, sitting in a string table, and
+reachable by anyone who flips one constant. Hidden is a UI decision, and a UI decision does not
+survive contact with someone who has the installer. Absence is a build decision.
+
+**The Marketplace is not owner-only, and this section is where that is pinned.** Marketplace
+*availability* — a catalogue of PrimeTech apps anyone may browse — is generic Henry product
+functionality. Owner *operational authority* over PrimeTech is not. Conflating the two is the
+single most likely mistake this architecture invites, because both are "PrimeTech". The
+distinction is asserted, not merely intended (§8.6).
+
+### 8.2 What is owner-only today: NOTHING
+
+Stated plainly because the rest of this section is only credible if it is:
+
+- **There is no owner-only PrimeTech implementation in the repository.** §7 is a mapped API
+  contract and a gap list, not code. `grep` for `primeroute`/`prime_route` across `electron/`,
+  `src/` and `resources/` returns nothing.
+- `electron/owner/index.ts` exports an **empty** `OWNER_ONLY_FEATURES` list. `src/owner/index.ts`
+  exports an **empty** `OWNER_ONLY_UI_FEATURES` list. This is the actual state, written as an
+  empty list rather than as a stub that returns plausible values.
+- `targets/ownerPolicy.json`'s `ownerOnlyIdentifiers`, `ownerOnlyEndpointPrefixes` and
+  `ownerOnlySecretMarkers` are all **empty**.
+- Therefore **the Owner and Standard artifacts of Henry 3.0.8 are byte-for-byte equivalent in
+  substance**: the same renderer, the same main process, the same Marketplace. The difference the
+  build makes today is *zero*, which is the correct and honest answer.
+
+This matters for reading the rest of §8. A separation that has never had anything to separate has
+not been *tested* by shipping. It has been tested by mutation — deliberately breaking the
+mechanism and confirming the guards fail (§8.7). That is a weaker claim than "this has protected a
+real secret" and a stronger claim than "the directories look right".
+
+**Prime Harness Agent is not owner-only implementation.** `RESERVED_RUNTIME_IDS`
+(`electron/runtimes/registry.ts:40`) is a reserved *name* in the shared runtime registry, with no
+adapter and no probe. It is Henry product data, present in both targets, and this section changes
+nothing about it.
+
+### 8.3 The mechanism
+
+Four pieces. Each is one file, and each is in exactly one place.
+
+**1. The policy — `targets/ownerPolicy.json`, read as `targets/ownerPolicy.ts`.**
+One source of truth for: the two target names, the owner-only directories, the owner seam
+specifiers, the owner-only marker lists, the never-in-either-target list, and the shared
+Marketplace markers. JSON rather than TypeScript so that `scripts/henry-build.mjs` — plain Node, no
+build step — reads the *same bytes* the guards do. **The build and its guard cannot disagree about
+what is owner-only, because there is only one list and both read it.**
+Nothing under `src/` or `electron/` may import this file: it *names* the owner-only markers, so
+bundling it into an artifact would defeat the mechanism and make the guards fail on a correct
+build. Enforced.
+
+**2. The seam — `electron/owner/index.ts` and `src/owner/index.ts`.**
+The owner-only surface. `electron/main.ts` imports `{ ownerSeam } from '@henry/owner'` and calls
+`ownerSeam.register(...)` **unconditionally**. Shared core never learns what an owner-only feature
+is; it learns only "something may register handlers and report which channels it turned on"
+(`targets/ownerSeamTypes.ts`). Owner-only IPC registers on the same `ipcMain` as everything else
+and therefore inherits the same `installIpcBoundary` approval gate from §3 — an owner-only
+channel is not a side door around the authority model.
+
+**3. The exclusion — `targets/viteOwnerTarget.ts`, a Vite plugin.**
+For a Standard build, `@henry/owner` resolves to `targets/ownerStub.ts`: same exported names, no
+behaviour. **The real owner module is never read, never parsed, and never enters the module
+graph.** This is resolution-time exclusion, not dead-code elimination. It does not depend on
+minification, mangling, a lucky `if`, or a bundler optimising correctly.
+
+This is the honest core of the mechanism, and it is worth being precise about why tree-shaking was
+*not* used: Vite cannot prove `if (process.env.HENRY_TARGET === 'owner')` is statically false, so
+the module stays in the bundle and only its behaviour is skipped. Redirecting at resolution removes
+it from the graph, which is a stronger guarantee.
+
+A **backstop**: any relative or root-relative import that reaches into an owner-only directory
+directly makes a Standard build **fail with an actionable message**, naming the file and the two
+ways to fix it. That path is a boundary violation rather than a seam call, and silently
+redirecting it to the stub would surface as `MISSING_EXPORT` — an error pointing at the stub
+instead of at the violation. `ownerBoundary.test.ts` rejects such imports in source before the
+build ever runs.
+
+The plugin is wired into **three** build paths, because each is a separate bundler invocation:
+`vite.config.ts` (top level), the `vite-plugin-electron` sub-builds for `main.ts` and `preload.ts`
+(they do **not** inherit the top-level plugin array), the esbuild `preload.cjs` re-emit (which
+bypasses Vite entirely and needs its own alias), and `vite.web.config.ts` for the web build.
+
+**4. The build entry — `scripts/henry-build.mjs`.**
+`node scripts/henry-build.mjs <owner|standard> [platform flags]`, or
+`HENRY_TARGET=owner npm run build:linux`. Exports `HENRY_TARGET` to the whole process tree, so
+Vite and electron-builder cannot disagree. An unrecognised target is **an error, not a fallback**.
+**Default target is `standard`**: a build with no explicit target must never be the owner's
+private one. Guessing "owner" means an artifact nobody audited carries the owner's integration to
+everybody; guessing "standard" means the owner runs a build missing their own feature, which is a
+bug they notice. Only the first is a disclosure.
+
+### 8.4 What the toolchain can and cannot do — stated plainly
+
+| Mechanism | Standard-build guarantee |
+|---|---|
+| **Vite alias to stub** (`@henry/owner` → `targets/ownerStub.ts`) | **Real.** Static imports of owner code are removed from the module graph before bundling. Not a minification hope. |
+| **Backstop refusal** on direct relative imports into owner dirs | **Real.** The build stops. |
+| **`OWNER_ONLY_RESOURCE_DIRS` → `extraResources` filtering** | **Real for declared directories.** `scripts/henry-build.mjs` strips them from a Standard build's `extraResources`. Empty today because no owner resource exists; a new one must be declared or the guard fails. |
+| **electron-builder `files` / `asar` packaging** | **Not needed and not relied on.** Owner code is TypeScript compiled into bundles; the installer never ships `electron/owner/` as source. The bundle-level guarantee is the real one. |
+| **Dead-code elimination on a target flag** | **NOT RELIABLE, and not used.** DCE needs a statically provable `false`. `ownerBoundary.test.ts` forbids the flag appearing in shipped code at all, so the question does not arise. |
+| **Runtime-computed paths** (`import(variable)`, `require(name)`, `fs.readFile` of a bundled path) | **CANNOT BE EXCLUDED by any bundler.** See below. |
+
+**The real residual risk, named.** Vite cannot see a module path computed at runtime. A dynamic
+`import(someVariable)` reaching into `electron/owner/` would not be intercepted. Three things
+close this in practice rather than by magic:
+
+1. Only the seam specifiers may reach owner code, and only owner-only files may import the owner
+   directory — so there is no shared code that *could* compute such a path.
+2. `ownerBoundary.test.ts` scans for `import(`/`require(` with literal specifiers as well as
+   static ones, in every source file.
+3. A **computed** specifier is not matched by any scanner, literal or otherwise. If owner-only
+   code is ever to be loaded by a computed path, that loading must be confined to a file inside
+   the owner directory itself — where a Standard build has removed the caller along with it.
+   **A computed path from shared code into owner code is not detectable by these guards and must
+   be treated as a design prohibition, not a bug to be caught later.**
+
+### 8.5 The `NEVER IN HENRY` surfaces, enforced in BOTH targets
+
+`FORBIDDEN_IN_EVERY_ARTIFACT` = `/api/admin/`, `/api/security/` — §7.4's management API and
+operator control plane.
+
+These are forbidden in the **Owner's** build too, not just Standard. A guard that only inspected
+Standard artifacts would wave them through in an owner build, and an admin endpoint reachable from
+the owner's own desktop app is still an endpoint reachable from a desktop app. `ownerBoundary.test.ts`
+scans Henry source for them and `standardBundle.test.ts` scans built bundles for them.
+
+This is the one place where the separation architecture enforces something the Owner build is not
+allowed to have either, and it is deliberate.
+
+### 8.6 The Marketplace is asserted present in BOTH targets
+
+Absence assertions only catch leaks in one direction. A Standard build that had quietly **lost**
+the Marketplace — because the exclusion alias grew to swallow shared surface — would pass every
+forbidden-string check. So presence is asserted too:
+
+- `SHARED_MARKETPLACE_IPC_CHANNELS` (`marketplace:list`, `marketplace:states`, `marketplace:fetch`)
+  must be present in `dist-electron/main.js` **and** in `preload.cjs`.
+- `SHARED_MARKETPLACE_MANIFEST_ID` (`primech-marketplace`) must be in the main bundle.
+- `marketplaceList` — the `henryAPI` method `MarketplacePanel` actually calls, and the marker that
+  genuinely exists in the renderer bundle — must be in `renderer/assets/*.js`.
+- `resources/marketplace/marketplace.json` must ship as an `extraResource` for every target and
+  must not sit under any `OWNER_ONLY_RESOURCE_DIRS` entry.
+- The three Marketplace source files must not be inside the owner boundary, and `main.ts` must
+  register `registerMarketplaceHandlers` unconditionally.
+
+Note the marker placement: the renderer bundle carries `marketplaceList`, not `marketplace:list`,
+because channels are resolved by the preload at runtime. An assertion written against where the
+marker *ought* to be rather than where it *is* fails for a reason unrelated to the property being
+guarded, and gets deleted.
+
+### 8.7 The guards, and the mutation checks that make them trustworthy
+
+**31 tests across two files** (21 source-level, 10 artifact-level). A guard that has never been shown to fail is indistinguishable from
+a guard that cannot fail, so every load-bearing guard below was **broken on purpose and observed to
+fail.** These were run, not reasoned about.
+
+`targets/ownerBoundary.test.ts` — source-level (21 tests):
+
+| Guard | Mutation that must fail it | Result |
+|---|---|---|
+| no shared module imports an owner-only module | added `import { OWNER_ONLY_FEATURES } from '../owner/index'` to `electron/ipc/marketplace.ts` | **failed as required** |
+| no shared module branches on the target | wrapped `ownerSeam.register` in `if (process.env.HENRY_TARGET === 'owner')` in `main.ts` | **failed as required** |
+| no source file references a forbidden endpoint prefix | added a fake `https://…/api/admin/owner-console` to `main.ts` | **failed as required** |
+| the policy is not importable from bundled code | — (structural; fires on any `import … ownerPolicy` outside `targets/`) | verified by the fixture run below |
+
+`targets/standardBundle.test.ts` — artifact-level (10 tests, two of them mutation checks):
+
+| Guard | Mutation that must fail it | Result |
+|---|---|---|
+| Standard bundle excludes owner-only code | disabled the alias redirect (`if (false && ownerDir)`) | **failed as required** — the fixture endpoint appeared in the Standard bundle |
+| Standard build refuses a direct owner-dir import | — (the plugin's backstop) | **build refused** with the actionable message |
+| no owner-only/never-in-either-target marker in a built bundle | appended a fake `https://ops.owner-fixture.invalid/…` line to a real built `dist-electron/main.js` | **failed as required** |
+
+**The end-to-end check, on the real build.** This is the one that matters, because it used the
+production plugin, the production config, and a real owner-only feature rather than a fixture:
+
+1. Added a real owner-only feature to `electron/owner/index.ts` — an `OWNER_OPS_BASE_URL` of
+   `https://ops.owner-fixture.invalid/owner-console`, an IPC channel `owner:ops:status`, and a
+   feature id `owner-ops-console` — and declared all three in `targets/ownerPolicy.json`.
+2. `node scripts/henry-build.mjs owner --no-package` → **all three markers present** in
+   `dist-electron/main.js`.
+3. `node scripts/henry-build.mjs standard --no-package` → **all three markers absent** from
+   `dist-electron/main.js`, from the identical source tree, in the same session.
+4. Marketplace markers **still present** in that Standard artifact: `marketplace:list` and
+   `primech-marketplace` in `main.js`, `marketplaceList` in `renderer/assets/`.
+5. The temporary owner feature was then reverted. Henry's committed state is the empty,
+   zero-owner-feature state of §8.2.
+
+The positive control in step 2 is what makes step 3 mean anything: without a build where the
+marker *is* present, "absent" could just mean "the fixture was broken". The same principle applies
+inside the test: `buildFixture('owner')` must contain the marker before `buildFixture('standard')`
+is asserted not to, and it is.
+
+**One real bug was found by these guards during the work, and is fixed.** The owner seam's
+`register` registered handlers without pushing them onto its return value, so `electron/main.ts`
+would have under-reported the channels it turned on. The guard
+`every channel the owner seam registers is reported back to the caller` caught it. The seam now
+reports what it registers.
+
+### 8.8 How to add an owner-only feature so it cannot leak
+
+The procedure, in the order the steps must be done. **Steps 3 and 5 are the ones that get skipped,
+and skipping them is the only way this fails.**
+
+1. **Put the implementation in `electron/owner/` (main) or `src/owner/` (renderer).** Nowhere
+   else. A shared module importing one of these directories directly fails
+   `ownerBoundary.test.ts` before the build runs. Renderer rules still apply here: owner-only code
+   is renderer code, and gets no reach to `fs` or `child_process` that the rest of the renderer
+   lacks (`AGENTS.md`).
+2. **Declare the feature** as an `OwnerOnlyFeature` in `OWNER_ONLY_FEATURES`, and implement
+   `register` to call `host.registerHandler` for each channel it owns, returning the channels it
+   registered. **Do not add an `if (target === 'owner')` to shared code** — shared code calls
+   `ownerSeam.register(...)` unconditionally and the build decides what that resolves to.
+3. **In the same commit**, add every owner-only identifier, endpoint prefix and credential marker
+   to `targets/ownerPolicy.json`. This is the step that makes the guard *able* to see the feature;
+   without it the exclusion still works but nothing scans for the strings, and the guarantee
+   becomes decorative. Two guards fail if it is skipped: the seam's channels must each be a
+   declared marker, and each declared feature id must be one too.
+4. **If it needs an installer resource**, add the directory to `OWNER_ONLY_RESOURCE_DIRS`.
+   `scripts/henry-build.mjs` strips declared directories from a Standard build's
+   `extraResources`; `ownerBoundary.test.ts` fails if a shipped `extraResource` is also declared
+   owner-only.
+5. **Build both targets and diff them.** Then run the guards against a **Standard** artifact —
+   the guard reads whatever is on disk, so a last-built Owner artifact will (correctly) fail it:
+   ```
+   node scripts/henry-build.mjs standard --no-package
+   npm run build:target:check
+   ```
+   The Standard artifact must contain none of the step-3 markers, and must still contain every
+   Marketplace marker.
+6. **Never import `targets/ownerPolicy.*` from `src/` or `electron/`.** Build tooling and the
+   guards only. It names the markers; bundling it into an artifact would put them there.
+
+**What a reviewer should check on such a commit.** That the implementation is inside an owner
+directory; that `main.ts` and the panel files are unchanged except for the seam; that the policy
+JSON gained markers in the same commit; and that `npm run build:target:check` passes against a
+Standard build. Those four checks are what make the separation structural rather than a claim.
+
+### 8.9 Limits of this section, recorded honestly
+
+- **The mechanism has never shipped a real secret.** There is no owner-only code to protect yet
+  (§8.2). What has been demonstrated is that owner code added to the boundary *is* excluded from a
+  Standard build and *is* detected when the exclusion breaks. That is a real result and a smaller
+  one than "this has been protecting a live private integration".
+- **The marker lists are empty**, so today the artifact scan is checking only
+  `FORBIDDEN_IN_EVERY_ARTIFACT`. The scan is correct; it has little to scan for. It becomes
+  meaningful at the first owner-only feature, which is exactly when it starts mattering.
+- **The guards read the artifact on disk**, not a freshly produced one. A developer who builds
+  Owner and runs the checks will see a failure that is correct behaviour, not a defect. The
+  artifact-level guard is only meaningful against the target being distributed.
+- **Computed module paths cannot be excluded by any bundler** (§8.4). This is a design
+  prohibition, not something the tooling catches.
+- **The Owner's own build is not scanned for owner-only correctness**, only for
+  `FORBIDDEN_IN_EVERY_ARTIFACT`. An Owner build is *supposed* to contain owner markers.
+- **Nothing here has been run through `electron-builder`** to a packaged installer. The guarantee
+  is established at the bundle level, which is what the installer ships; the packaging step itself
+  is unverified for both targets.

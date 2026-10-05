@@ -4,6 +4,11 @@ import path from 'path';
 import https from 'https';
 import http from 'http';
 import type { IncomingMessage, ServerResponse } from 'http';
+import { ownerTargetPlugin } from './targets/viteOwnerTarget';
+
+// The web build ships the renderer without Electron, so it needs the same
+// Owner/Standard exclusion the desktop build has — see targets/viteOwnerTarget.ts.
+const ownerTarget = ownerTargetPlugin({ root: __dirname });
 
 // ── AI Proxy Plugin ──────────────────────────────────────────────────────────
 // Manually proxies /proxy/{provider}/* → external API server-side.
@@ -155,7 +160,7 @@ function aiProxyPlugin(): Plugin {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default defineConfig({
-  plugins: [react(), aiProxyPlugin()],
+  plugins: [react(), ownerTarget, aiProxyPlugin()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

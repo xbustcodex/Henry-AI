@@ -14,11 +14,17 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
       '@capacitor-mlkit/barcode-scanning': path.resolve(__dirname, './src/stubs/barcodeScanning.ts'),
+      // The owner seam resolves to the REAL module under test, whatever
+      // HENRY_TARGET happens to be. The guards exercise the Standard exclusion
+      // by calling `ownerTargetPlugin` directly, not by relying on the test
+      // runner's resolution.
+      '@henry/owner': path.resolve(__dirname, './electron/owner/index.ts'),
+      '@henry/owner-ui': path.resolve(__dirname, './src/owner/index.ts'),
     },
   },
   test: {
     environment: 'node',
-    include: ['electron/**/*.test.ts', 'src/**/*.test.ts'],
+    include: ['electron/**/*.test.ts', 'src/**/*.test.ts', 'targets/**/*.test.ts'],
     watch: false,
 
     // The default 10s hook timeout is marginal for this suite. 144 files run in
