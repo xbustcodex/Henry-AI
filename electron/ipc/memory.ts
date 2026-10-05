@@ -87,6 +87,32 @@ function safeHandle<T>(channel: string, fn: () => T): T {
  * `policyFlag` is a synchronous, allocation-free read that fails closed before
  * boot and on a corrupt settings row.
  */
+/**
+ * Ensure the finance `transactions` table exists and matches what `finance:create` writes.
+ *
+ * `updated_at` was absent from the original DDL while every insert supplied it, so each
+ * insert raised `no such column: updated_at`. `CREATE TABLE IF NOT EXISTS` cannot add a
+ * column to an already-installed database, so the migration is explicit and idempotent.
+ */
+export function ensureFinanceSchema(db: Database.Database): void {
+  // ── Finance ───────────────────────────────────────────────────────────────
+  db.prepare(`CREATE TABLE IF NOT EXISTS transactions (
+  id TEXT PRIMARY KEY, type TEXT NOT NULL, amount REAL NOT NULL,
+  category TEXT NOT NULL, description TEXT, date TEXT NOT NULL,
+  created_at TEXT NOT NULL, updated_at TEXT
+  )`).run();
+  // `finance:create` has always supplied updated_at, but the original DDL omitted it, so
+  // every insert raised `no such column: updated_at`. The renderer's import loop swallowed
+  // that and still reported success, so bank CSV import silently recorded nothing.
+  // CREATE TABLE IF NOT EXISTS cannot add a column to an existing install; migrate it.
+  {
+  const cols = db.prepare(`PRAGMA table_info(transactions)`).all() as { name: string }[];
+  if (!cols.some((c) => c.name === 'updated_at')) {
+  try { db.exec('ALTER TABLE transactions ADD COLUMN updated_at TEXT'); } catch { /* ignore */ }
+  }
+  }
+}
+
 export function registerMemoryHandlers(database: Database.Database) {
   db = database;
 
@@ -1301,12 +1327,7 @@ export function registerMemoryHandlers(database: Database.Database) {
     catch (e) { return { ok: false, error: String(e) }; }
   });
 
-  // ── Finance ───────────────────────────────────────────────────────────────
-  db.prepare(`CREATE TABLE IF NOT EXISTS transactions (
-    id TEXT PRIMARY KEY, type TEXT NOT NULL, amount REAL NOT NULL,
-    category TEXT NOT NULL, description TEXT, date TEXT NOT NULL,
-    created_at TEXT NOT NULL
-  )`).run();
+  ensureFinanceSchema(db);
 
   ipcMain.handle('finance:create', (_e, t: Record<string,unknown>) => {
     try {

@@ -146,6 +146,7 @@ Write a brief P&L summary in 3 sentences: how the month went, biggest expense ar
       return;
     }
     let imported = 0;
+    let failed = 0;
     const api2 = (window as any).henryAPI;
     for (let i = 1; i < lines.length; i++) {
       const parts = lines[i].split(',').map(p => p.replace(/^"|"$/g,'').trim());
@@ -187,9 +188,17 @@ Write a brief P&L summary in 3 sentences: how the month went, biggest expense ar
           updated_at: new Date().toISOString(),
         });
         imported++;
-      } catch { /* skip bad rows */ }
+      } catch {
+        // Count these honestly. Silently skipping a row the main process rejected made a
+        // completely failed import report "✓ Imported N transactions".
+        failed++;
+      }
     }
-    setImportMsg(`✓ Imported ${imported} transactions`);
+    setImportMsg(
+      failed > 0
+        ? `Imported ${imported} of ${imported + failed} — ${failed} row${failed === 1 ? '' : 's'} could not be saved`
+        : `✓ Imported ${imported} transactions`,
+    );
     setImporting(false);
     if (imported > 0) void load();
     e.target.value = '';
