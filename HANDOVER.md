@@ -743,6 +743,56 @@ integration contract exists.
 1. Locate/provide the PrimeRoute repository or its API specification, or
 2. Confirm PrimeRoute is not yet implemented and that this programme should proceed without it.
 
+## 12b. OWNER DECISION REQUIRED — Henry's licence/ownership position is ambiguous
+
+Recorded, not guessed. Changing any of this is a legal/ownership decision.
+
+### Evidence in the repository right now
+```
+LICENSE              MIT (full text, repository root)
+package.json         "license": "MIT"
+package.json         "author": { "name": "Topher Cook", "email": "hello@henryai.app" }
+```
+
+For comparison, the owner's other PrimeTech system:
+```
+/mnt/e/PrimeRoute/pyproject.toml   license = "LicenseRef-Proprietary"
+                                  authors = [{ name = "Prime Tech" }]
+```
+
+### Why this cannot be resolved from evidence
+- The repository now lives at `xbustcodex/Henry-AI` and the previous owner's Apple signing
+  identity was deliberately removed in `efa4fd1`, which is consistent with Henry no longer
+  being that person's product.
+- But `package.json` still names them as author, and `LICENSE` still grants MIT rights —
+  which would let anyone redistribute and sublicense the code.
+- PrimeRoute, in the same ecosystem, is proprietary. That may indicate an intent for Henry to
+  follow, or it may be unrelated. **Nothing in the repository states Henry's intended terms.**
+
+### Options
+1. **Keep MIT** — correct only if Henry is genuinely intended to be permissively licensed.
+   No change needed; author metadata may still want updating for accuracy.
+2. **Change to proprietary** (e.g. `LicenseRef-Proprietary`, matching PrimeRoute) — a
+   licence change is a legal decision with distribution consequences.
+3. **Keep MIT, correct authorship metadata only** — narrowest change that fixes attribution
+   without altering terms.
+
+### Recommendation
+Option 3 or 1. The author metadata is demonstrably stale regardless of which licence is
+intended, and that part is a factual accuracy fix rather than a legal decision. The licence
+*terms* themselves should be an explicit owner decision.
+
+No change has been made. Deliberately NOT done without instruction:
+- changing `LICENSE` terms
+- relabelling the product as proprietary
+- mass-inserting copyright headers into source files (the repository does not use that
+  convention, and header spam would not improve accuracy)
+- overwriting any third-party notice
+
+Also pending the same decision: `package.json` `version` is still `3.0.7`, identical to the
+tag that must not be moved. The next release needs a distinct version so the built artefact is
+not mistaken for the existing `v3.0.7` tag.
+
 ## 12. Next recommended task, in priority order
 
 1. **Rebuild, package, install** from `9eb73af`; re-run the fresh-profile acceptance end
