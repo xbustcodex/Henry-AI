@@ -21,6 +21,14 @@ export function initDatabase(dataDir: string): Database.Database {
   const dbPath = path.join(dataDir, 'henry.db');
   dbFilePath = dbPath;
   db = new Database(dbPath);
+  // Zero deleted content instead of leaving it in freed pages.
+  //
+  // SQLite does NOT overwrite bytes on DELETE by default, so deleting a provider row
+  // that held a credential - a retired one during migration, or any row a user removes -
+  // leaves the plaintext sitting in the database file. Verified on a real upgrade: after
+  // migrateRetiredProviders removed a Groq row, the row was gone from every live table but
+  // the key string was still readable in henry.db itself.
+  db.pragma('secure_delete = ON');
 
   // Enable WAL mode for better performance
   db.pragma('journal_mode = WAL');
