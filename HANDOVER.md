@@ -126,6 +126,42 @@ Consequences to accept deliberately:
 - Capability data is runtime-reported only (`/api/show`); a record whose
   `capabilitySource !== 'runtime'` reads as `unknown`, never as capable.
 
+## 5b. PRODUCT DECISION — Agent Runtime Discovery (do NOT hardcode a runtime backend)
+
+Owner-ruled. Henry must not hardcode a particular external agent runtime as its permanent
+backend.
+
+- Henry **discovers supported agent software actually installed on the machine at runtime**.
+- Detected runtimes are presented to the user as available options, **including verified
+  capabilities where possible**.
+- **The user explicitly chooses** whether to integrate a discovered runtime and which to use.
+- **Discovery must never automatically activate, replace, or change the user's existing
+  selection.** It is read-only.
+- **Prime Pi, OMP, OpenCode and future runtimes are implementations behind adapters**, not
+  Henry's architecture.
+- Runtime-specific **executable names, CLI arguments, authentication, event formats and
+  capability detection belong inside their respective adapters** — nothing outside the
+  adapter layer should know that omp speaks `--mode json`.
+- **If software is not installed, Henry must not pretend it is available.**
+- A newly supported runtime must be addable **without changing Henry's core Chat
+  architecture**.
+
+### Why this matters (real failures it prevents)
+1. `omp` and `opencode` are **the same product under different binary names** — the vendor's
+   bundle installs `omp.exe` into `%LOCALAPPDATA%\omp`. Probing only the literal name
+   `opencode` made Henry fail to see an installed runtime.
+2. Henry hardcoded `--format json --dir <cwd>`, which the installed CLI (`omp v18.3.2`)
+   rejects outright with `unknown flags`. Every OpenCode/Zen turn failed at launch. The
+   correct contract is `--mode json`, `--cwd`, `-p`.
+3. Because discovery was implicit, a missing runtime presented as "provider error" rather
+   than "this agent software is not installed".
+
+### Runtime vs provider identity (do not collapse these)
+`opencode` and `opencode-zen` are **model services reached through a runtime**. Runtime
+identity (which agent software is installed) is separate from provider identity (which
+model service is selected). `opencode-zen` keeps its distinct provider id, its own
+catalogue, and its credential-optional status.
+
 ## 6. Onboarding state machine
 
 `src/components/onboarding/stages.ts` = the ordered plan (pure data).
