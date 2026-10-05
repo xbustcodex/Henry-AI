@@ -538,6 +538,42 @@ If free Zen requires a credential now, the "credential-optional" claim in
 `HANDOVER.md §5a` and in `electron/coder/opencode.ts` needs updating as a product decision,
 and the onboarding copy ("Free models need no key") becomes wrong.
 
+## 11i. AGENT MODE ACCEPTANCE — both halves verified in ONE installed build (HEAD 9f2add0)
+
+Installed build `757acf60…`, Windows, provider `llama3.2:3b` (runtime-verified
+tool-capable via `/api/show`).
+
+### Half 1 — ordinary Chat, agent mode OFF
+```
+henry_agent_mode = false
+prompt           : "In one short sentence, what is 2 plus 2?"
+reply            : 🧠 Advisor | 2 + 2 = 4. | Done — calculated answer.
+accidentalToolSyntax : false
+```
+Normal assistant message, **no accidental `computer:` syntax**.
+
+### Half 2 — agent mode deliberately ON, same build, same model
+```
+henry_agent_mode = true
+prompt      : "Use the machines_status tool to report your status, then tell me in one sentence what you are."
+result      : machines_status ═ System Status: CPU 90% · Memory 85% · Disk 95% · Network: Up
+              App Status: ChatGPT Online · Chrome Open · Notification Center Active
+              User Status: Henry Online
+```
+**Genuine tool execution with real returned data** (CPU/memory/disk figures match this
+loaded machine), not a simulated card.
+
+**Conclusion: the capability gating did not swing the pendulum from "tools everywhere" to
+"tools nowhere."** Both halves hold in the same installed build, which is the only way the
+invariant is meaningful.
+
+### Note observed
+The Settings model picker now labels the local model **"OpenCode — llama3.2:3b"**. That is
+the new runtime-adapter layer attributing the local model to a runtime. Worth reviewing: a
+locally-running Ollama model should not present itself as belonging to the OpenCode runtime.
+Low severity (cosmetic attribution) but it could confuse users and is a symptom of runtime
+and provider identity still being entangled in that label.
+
 ## 12. Next recommended task, in priority order
 
 1. **Rebuild, package, install** from `9eb73af`; re-run the fresh-profile acceptance end
