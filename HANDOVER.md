@@ -834,6 +834,39 @@ not mistaken for the existing `v3.0.7` tag.
    Ollama turns, coder:run confirmation/approval/audit gating, fail-closed behaviour, and the
    no-renderer approval rows recorded `rejected` rather than left permanently pending.
 
+## 12d. HENRY 3.0.8 — BOTH TARGETS BUILT, ISOLATION INSPECTED
+
+```
+source commit : a73700f (+ target build-script fix)
+version       : 3.0.8   (v3.0.7 unmoved at 0920bbd)
+
+OWNER    (windows x64)  installer 57ff4082d5005f323c8e4b61eb18671e47b38fafb65ef0efc72d54260dc7eabe
+                       asar      3ad85a3afcc2293c579e28a7169fa2a24fb95c5ec022a880659f765524c24cbf
+STANDARD (windows x64)  installer 3c9f4b10f467fcb60769f7ac9021e03ea243b3e65365617c4421c535d497727d
+                       asar      eb4725914622f0a47c7d1583f859166c2fd371c0b2a3e2055c3478aae2eb8381
+```
+
+### Isolation inspected against the ACTUAL built Standard artifact
+```
+dist-electron/main.js     owner markers (/api/admin/, owner-console, ops.owner, HENRY_TARGET) = NONE
+dist-electron/preload.cjs same                                                                    = NONE
+both files                PrimeTech Marketplace present                                            = TRUE
+```
+`targets/standardBundle.test.ts` — 10 artifact guards, all passing. Every load-bearing
+guard was mutation-checked during implementation, including an end-to-end build where a
+real owner-only feature appeared in the Owner artifact and was absent from the Standard
+artifact built from the identical source tree.
+
+Marketplace is asserted present in BOTH targets, not merely protected from exclusion:
+availability of a public app catalogue is not owner operational authority.
+
+### Defect found and fixed while building
+`scripts/henry-build.mjs` passed its passthrough to Vite as well as electron-builder.
+Vite parses argv with CAC and rejects `--win`/`--x64`/`--publish` outright, so every
+target build died at the Vite step; and a builder flag with a separate value word leaked
+that word to Vite as a bare positional. Fixed by filtering builder-only flags (and their
+value words) out of the Vite arguments. Without this the new target system was unusable.
+
 ## 12. Next recommended task, in priority order
 
 1. **Rebuild, package, install** from `9eb73af`; re-run the fresh-profile acceptance end
