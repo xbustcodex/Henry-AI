@@ -65,9 +65,28 @@ function run(command, args) {
 }
 
 
+// Builder-only flags must not reach Vite. Vite uses CAC to parse argv and rejects
+// `--win`/`--linux`/`--x64` outright, which failed the build before packaging began.
+const BUILDER_ONLY = [
+  '--linux', '--win', '--mac', '--x64', '--arm64',
+  // electron-builder's publish flag; Vite's CAC parser rejects it too.
+  '--publish',
+];
+
 // `--no-package` is this script's flag, not vite's or electron-builder's.
 // Filter it out of the vite invocation or CAC rejects it as unknown.
-const viteArgs = passthrough.filter((a) => a !== '--no-package');
+// A builder flag that takes a separate value word (e.g. `--publish never`) must take
+// that word with it, or Vite receives a bare `never` and fails to parse.
+const skip = new Set();
+passthrough.forEach((a, i) => {
+  if (BUILDER_ONLY.includes(a)) {
+    skip.add(a);
+    if (a === '--publish' && passthrough[i + 1] && !passthrough[i + 1].startsWith('-')) {
+      skip.add(passthrough[i + 1]);
+    }
+  }
+});
+const viteArgs = passthrough.filter((a) => a !== '--no-package' && !skip.has(a));
 // 1. Renderer + main + preload, through the owner-target plugin.
 run('npx', ['vite', 'build', ...viteArgs]);
 
@@ -78,8 +97,10 @@ if (passthrough.includes('--no-package')) {
 }
 
 const builderArgs = ['electron-builder'];
-for (const a of passthrough) {
-  if (['--linux', '--win', '--mac', '--x64', '--arm64'].includes(a) || a.startsWith('--config.')) {
+for (let i = 0; i < passthrough.length; i++) {
+  const a = passthrough[i];
+  if (a === '--publish' && passthrough[i + 1]) { builderArgs.push(a, passthrough[++i]); continue; }
+  if (BUILDER_ONLY.includes(a) || a.startsWith('--config.')) {
     builderArgs.push(a);
   }
 }
