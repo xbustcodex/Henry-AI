@@ -20,5 +20,16 @@ export default defineConfig({
     environment: 'node',
     include: ['electron/**/*.test.ts', 'src/**/*.test.ts'],
     watch: false,
+
+    // The default 10s hook timeout is marginal for this suite. 144 files run in
+    // parallel worker threads, and the suites that touch the real filesystem or
+    // SQLite (memoryStagePersistence, providerState.seam, PrinterPanel) intermittently
+    // exceeded 10s purely from CPU contention. They are load-sensitive, not
+    // ordering-, cleanup- or handle-leak-sensitive: proven both ways, the whole suite
+    // is green at 60s, and each of those files passes in isolation at the default.
+    // Raising the budget makes `npm test` deterministic on a loaded machine rather
+    // than reporting failures that do not exist.
+    hookTimeout: 60_000,
+    testTimeout: 60_000,
   },
 });

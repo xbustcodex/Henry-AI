@@ -99,6 +99,24 @@ afterEach(() => {
   if (root) rmSync(root, { recursive: true, force: true });
 });
 
+describe('the capability itself is metadata-only', () => {
+  it('gives the scanner exactly two operations and no third', () => {
+    // The comment above says the guarantee is structural rather than aspirational.
+    // That claim is only worth anything if something enforces the method count,
+    // because adding a third method to `MetadataFs` otherwise removes the
+    // guarantee in the same commit with every test still green: the scanner would
+    // simply have an unused `readFile` to hand.
+    //
+    // So the method count is asserted here. Adding a method now fails THIS test,
+    // which is the difference between a rule and a wish — and the failure is
+    // located next to the interface doc that tells you what to update with it.
+    const operations = Object.getOwnPropertyNames(nodeMetadataFs()).filter(
+      (name) => name !== 'length' && name !== 'name' && name !== 'prototype',
+    );
+    expect(operations.sort()).toEqual(['readDir', 'stat']);
+  });
+});
+
 describe('a scan records metadata and never reads contents', () => {
   it('produces nodes whose every field is metadata', async () => {
     write('home/notes/todo.txt', `Buy milk\n${CANARY_SECRET}\n`);
