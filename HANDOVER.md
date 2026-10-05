@@ -793,6 +793,47 @@ Also pending the same decision: `package.json` `version` is still `3.0.7`, ident
 tag that must not be moved. The next release needs a distinct version so the built artefact is
 not mistaken for the existing `v3.0.7` tag.
 
+## 12c. OWNER DECISIONS RESOLVED (2026-10-05)
+
+1. **Retired Groq model id** — accept the configured Henry engine as correct behaviour.
+   `llama-3.3-70b-versatile` must not remain a functional requirement, default, fallback or
+   routing target, and is not a reason to restore Groq. Panels go: panel feature → governed
+   Henry AI path → currently configured usable engine → normal provider/model policy. Do not
+   force a 70B model. Surviving references are **historical only**: test fixtures proving
+   Groq stays retired, a Cerebras model alias (`cerebras.ts`), a web-mock price table and a
+   comment. **No panel requires the model.**
+
+2. **Licensing** — Henry keeps **MIT** for this release. PrimeRoute remains proprietary per its
+   own repository; not changed. Stale previous-owner authorship corrected to the established
+   Prime Tech identity; MIT LICENSE, third-party licences, copyright and attribution all
+   preserved. No mass source-header rewrite (the repository does not use that convention).
+
+3. **Version** — the next release is **3.0.8**. `v3.0.7` remains historical and immutable.
+
+4. **PrimeRoute admin-auth defect** — recorded as a **separate PrimeRoute security defect**,
+   NOT worked around from Henry and NOT to be relied on by Owner Henry. `require_admin`
+   accepts an ordinary `pr_` bearer credential first and derives admin/owner authority from
+   the associated user's role, affecting `/api/admin/*`. Owner will address it separately.
+   Privileged PrimeRoute administrative integration is **awaiting the properly secured
+   PrimeRoute admin/control surface**.
+
+5. **PrimeRoute key issuance** — accepted that there is no customer-facing `/v1`
+   key-issuance/onboarding endpoint. Henry must NOT self-issue a credential and must NOT
+   fabricate one. Credentials are provisioned through PrimeRoute's real authorised
+   operator/admin mechanism. Henry may consume a legitimately provisioned credential through
+   its own secure mechanism when operational. Never bundle an owner key.
+
+6. **PrimeRoute transport** — Henry's existing `relay` provider is the correct seam; do NOT
+   build a second client. The genuine gap is `AiRequest` being unable to express
+   `X-PrimeRoute-*` routing metadata. Extend only where an available, authorised PrimeRoute
+   interface genuinely requires it. Do not prematurely close functionality depending on the
+   unfinished standalone admin surface.
+
+7. **Completed governance work is to be kept, not regressed** — `runPanelAI` governed path,
+   all ten migrated call sites, `proxyShim.ts` removed, cost logging including zero-cost
+   Ollama turns, coder:run confirmation/approval/audit gating, fail-closed behaviour, and the
+   no-renderer approval rows recorded `rejected` rather than left permanently pending.
+
 ## 12. Next recommended task, in priority order
 
 1. **Rebuild, package, install** from `9eb73af`; re-run the fresh-profile acceptance end

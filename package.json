@@ -1,11 +1,11 @@
 {
   "name": "henry-ai-desktop",
-  "version": "3.0.7",
+  "version": "3.0.8",
   "description": "Henry AI \u2014 Local-first desktop AI operating system with dual-engine architecture",
   "main": "dist-electron/main.js",
   "author": {
-    "name": "Topher Cook",
-    "email": "hello@henryai.app"
+    "name": "Prime Tech",
+    "email": "hello@primetech.ai"
   },
   "license": "MIT",
   "scripts": {
