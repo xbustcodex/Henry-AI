@@ -16,6 +16,7 @@
  * any core module.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { RESERVED_RUNTIME_IDS, RESERVED_RUNTIME_NAMES } from './registry';
 import fs from 'fs';
 import path from 'path';
 import { discoverRuntimes } from './discovery';
@@ -197,5 +198,39 @@ describe('adding an adapter changes discovery with no core edit', () => {
     // the tests happens to have installed. What is under test here is that both
     // runtimes ship in the registry without any chat or router edit.
     expect(listRuntimeAdapters().map((a) => a.id).sort()).toEqual(['omp', 'pi']);
+  });
+});
+/**
+ * Prime Harness Agent is a name Henry recognises and nothing more.
+ *
+ * It is owned and built separately. Henry must not report it as installed, must not offer
+ * it for selection, and must not pretend a probe exists for software that does not.
+ */
+describe('reserved runtime identities', () => {
+  it('reserves the Prime Harness Agent name', () => {
+    expect(RESERVED_RUNTIME_IDS).toContain('prime-harness-agent');
+    expect(RESERVED_RUNTIME_NAMES['prime-harness-agent']).toBe('Prime Harness Agent');
+  });
+
+  it('registers NO adapter for it, so discovery can never report it installed', async () => {
+    const { listRuntimeAdapters, RESERVED_RUNTIME_IDS: reserved } = await import('./registry');
+    const ids = listRuntimeAdapters().map((a) => a.id);
+    for (const id of reserved) {
+      expect(ids).not.toContain(id);
+    }
+  });
+
+  it('is recognised as reserved rather than silently unknown', async () => {
+    const { isReservedRuntimeId } = await import('./registry');
+    expect(isReservedRuntimeId('prime-harness-agent')).toBe(true);
+    expect(isReservedRuntimeId('omp')).toBe(false);
+  });
+
+  it('cannot be selected as a working runtime, because nothing could execute', async () => {
+    const { isReservedRuntimeId } = await import('./registry');
+    const { listRuntimeAdapters } = await import('./registry');
+    const reserved = isReservedRuntimeId('prime-harness-agent');
+    const hasAdapter = listRuntimeAdapters().some((a) => a.id === 'prime-harness-agent');
+    expect(reserved && !hasAdapter).toBe(true);
   });
 });

@@ -22,6 +22,39 @@ const BUILT_IN_ADAPTERS: readonly AgentRuntimeAdapter[] = [ompAdapter, piAdapter
 let registered: AgentRuntimeAdapter[] = [...BUILT_IN_ADAPTERS];
 
 /**
+ * Runtime identities Henry reserves for software that is still being built.
+ *
+ * A reserved id is a NAME ONLY. It is deliberately not an adapter and has no probe,
+ * because a probe would mean inventing an executable contract for software that does not
+ * exist yet — and a runtime with a wrong probe reports false negatives today, or worse,
+ * false positives if the guessed path ever happens to exist.
+ *
+ * Because these are not adapters, discovery cannot report them as installed and the picker
+ * cannot offer them. That is the correct behaviour: Henry must never claim software is
+ * present when it is not. When the real product ships, adding an adapter here is the ONLY
+ * step needed — this entry should be removed in the same change.
+ *
+ * Prime Harness Agent is being built separately by the owner. Henry recognises the name
+ * and nothing more: no design, no API, no ports, no protocol, no workers, no commands.
+ */
+export const RESERVED_RUNTIME_IDS: readonly string[] = ['prime-harness-agent'];
+
+/** Human-readable names for reserved runtimes, for display in future UI. */
+export const RESERVED_RUNTIME_NAMES: Readonly<Record<string, string>> = {
+  'prime-harness-agent': 'Prime Harness Agent',
+};
+
+/**
+ * Whether an id is reserved for a runtime that does not exist yet.
+ *
+ * A reserved id must never be selected as a working runtime: there is no adapter behind it,
+ * so nothing could execute.
+ */
+export function isReservedRuntimeId(id: string): boolean {
+  return RESERVED_RUNTIME_IDS.includes(id);
+}
+
+/**
  * Register a runtime adapter.
  *
  * Re-registering an id replaces the previous adapter rather than adding a
