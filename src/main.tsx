@@ -30,12 +30,6 @@ import './styles/globals.css';
 import './webMock';
 import { initCapacitor } from './capacitor';
 import { logError } from './henry/selfRepairStore';
-import { installProxyShim } from './henry/proxyShim';
-
-// ── Cost-protection shim ─────────────────────────────────────────────────────
-// Routes any panel-level proxy calls through callHenryAI so free users never
-// run up the developer's bill. Idempotent — safe to call multiple times.
-installProxyShim();
 
 // ── Renderer-level error capture ─────────────────────────────────────────────
 // These run before React's error boundary catches render crashes.

@@ -10,6 +10,11 @@ type AIInvokeParams = {
   provider: string;
   model: string;
   apiKey: string;
+  /**
+   * Names the panel feature this call belongs to. When set, `ai:send` writes a
+   * `cost_log` row so the call shows up in Henry's own AI spend.
+   */
+  logPurpose?: string;
   /** Content may carry images, so an attached picture reaches the model. */
   messages: Array<{
     role: string;

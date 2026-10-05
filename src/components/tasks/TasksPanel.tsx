@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { sendToHenry } from '../../actions/store/chatBridgeStore';
 import { useStore } from '../../store';
+import { runPanelAI, panelAIErrorMessage } from '../../henry/panelAI';
 
 interface PersonalTask {
   id: string;
@@ -60,16 +61,13 @@ export default function TasksPanel() {
     const ownerName = localStorage.getItem('henry:owner_name') || 'you';
     const prompt = `${ownerName} has these open tasks:\n${list}\n\nGive a brief triage: which 1-3 should be done first today and why. Be direct, 3-5 sentences max.`;
     try {
-      const deviceId = (() => { let id = localStorage.getItem('henry:device_id'); if (!id) { id = crypto.randomUUID(); localStorage.setItem('henry:device_id', id); } return id; })();
-      const res = await fetch('https://henry-proxy.henryai.workers.dev/v1/chat', {
-        signal: AbortSignal.timeout(25000),
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Henry-Device': deviceId },
-        body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt }], max_tokens: 300, stream: false }),
+      const r = await runPanelAI({
+        messages: [{ role: 'user', content: prompt }],
+        maxTokens: 300,
+        purpose: 'tasks.triage',
       });
-      const data = await res.json() as any;
-      setTriageResult(data?.choices?.[0]?.message?.content || 'No response');
-    } catch { setTriageResult('Could not reach Henry AI.'); }
+      setTriageResult(r.content || 'No response');
+    } catch (e) { setTriageResult(panelAIErrorMessage(e)); }
     setTriaging(false);
   }
 

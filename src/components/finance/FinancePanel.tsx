@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { sendToHenry } from '../../actions/store/chatBridgeStore';
 import { useStore } from '../../store';
+import { runPanelAI, panelAIErrorMessage } from '../../henry/panelAI';
 
 interface Transaction { id:string; type:'income'|'expense'; amount:number; category:string; description?:string; date:string; created_at:string }
 interface Summary { income:number; expenses:number; net:number; breakdown:{type:string;total:number;category:string}[] }
@@ -86,16 +87,14 @@ Net: $${net.toFixed(2)}
 Top categories: ${topCats}
 
 Write a brief P&L summary in 3 sentences: how the month went, biggest expense area, and one actionable tip for next month.`;
-    const deviceId = (() => { let id = localStorage.getItem('henry:device_id'); if (!id) { id = crypto.randomUUID(); localStorage.setItem('henry:device_id', id); } return id; })();
     try {
-      const r = await fetch('https://henry-proxy.henryai.workers.dev/v1/chat', {
-        signal: AbortSignal.timeout(25000),
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Henry-Device': deviceId },
-        body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt }], max_tokens: 250, stream: false }),
+      const r = await runPanelAI({
+        messages: [{ role: 'user', content: prompt }],
+        maxTokens: 250,
+        purpose: 'finance.pl-summary',
       });
-      const d = await r.json() as any;
-      setPlResult(d?.choices?.[0]?.message?.content || 'No response');
-    } catch { setPlResult('Could not reach Henry AI.'); }
+      setPlResult(r.content || 'No response');
+    } catch (e) { setPlResult(panelAIErrorMessage(e)); }
     setPlBusy(false);
   }
 
@@ -210,13 +209,14 @@ Write a brief P&L summary in 3 sentences: how the month went, biggest expense ar
     const ownerName = localStorage.getItem('henry:owner_name') || 'you';
     const topExp = expenseCats.slice(0,3).map(c=>c.category+' $'+c.total.toFixed(0)).join(', ');
     const prompt = ownerName + ' spent $' + summary.expenses.toFixed(0) + ' this month with income of $' + summary.income.toFixed(0) + '. Top expenses: ' + (topExp||'none yet') + '. Net: $' + (summary.income-summary.expenses).toFixed(0) + '. In 2-3 sentences give a helpful financial observation and one actionable tip. Be direct and practical.';
-    const deviceId = (() => { let id = localStorage.getItem('henry:device_id'); if (!id) { id = crypto.randomUUID(); localStorage.setItem('henry:device_id', id); } return id; })();
     try {
-      const r = await fetch('https://henry-proxy.henryai.workers.dev/v1/chat', {
-        signal: AbortSignal.timeout(25000), method:'POST', headers:{'Content-Type':'application/json','X-Henry-Device':deviceId}, body:JSON.stringify({model:'llama-3.3-70b-versatile',messages:[{role:'user',content:prompt}],max_tokens:150,stream:false}) });
-      const d = await r.json() as any;
-      setInsight(d?.choices?.[0]?.message?.content || '');
-    } catch { setInsight('Could not reach Henry AI.'); }
+      const r = await runPanelAI({
+        messages: [{ role: 'user', content: prompt }],
+        maxTokens: 150,
+        purpose: 'finance.insight',
+      });
+      setInsight(r.content);
+    } catch (e) { setInsight(panelAIErrorMessage(e)); }
     setInsightBusy(false);
   }
 

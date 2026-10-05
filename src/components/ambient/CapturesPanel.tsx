@@ -18,6 +18,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useCapturesStore, selectActiveCaptures, selectUnroutedCaptures } from '../../ambient/capturesStore';
 import { confirmDialog } from '../ui/Toast';
 import type { CapturedNote } from '../../ambient/capturesStore';
+import { runPanelAI, panelAIErrorMessage } from '../../henry/panelAI';
 import {
   NOTE_CATEGORY_LABELS,
   NOTE_CATEGORY_ICONS,
@@ -274,17 +275,14 @@ export default function CapturesPanel() {
     setReviewResult('');
     const ownerName = localStorage.getItem('henry:owner_name') || 'you';
     const prompt = `Review these ${dbCaptures.length} captures from ${ownerName}'s day:\n\n${all}\n\nIn 3-5 sentences: what patterns do you see? What 1-2 things should ${ownerName} act on? What can be dismissed? Be direct.`;
-    const deviceId = (() => { let id = localStorage.getItem('henry:device_id'); if (!id) { id = crypto.randomUUID(); localStorage.setItem('henry:device_id', id); } return id; })();
     try {
-      const r = await fetch('https://henry-proxy.henryai.workers.dev/v1/chat', {
-        signal: AbortSignal.timeout(25000),
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Henry-Device': deviceId },
-        body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt }], max_tokens: 350, stream: false }),
+      const r = await runPanelAI({
+        messages: [{ role: 'user', content: prompt }],
+        maxTokens: 350,
+        purpose: 'captures.review',
       });
-      const d = await r.json() as any;
-      setReviewResult(d?.choices?.[0]?.message?.content || 'No response');
-    } catch { setReviewResult('Could not reach Henry AI.'); }
+      setReviewResult(r.content || 'No response');
+    } catch (e) { setReviewResult(panelAIErrorMessage(e)); }
     setReviewing(false);
   }
   const [ambientFlash, setAmbientFlash] = useState<string | null>(null);

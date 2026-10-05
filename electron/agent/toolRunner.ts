@@ -122,8 +122,27 @@ export type CompleteFn = (
 
 // ── Confirmation bus (confirm-tier tools) ──────────────────────────────────
 
+/**
+ * Why a confirmation request ended the way it did.
+ *
+ * `approved` alone answers "may I proceed?", which is all the tool path needs.
+ * Callers that AUDIT the gate (see coder/index.ts) also need to distinguish a
+ * deliberate refusal from a timeout or from having no renderer to ask, because
+ * each is a different thing to write down. The reason travels with the
+ * decision so the gate stays single-sourced: no caller re-implements the
+ * no-renderer check to find out which failure it was.
+ */
+export type ConfirmOutcome = 'approved' | 'declined' | 'expired' | 'no-renderer';
+
+export interface ConfirmDecision {
+  approved: boolean;
+  editedArgs?: Record<string, unknown>;
+  /** Absent only on a decision minted before this field existed. */
+  outcome?: ConfirmOutcome;
+}
+
 interface PendingConfirm {
-  resolve: (r: { approved: boolean; editedArgs?: Record<string, unknown> }) => void;
+  resolve: (r: ConfirmDecision) => void;
   timer: ReturnType<typeof setTimeout>;
 }
 
@@ -144,7 +163,7 @@ export function resolveConfirmation(
   if (!pending) return false;
   clearTimeout(pending.timer);
   pendingConfirms.delete(id);
-  pending.resolve({ approved, editedArgs });
+  pending.resolve({ approved, editedArgs, outcome: approved ? 'approved' : 'declined' });
   // Persist the outcome so the Approval Queue has a durable record.
   void import('../ipc/approvals')
     .then((m) => m.recordApprovalDecision(id, approved ? 'approved' : 'rejected', editedArgs))
@@ -152,10 +171,21 @@ export function resolveConfirmation(
   return true;
 }
 
-function requestConfirmation(
+/**
+ * The one confirmation gate.
+ *
+ * Emits `agent:confirm-required`, waits for `agent:confirm-response` (or the
+ * timeout), and records the outcome in the approvals queue. It fails CLOSED:
+ * no renderer, or no answer in time, resolves `approved: false`.
+ *
+ * Exported because a consequential operation outside the tool loop needs the
+ * same gate rather than a second one — `coder/index.ts` spawns an agent that
+ * can read and modify files, which is exactly what the confirm tier is for.
+ */
+export function requestConfirmation(
   context: AgentContext,
   payload: { id: string; toolName: string; args: Record<string, unknown>; description: string },
-): Promise<{ approved: boolean; editedArgs?: Record<string, unknown> }> {
+): Promise<ConfirmDecision> {
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
       pendingConfirms.delete(payload.id);
@@ -163,7 +193,7 @@ function requestConfirmation(
       void import('../ipc/approvals')
         .then((m) => m.recordApprovalDecision(payload.id, 'expired'))
         .catch(() => {});
-      resolve({ approved: false }); // timeout → treat as rejection
+      resolve({ approved: false, outcome: 'expired' }); // timeout → treat as rejection
     }, CONFIRM_TIMEOUT_MS);
     pendingConfirms.set(payload.id, { resolve, timer });
 
@@ -184,10 +214,16 @@ function requestConfirmation(
     if (win && !win.isDestroyed()) {
       win.webContents.send('agent:confirm-required', { ...payload, safetyLevel: 'confirm' });
     } else {
-      // No renderer to confirm — fail safe.
+      // No renderer to confirm — fail safe. The pending row was written above,
+      // so it must be closed out here: a request nobody could answer is not a
+      // request still awaiting review, and leaving it `pending` forever would
+      // say the opposite of what happened.
       clearTimeout(timer);
       pendingConfirms.delete(payload.id);
-      resolve({ approved: false });
+      void import('../ipc/approvals')
+        .then((m) => m.recordApprovalDecision(payload.id, 'rejected'))
+        .catch(() => {});
+      resolve({ approved: false, outcome: 'no-renderer' });
     }
   });
 }

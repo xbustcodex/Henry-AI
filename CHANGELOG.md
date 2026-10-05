@@ -1,5 +1,85 @@
 # Changelog
 
+## Panel AI is governed (2026-10-05)
+
+Ten renderer call sites across six panels fetched the hosted Cloudflare proxy
+directly, with a hardcoded model, from the renderer. Provider classification,
+credential policy, the security and validation layer, retry handling and the
+cost log were all downstream of the point they bypassed — so a financial summary
+left the machine unrouted, unvalidated and unmeasured. Provider identity and
+runtime identity stay separate; this is a transport change, not an agent change.
+
+- **One governed path.** All ten now dispatch through `src/henry/panelAI.ts` ->
+  `ai:send` / `ai:stream` (`electron/ipc/ai.ts`). Finance P&L summary and monthly
+  insight, Today "Henry's word", morning briefing, focus-now and daily plan,
+  Tasks triage, Goals coaching, Weekly review and Captures review.
+- **A panel cannot name a provider.** `PanelAIRequest` has no `provider` or
+  `model` field. The engine comes from `resolveConfiguredEngine`
+  (`src/henry/henryAI.ts`), which is the same `resolveChat` decision Chat and
+  `callHenryAI` already make — so there is one answer to "which provider does a
+  panel use", and no second resolver to drift from it. An unconfigured install,
+  a keyless non-local provider, a retired provider, or a model the selected
+  provider does not offer all dispatch nothing and name the setting that fixes it.
+- **Provider and model selection is unchanged.** The declared model
+  (`llama-3.3-70b-versatile`) was already inert twice over: the proxy served no
+  model of its own (`henry-proxy/README.md` documents `503 provider_not_configured`),
+  and the deleted `proxyShim.ts` ignored the requested model and answered from the
+  configured engine anyway. All ten features were therefore already running on the
+  configured Companion engine; that is now true by construction rather than by
+  interception.
+- **Panel AI is now costed.** `ai:send` and `ai:stream` accept a `logPurpose` and
+  write one `cost_log` row per call under `task_id`, including 0-cost local Ollama
+  turns — the row is the usage record, not just the bill, so a local install's
+  panel usage is visible too.
+- **The briefing no longer forks on "did the user paste a key".** The no-key case
+  used to go to the proxy with a different provider. A keyless engine (Ollama) is a
+  legitimate selection, so it streams from the same governed transport as a keyed one.
+- **`src/henry/proxyShim.ts` deleted.** A global `window.fetch` monkey-patch that
+  existed only to intercept these calls, plus its install in `main.tsx`. Nothing
+  patches `window.fetch` now.
+- **Not changed, deliberately.** The daily plan still prefers Henry's own loopback
+  sync service (`127.0.0.1:4242`) and only falls through to the governed path when
+  it is not running. Image, video, speech and geocoding panels post to their own
+  APIs with their own credentials and are outside the chat path.
+
+Owner decision still open: whether the ten features should be pinned to a specific
+70B model rather than the configured engine. Evidence, options and consequences are
+recorded in `PRIMETECH_INTEGRATION_LEDGER.md` §1.5.
+
+## Coder runs ask first (2026-10-05)
+
+`coder:run` spawned Claude Code, opencode or the local coder with no approval, no
+Approval Queue row and no audit line, while every other consequential operation in
+Henry goes through the confirm gate. A coding agent reads and modifies files, so
+a run is now confirm tier — for Claude Code, for opencode and for the local
+coder alike.
+
+- **One gate, not two.** `electron/coder/index.ts` calls the agent runner's own
+  `requestConfirmation`, which is now exported rather than duplicated. Same
+  modal, same `agent:confirm-response` channel, same Approval Queue. The engine
+  that runs, the model it uses and the moment it starts are unchanged; only
+  whether it runs at all is now the user's call. The modal's prompt field is
+  editable, and the edited prompt is what runs — what was approved is what is
+  executed.
+- **Fail-closed on authority, fail-open on audit.** Refused, timed out, or no
+  renderer to ask: no process spawns. All three return the same message so a
+  caller cannot tell them apart and retry one of them; the reason goes to the
+  audit log instead. A request nobody could answer is now closed out as
+  `rejected` rather than left `pending` forever.
+- **Audited, including the refusals.** Every decision writes an `app_logs` line
+  with the engine, working directory, approval id and outcome. The prompt text
+  is deliberately not logged — it is already in the queue row, and prompts carry
+  whatever the user pasted.
+- **No off switch.** Nothing in Settings disables this. An approval gate that
+  cannot be seen or audited is not one. `confirmSilentTools` still governs only
+  the silent tool tier and still ships off; the confirm tier remains
+  unconditional.
+- **Tests.** `electron/coder/approvalGate.test.ts` — 10 cases over the real
+  handler and the real gate: no renderer, refusal, expiry, approval, an edited
+  prompt, a second run asking again, a run that cannot start, and both the
+  Claude Code and local spawn paths. The queue rows asserted are the SQL the
+  shipped `recordApproval*` binds, read from a fake store underneath the queue.
+
 ## One free AI path: Ollama (2026-10-05)
 
 Ollama is the only cost-free AI path in Henry. Every other service — opencode,

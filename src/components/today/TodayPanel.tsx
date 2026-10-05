@@ -5,6 +5,8 @@ import { getTodayBriefing, getTodayKey, saveBriefing, setGenerating, isGeneratin
 import type { DailyBriefing } from '../../henry/proactiveBriefing';
 import { getDailyIntention, setDailyIntention, clearDailyIntention } from '../../henry/dailyIntention';
 import { PANEL_QUICK_ASK } from '../../henry/henryQuickAsk';
+import { runPanelAI, panelAIErrorMessage } from '../../henry/panelAI';
+import { resolveConfiguredEngine } from '../../henry/henryAI';
 import { isMacOS, isLinux, isWindows } from '../../utils/platform';
 import { isOpencodeProvider, requiresApiKey } from '../../../electron/providers/classification';
 
@@ -168,14 +170,12 @@ export default function TodayPanel() {
       const hour5 = new Date().getHours();
       const greeting = hour5 < 12 ? 'morning' : hour5 < 17 ? 'afternoon' : 'evening';
       const prompt = `Give ${ownerName} one short, genuine, encouraging word or thought for this ${greeting}. 1-2 sentences. No fluff — make it specific, real, worth reading. Can be practical wisdom, a challenge, or quiet encouragement.`;
-      const deviceId5 = (() => { let id = localStorage.getItem('henry:device_id'); if (!id) { id = crypto.randomUUID(); localStorage.setItem('henry:device_id', id); } return id; })();
-      fetch('https://henry-proxy.henryai.workers.dev/v1/chat', {
-        signal: AbortSignal.timeout(25000),
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Henry-Device': deviceId5 },
-        body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt }], max_tokens: 80, stream: false }),
-      }).then(r => r.json()).then((d: any) => {
-        const word = d?.choices?.[0]?.message?.content?.trim() || '';
+      runPanelAI({
+        messages: [{ role: 'user', content: prompt }],
+        maxTokens: 80,
+        purpose: 'today.henrys-word',
+      }).then(r => {
+        const word = r.content.trim();
         if (word) { setHenryWord(word); setCached('henry-word', word); }
       }).catch(() => {});
     }
@@ -232,12 +232,6 @@ export default function TodayPanel() {
     setGeneratingBriefing(true);
     setGenerating(true);
     try {
-      const s = useStore.getState().settings;
-      const providers = useStore.getState().providers;
-      const provider = s.companion_provider || '';
-      const model = s.companion_model || '';
-      const prov = providers.find((p) => p.id === provider);
-      const apiKey = prov?.apiKey || '';
       const ownerName = localStorage.getItem('henry:owner_name') || 'there';
 
       const facts = (() => {
@@ -259,34 +253,25 @@ Write 2-4 short sentences covering: one encouraging opening, what to focus on to
 
       let full = '';
 
-      // Use cloud proxy if no personal API key
-      const useProxy = !apiKey || apiKey.length < 10;
+      // One path, for every engine. This used to fork on "did the user paste an
+      // API key" and send the no-key case to the hosted proxy with a hardcoded
+      // model — a different provider, off the cost log, off classification. A
+      // keyless engine (Ollama) is a legitimate selection, so it streams from
+      // the same governed transport as a keyed one, and `resolveConfiguredEngine`
+      // is what decides which. It throws naming the unresolved setting when
+      // nothing is selected, and the catch below clears the spinner.
+      const engine = await resolveConfiguredEngine([{ role: 'user', content: prompt }]);
 
-      if (useProxy) {
-        const deviceId = (() => {
-          let id = localStorage.getItem('henry:device_id');
-          if (!id) { id = crypto.randomUUID(); localStorage.setItem('henry:device_id', id); }
-          return id;
-        })();
-        const proxyUrl = (import.meta as any).env?.VITE_HENRY_PROXY_URL || 'https://henry-proxy.henryai.workers.dev';
-        try {
-          const r = await fetch(proxyUrl + '/v1/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Henry-Device': deviceId },
-            body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt }], max_tokens: 300, stream: false }),
-          });
-          if (r.ok) {
-            const data = await r.json() as any;
-            full = data?.choices?.[0]?.message?.content || '';
-          }
-        } catch { /* proxy unavailable */ }
-        if (full) { saveBriefing(full); setBriefing(getTodayBriefing()); }
-        setGeneratingBriefing(false);
-        setGenerating(false);
-        return;
-      }
-
-      const stream = window.henryAPI.streamMessage({ provider, model, apiKey, messages: [{ role: 'user', content: prompt }], temperature: 0.7, maxTokens: 300 });
+      const stream = window.henryAPI.streamMessage({
+        provider: engine.provider,
+        model: engine.model,
+        apiKey: engine.apiKey,
+        apiUrl: engine.apiUrl,
+        logPurpose: 'today.briefing',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+        maxTokens: 300,
+      });
       briefingStreamRef.current = stream;
       stream.onChunk((chunk: string) => { full += chunk; });
       stream.onDone(() => {
@@ -318,16 +303,13 @@ Write 2-4 short sentences covering: one encouraging opening, what to focus on to
       ctx = [topTasks && `Tasks: ${topTasks}`, dueRems && `Due today: ${dueRems}`].filter(Boolean).join('. ');
     } catch { /* empty */ }
     const prompt = `${ownerName} is asking what to focus on right now (${timeOfDay}). ${ctx || 'No task data available.'} In 1-2 sentences, tell them the single most important thing to work on and why. Be direct and specific.`;
-    const deviceId = (() => { let id = localStorage.getItem('henry:device_id'); if (!id) { id = crypto.randomUUID(); localStorage.setItem('henry:device_id', id); } return id; })();
     try {
-      const r = await fetch('https://henry-proxy.henryai.workers.dev/v1/chat', {
-        signal: AbortSignal.timeout(25000),
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Henry-Device': deviceId },
-        body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt }], max_tokens: 120, stream: false }),
+      const r = await runPanelAI({
+        messages: [{ role: 'user', content: prompt }],
+        maxTokens: 120,
+        purpose: 'today.focus-now',
       });
-      const d = await r.json() as any;
-      setHenryFocusQ(d?.choices?.[0]?.message?.content || '');
+      setHenryFocusQ(r.content);
     } catch { /* ignore */ }
     setHenryFocusBusy(false);
   }
@@ -386,7 +368,12 @@ Write 2-4 short sentences covering: one encouraging opening, what to focus on to
     planParts.push(`Create a focused daily plan for ${ownerName}. Format:\n**Morning** (1-2 things)\n**Afternoon** (1-2 things)\n**This evening** (1 thing)\n\nBe specific to their actual tasks/reminders. Keep each line short. End with one sentence of encouragement.`);
     const prompt = planParts.join('\n\n');
     try {
-      let d: any = null;
+      // Henry's own loopback sync service first, as before — a local companion
+      // feature, not a provider. When it is not running, the fallback used to be
+      // the hosted proxy with a hardcoded model; it is now the configured engine
+      // through the governed path, so this feature classifies and prices like
+      // every other one instead of quietly choosing a provider for itself.
+      let planText = '';
       try {
         const r = await fetch('http://127.0.0.1:4242/sync/prompt', {
           method: 'POST', signal: AbortSignal.timeout(30000),
@@ -394,20 +381,19 @@ Write 2-4 short sentences covering: one encouraging opening, what to focus on to
           body: JSON.stringify({ text: prompt }),
         });
         const rd = await r.json() as any;
-        d = { choices: [{ message: { content: rd?.reply || rd?.response || '' } }] };
+        planText = rd?.reply || rd?.response || '';
       } catch {
-        const deviceId = (() => { let id = localStorage.getItem('henry:device_id'); if (!id) { id = crypto.randomUUID(); localStorage.setItem('henry:device_id', id); } return id; })();
-        const r = await fetch('https://henry-proxy.henryai.workers.dev/v1/chat', {
-          signal: AbortSignal.timeout(25000), method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Henry-Device': deviceId },
-          body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt }], max_tokens: 350, stream: false }),
+        const r = await runPanelAI({
+          messages: [{ role: 'user', content: prompt }],
+          maxTokens: 350,
+          purpose: 'today.daily-plan',
         });
-        d = await r.json() as any;
+        planText = r.content;
       }
-      const planText = d?.choices?.[0]?.message?.content || 'No response';
+      planText = planText || 'No response';
       setPlannerResult(planText);
-      if (planText && planText !== 'No response') setCached('daily-plan', planText);
-    } catch { setPlannerResult('Could not reach Henry AI.'); }
+      if (planText !== 'No response') setCached('daily-plan', planText);
+    } catch (e) { setPlannerResult(panelAIErrorMessage(e)); }
     setPlannerBusy(false);
   }
 

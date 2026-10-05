@@ -12,6 +12,7 @@ import { loadWorkingMemory } from '../../henry/workingMemory';
 import { getRhythmState } from '../../henry/dailyRhythm';
 import { getSessionMode, inferSessionMode, type SessionMode } from '../../henry/sessionModeStore';
 import { computeDomainDistribution, LIFE_AREA_LABELS, type LifeArea } from '../../henry/lifeAreas';
+import { runPanelAI, panelAIErrorMessage } from '../../henry/panelAI';
 import {
   loadOpenCommitments,
   addCommitment,
@@ -716,17 +717,14 @@ Format:
 **One focus for next week:** 1 sentence
 
 Be encouraging and specific. Keep it under 80 words total.`;
-    const deviceId = (() => { let id = localStorage.getItem('henry:device_id'); if (!id) { id = crypto.randomUUID(); localStorage.setItem('henry:device_id', id); } return id; })();
     try {
-      const r = await fetch('https://henry-proxy.henryai.workers.dev/v1/chat', {
-        signal: AbortSignal.timeout(25000),
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Henry-Device': deviceId },
-        body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt }], max_tokens: 300, stream: false }),
+      const r = await runPanelAI({
+        messages: [{ role: 'user', content: prompt }],
+        maxTokens: 300,
+        purpose: 'weekly.review',
       });
-      const d = await r.json() as any;
-      setWeekSummary(d?.choices?.[0]?.message?.content || 'No response');
-    } catch { setWeekSummary('Could not reach Henry AI.'); }
+      setWeekSummary(r.content || 'No response');
+    } catch (e) { setWeekSummary(panelAIErrorMessage(e)); }
     setWeekSummaryBusy(false);
   }
 

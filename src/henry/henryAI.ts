@@ -61,6 +61,22 @@ interface ResolvedBackend {
   model: string;
 }
 
+/**
+ * The engine the user configured, in the exact shape `ai:send` expects.
+ *
+ * This is the single point where a panel turn's provider/model/credential is
+ * decided, and it is deliberately the SAME decision `callHenryAI` makes — both
+ * go through `resolveChat`, which is the classification authority. A panel
+ * cannot pick its own provider, and it cannot pick a model the user never chose.
+ */
+export interface ConfiguredEngine {
+  provider: string;
+  model: string;
+  apiKey: string;
+  /** Ollama's configured endpoint; undefined for every other provider. */
+  apiUrl?: string;
+}
+
 interface HenryApi {
   getSettings?: () => Promise<Record<string, string>>;
   getProviders?: () => Promise<unknown[]>;
@@ -97,6 +113,41 @@ async function readSettings(): Promise<Record<string, string>> {
  */
 async function resolveBackend(opts: CallHenryAIOptions): Promise<ResolvedBackend> {
   const settings = await readSettings();
+  const route = await resolveRoute(opts.messages.map((m) => m.content).join('\n'), settings);
+  const apiKey = route.apiKey;
+
+  switch (route.provider) {
+    case 'ollama':
+      return { kind: 'ollama', baseUrl: route.apiUrl, model: route.model };
+    case 'openai':
+      return { kind: 'openai', apiKey, model: route.model };
+    case 'anthropic':
+      return { kind: 'anthropic', apiKey, model: route.model };
+    case 'google':
+      return { kind: 'google', apiKey, model: route.model };
+    default:
+      // Every other supported engine (the opencode bridge, Zen, a user's own
+      // relay) is reached through Chat's own transport, not through this
+      // panel-level HTTP path. Saying so is the honest answer; answering from
+      // a different engine would be the silent substitution.
+      throw new NoBackendAvailableError(
+        `Provider \`${route.provider}\` is selected, but panels cannot reach it over this path. ` +
+        'Ask Henry in Chat, or choose a provider with its own API key in **Settings → AI Providers**.',
+      );
+  }
+}
+
+/**
+ * The routing decision itself, shared by `callHenryAI`'s own HTTP transport and
+ * by {@link module:henry/panelAI}, which dispatches through `ai:send`.
+ *
+ * Both must agree on which provider and model a panel turn uses, so both ask
+ * this. There is no second resolver.
+ */
+async function resolveRoute(
+  content: string,
+  settings: Record<string, string>,
+): Promise<ConfiguredEngine> {
   const providerId = (settings[CHAT_PROVIDER_SETTING] ?? '').trim();
   const model = (settings[CHAT_MODEL_SETTING] ?? '').trim();
 
@@ -122,7 +173,7 @@ async function resolveBackend(opts: CallHenryAIOptions): Promise<ResolvedBackend
   // unresolved setting; it never resolves to a substitute.
   let route: ModelRoute;
   try {
-    route = resolveChat(opts.messages.map((m) => m.content).join('\n'), settings, rows as never);
+    route = resolveChat(content, settings, rows as never);
   } catch (err) {
     if (isProviderRoutingError(err)) throw new NoBackendAvailableError(err.detail);
     throw err;
@@ -134,27 +185,29 @@ async function resolveBackend(opts: CallHenryAIOptions): Promise<ResolvedBackend
 
   const apiKey = (row?.api_key || row?.apiKey || '').trim();
 
-  switch (route.provider) {
-    case 'ollama':
-      return { kind: 'ollama', baseUrl: (settings.ollama_base_url || '').trim() || 'http://localhost:11434', model: route.model };
-    case 'openai':
-      return { kind: 'openai', apiKey, model: route.model };
-    case 'anthropic':
-      return { kind: 'anthropic', apiKey, model: route.model };
-    case 'google':
-      return { kind: 'google', apiKey, model: route.model };
-    default:
-      // Every other supported engine (the opencode bridge, Zen, a user's own
-      // relay) is reached through Chat's own transport, not through this
-      // panel-level HTTP path. Saying so is the honest answer; answering from
-      // a different engine would be the silent substitution.
-      throw new NoBackendAvailableError(
-        `Provider \`${route.provider}\` is selected, but panels cannot reach it over this path. ` +
-        'Ask Henry in Chat, or choose a provider with its own API key in **Settings → AI Providers**.',
-      );
-  }
+  return {
+    provider: route.provider,
+    model: route.model,
+    apiKey,
+    // Only Ollama reads a base URL; the rest are fixed endpoints, and sending
+    // one would be meaningless rather than harmless-but-ignored.
+    ...(route.provider === 'ollama'
+      ? { apiUrl: (settings.ollama_base_url || '').trim() || 'http://localhost:11434' }
+      : {}),
+  };
 }
 
+/**
+ * The engine a panel turn will use, resolved the same way for every panel.
+ *
+ * Exported so `panelAI.ts` and `callHenryAI` cannot drift: both call this, so
+ * there is exactly one answer to "which provider does a panel use".
+ */
+export async function resolveConfiguredEngine(
+  messages: readonly HenryAIMessage[],
+): Promise<ConfiguredEngine> {
+  return resolveRoute(messages.map((m) => m.content).join('\n'), await readSettings());
+}
 
 /**
  * Call an LLM using the engine the user configured.

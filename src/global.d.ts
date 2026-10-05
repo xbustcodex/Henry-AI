@@ -144,6 +144,13 @@ declare global {
     tools?: unknown[];
     /** Session id the agent run logs its tool-call audit trail against. */
     sessionId?: string;
+    /**
+     * Stable name of the panel feature making this call (e.g.
+     * `finance.pl-summary`). When set, the main process writes a `cost_log` row
+     * so the turn appears in Henry's own AI spend — the reason panel AI stopped
+     * being unmeasurable.
+     */
+    logPurpose?: string;
   }
 
   interface HenryAIUsage {

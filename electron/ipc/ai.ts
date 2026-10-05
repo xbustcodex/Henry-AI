@@ -71,6 +71,20 @@ interface AiRequest {
   tools?: ModelTool[];
   /** Session id for the tool-call audit log (agent runs only). */
   sessionId?: string;
+  /**
+   * Names the panel feature this call belongs to (e.g. `finance.pl-summary`).
+   *
+   * Chat turns are attributed to a conversation by `messages:save`, but a panel
+   * call has no conversation — so panel AI features reached the provider with
+   * nothing written to `cost_log`. Henry's own AI spend is the one number it
+   * claims to measure accurately; a caller that supplies `logPurpose` is asking
+   * for its spend to be counted, and the handler writes one `cost_log` row per
+   * call.
+   *
+   * Recorded even when the cost is 0 (Ollama): the row is the usage record, not
+   * just the bill.
+   */
+  logPurpose?: string;
 }
 
 // ── Pricing ───────────────────────────────────────────────────
@@ -1376,11 +1390,70 @@ const activeStreams = new Map<string, AbortController>();
 
 // ── Register IPC Handlers ─────────────────────────────────────
 
-export function registerAIHandlers(_db: Database.Database, getWindow: WindowGetter) {
+export function registerAIHandlers(db: Database.Database, getWindow: WindowGetter) {
   // Non-streaming request
   ipcMain.handle('ai:send', async (_, params: AiRequest) => {
-    return callAI(params);
+    const result = await callAI(params);
+
+    // A panel feature that asks to be counted gets counted here, in the one
+    // process that can price the call. Chat turns are logged from the
+    // conversation row by `messages:save`; a panel turn has no conversation, so
+    // this is the only place its spend can land.
+    //
+    // Logged on every completion that reported usage, including a 0-cost Ollama
+    // turn: a row with tokens and no money is still the record that the feature
+    // ran, and it is what lets the cost dashboard attribute panel AI at all.
+    if (params.logPurpose && result.usage) {
+      recordCostLog(db, {
+        provider: params.provider,
+        model: params.model,
+        tokensInput: result.usage.input || 0,
+        tokensOutput: result.usage.output || 0,
+        cost: result.cost || 0,
+        purpose: params.logPurpose,
+      });
+    }
+
+    return result;
   });
+
+  /**
+   * One `cost_log` row for a panel turn. `task_id` carries the feature name —
+   * the column exists for exactly this, and leaving it NULL is what made panel
+   * AI unattributable.
+   *
+   * A write failure must not fail the answer the user is waiting for, so it is
+   * swallowed with a warning rather than thrown.
+   */
+  function recordCostLog(
+    database: Database.Database,
+    row: {
+      provider: string;
+      model: string;
+      tokensInput: number;
+      tokensOutput: number;
+      cost: number;
+      purpose: string;
+    },
+  ): void {
+    try {
+      database
+        .prepare(
+          `INSERT INTO cost_log (provider, model, tokens_input, tokens_output, cost, task_id)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          row.provider,
+          row.model,
+          row.tokensInput,
+          row.tokensOutput,
+          row.cost,
+          row.purpose,
+        );
+    } catch (e) {
+      console.warn('[ai:send] cost_log write failed:', e);
+    }
+  }
 
   // Streaming request — preload sends { ...params, channelId }
   // Uses ipcMain.handle (preload calls ipcRenderer.invoke)
@@ -1396,6 +1469,18 @@ export function registerAIHandlers(_db: Database.Database, getWindow: WindowGett
     };
     const onDone = (fullText: string, usage?: StreamTokenUsage) => {
       const cost = usage ? calculateCost(params.model, usage.input || 0, usage.output || 0) : 0;
+      // Same accounting as `ai:send`: a streamed panel turn that declares a
+      // purpose is still spend, and `messages:save` will never see it.
+      if (params.logPurpose && usage) {
+        recordCostLog(db, {
+          provider: params.provider,
+          model: params.model,
+          tokensInput: usage.input || 0,
+          tokensOutput: usage.output || 0,
+          cost,
+          purpose: params.logPurpose,
+        });
+      }
       safeSend(getWindow, 'ai:stream:done', {
         channelId,
         fullText,

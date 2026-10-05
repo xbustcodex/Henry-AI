@@ -9,6 +9,7 @@ import { sendToHenry } from '../../actions/store/chatBridgeStore';
 import { addCommitment as addToStore } from '../../henry/commitmentStore';
 import { toast, confirmDialog } from '../ui/Toast';
 import { useStore } from '../../store';
+import { runPanelAI, panelAIErrorMessage } from '../../henry/panelAI';
 
 const getApi = () => (window as any).henryAPI as any;
 
@@ -92,17 +93,14 @@ export default function GoalsPanel() {
     setCoaching('');
     const ownerName = localStorage.getItem('henry:owner_name') || 'you';
     const prompt = 'You are Henry, an encouraging life coach. ' + ownerName + ' has a goal: "' + goal.title + '". Priority: ' + Math.round(goal.priority_score * 10) + '/10. Status: ' + goal.status + (goal.summary ? '. Details: ' + goal.summary : '') + '. Give a 3-4 sentence coaching response: acknowledge the goal, one practical next step for today, brief encouragement.';
-    const deviceId = (() => { let id = localStorage.getItem('henry:device_id'); if (!id) { id = crypto.randomUUID(); localStorage.setItem('henry:device_id', id); } return id; })();
     try {
-      const r = await fetch('https://henry-proxy.henryai.workers.dev/v1/chat', {
-        signal: AbortSignal.timeout(25000),
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Henry-Device': deviceId },
-        body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt }], max_tokens: 300, stream: false }),
+      const r = await runPanelAI({
+        messages: [{ role: 'user', content: prompt }],
+        maxTokens: 300,
+        purpose: 'goals.coach',
       });
-      const d = await r.json() as any;
-      setCoaching(d?.choices?.[0]?.message?.content || 'No response');
-    } catch { setCoaching('Could not reach Henry AI.'); }
+      setCoaching(r.content || 'No response');
+    } catch (e) { setCoaching(panelAIErrorMessage(e)); }
     setCoachingBusy(false);
   }
 
