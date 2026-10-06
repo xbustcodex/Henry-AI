@@ -29,11 +29,46 @@ export function extractErrorDetail(error: unknown): string {
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter(Boolean);
-  const specific =
-    lines.find((l) =>
-      /unknown flags|exited with code|not found|unauthorized|forbidden|401|403|404|500/i.test(l),
-    ) ?? lines[lines.length - 1];
-  return specific.replace(/^Error:\s*/i, '').slice(0, 220).trim();
+  const specific = lines.find((l) =>
+    /unknown flags|exited with code|not found|unauthorized|forbidden|401|403|404|500/i.test(l),
+  );
+  if (specific) return specific.replace(/^Error:\s*/i, '').slice(0, 220).trim();
+
+  // Fallback: the FIRST sentence that states a failure — never the last line. The
+  // tail of a Henry-authored error is Henry's own remediation copy ("If Ollama is
+  // on a different machine, update the URL in Settings → Engines."), and
+  // reporting that back as the reason sends the user to fix something that is not
+  // broken. Sentences are classified individually because the reason and the
+  // advice share a line: "Ollama isn't running. Start it in Terminal:".
+  const sentences = lines.flatMap((l) => l.split(/(?<=[.!?])\s+/));
+  const reason = sentences.find((s) => !isNonReasonLine(s));
+  return stripIpcWrapper(reason ?? '').slice(0, 220).trim();
+}
+
+/** Electron's IPC envelope. Names the channel, never the cause. */
+const IPC_WRAPPER = /^error invoking remote method '[^']*'[::]\s*/i;
+
+function stripIpcWrapper(line: string): string {
+  return line.replace(/^Error:\s*/i, '').replace(IPC_WRAPPER, '').trim();
+}
+
+/**
+ * True for lines that cannot be the cause: Henry's own remediation instructions,
+ * transport envelopes, and bare shell/code fragments. `extractErrorDetail` must
+ * never return one of these as the underlying reason.
+ */
+function isNonReasonLine(line: string): boolean {
+  const l = line.replace(IPC_WRAPPER, '').replace(/^Error:\s*/i, '').trim();
+  if (!l) return true;
+  return (
+    /^(if|try|run|start|update|check|switch|open|install|add|go to|see|make sure|restart|verify|confirm|revisit|set)\b/i.test(l) ||
+    /\b(update the URL|settings →|start it in terminal|run this in terminal|check settings|switch to a different)\b/i.test(l) ||
+    // Shell fragments are instructions ("ollama pull llama3.2:3b"). The
+    // subcommand is what makes it a command: "Ollama isn't running." is prose and
+    // is the single most important reason these messages carry, so a bare
+    // leading "ollama" must not sweep it away.
+    /^(ollama|npm|npx|pip|brew|git|sudo)\s+(pull|install|push|run|add|serve|start|list|exec|upgrade)\b/i.test(l)
+  );
 }
 
 /** True if the error string looks like a network / connectivity problem. */

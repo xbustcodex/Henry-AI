@@ -1147,6 +1147,76 @@ runtime metadata. `presenceTier` otherwise only affects `maxOutputTokens`
 
 Ordinary installed Chat remains **NOT CLOSED**.
 
+## 12k. FIXED — all three blockers; a second defect found by the watchdog
+
+### 1. Unbounded tool/agent streaming turn — FIXED
+
+`electron/providers/ollama.ts` now owns a bound for the outstanding provider
+operation, which is the only place that can actually terminate it:
+
+- `OLLAMA_TOOLS_TIMEOUT_MS = 60_000`, applied by `withToolRoundDeadline` around both
+  `callOllamaToolsRound` and `streamOllamaToolsRound`.
+- On expiry it **aborts** the request via a linked `AbortController` — it does not
+  merely stop waiting, so no provider call is left running.
+- `OllamaToolsTimeoutError` / `isOllamaToolsTimeout` carry `timedOut` so the identity
+  check survives module duplication.
+- `Promise.race` means a late completion cannot re-settle the abandoned round.
+- Timer and abort listener are released on every exit.
+- A round cancelled before it starts fails fast, so cancellation is never reported as
+  a provider stall.
+
+60s is not invented: it matches the existing `MODEL_LIST_TIMEOUT_MS`, and a live
+measurement showed a cold `llama3.2:3b` spending **57s in `load_duration` alone**
+before answering at all. A shorter bound would abandon rounds about to succeed.
+
+`electron/ipc/ai.ts` degrades a tools stall the same way the OpenCode bridge already
+reports `ToolsUnsupportedError`: `onToolsUnavailable` is set, and the turn is re-run
+plain so **the user still gets an answer**. Tools are not silently removed from a
+working round, and Agent mode is untouched.
+
+### 2. False 8B/70B vocabulary — FIXED
+
+`ChatView.tsx` no longer hardcodes `presenceTier === 'quality' ? '70B' : ... '8B'`.
+`presenceTierLabel()` in `src/henry/ambientBrain.ts` returns `'deep'` / `'quick'` / `''`
+— tier wording, never a parameter count. `modelRouter.ts:367-368` was left alone
+because it derives its label from the real `modelId`, which is authoritative.
+
+### 3. extractErrorDetail misidentifying Henry guidance — FIXED
+
+`src/henry/errorMessages.ts` no longer falls back to `lines[lines.length - 1]`. It
+classifies **sentences** (reason and advice share a line:
+`"Ollama isn't running. Start it in Terminal:"`) and returns the first one that is not
+Henry's own remediation, a shell fragment, or an IPC envelope. Advice-only errors now
+return `''` rather than a wrong reason.
+
+### Bonus defect found while fixing the above: configured apiUrl was dropped
+
+`callAI` declared an inline param type with no `apiUrl`, while `callOllamaProvider`
+reads `params.apiUrl`. Every plain round therefore fell back to `localhost:11434`
+regardless of Settings — which is exactly the situation the "update the URL in
+Settings" advice exists for. `callAI` now takes `AiRequest`.
+
+### The watchdog exposed a SECOND defect — reported, not masked
+
+Warm-model measurement (the earlier "tools never answers" reading was a **cold-load
+artefact**, not the tools payload):
+
+| Warm round | Result |
+|---|---|
+| no tools | 632 ms, `"Blue."` |
+| with tools, `"Name one colour."` | 2836 ms, content `""`, **tool call `get_weather({"city":"red"})`** |
+| with tools, `"What is the weather in Paris?"` | 2821 ms, `get_weather({"city":"Paris"})` |
+
+`llama3.2:3b` reports tool capability, so ordinary prompts enter the agent path, and
+the model **hallucinates a tool call for a question that needs none**. The agent loop
+then runs extra rounds; a confirm-tier tool additionally waits on
+`CONFIRM_TIMEOUT_MS = 5 * 60 * 1000` in `toolRunner.ts:150`. The loop itself is
+capped at `maxRounds ?? 10`, so a turn is now bounded (worst case 10 x 60s) rather
+than infinite, but the underlying cause of ordinary prompts becoming multi-round agent
+turns is NOT fixed here — stripping tools would break the routing contract.
+
+Ordinary installed Chat remains **NOT CLOSED**. Installed 3.0.8 Owner is untouched.
+
 ## 12. Next recommended task, in priority order
 
 1. **Rebuild, package, install** from `9eb73af`; re-run the fresh-profile acceptance end

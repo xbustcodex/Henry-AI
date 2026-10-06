@@ -22,6 +22,7 @@ import {
   callOllamaToolsRound,
   resolveOllamaBaseUrl,
   ollamaNotRunningError,
+  isOllamaToolsTimeout,
 } from '../providers/ollama';
 import { parseAnthropicContent, parseInlineToolCalls, parseOpenAIToolCalls } from '../providers/toolCalls';
 import { retiredProviderError } from '../providers/retiredProviders';
@@ -565,15 +566,13 @@ async function callOllamaProvider(params: AiRequest): Promise<{
  * Used by the Worker engine in taskBroker for background tasks.
  * Accepts an optional AbortSignal for task cancellation.
  */
-export async function callAI(params: {
-  provider: string;
-  model: string;
-  apiKey: string;
-  messages: AiMessage[];
-  temperature?: number;
-  maxTokens?: number;
-  signal?: AbortSignal;
-}): Promise<{ content: string; usage?: { input: number; output: number }; cost: number }> {
+export async function callAI(
+  // `AiRequest`, not an inline shape: the inline shape listed no `apiUrl`, while
+  // `callOllamaProvider` reads `params.apiUrl`. The configured Ollama endpoint was
+  // therefore unpassable and every plain round fell back to localhost, which is
+  // precisely the case the "update the URL in Settings" advice exists for.
+  params: AiRequest,
+): Promise<{ content: string; usage?: { input: number; output: number }; cost: number }> {
   // Validate messages before sending
   for (const m of params.messages) {
     if (!m.role || !['user', 'assistant', 'system'].includes(m.role)) {
@@ -1338,31 +1337,53 @@ export async function callAIWithTools(params: ToolCompletionParams): Promise<Mod
         return callOpencodeToolsCompletion({ ...params, modelTools: [] });
       }
     case 'ollama': {
-      const round = params.onDelta
-        ? // A caller that can surface deltas gets a genuinely streamed tool
-          // round: `stream: true` AND `tools` in one request. Without a delta
-          // channel the buffered round is used, so nothing changes for a
-          // caller that cannot display progress.
-          await streamOllamaToolsRound({
-            model: params.model,
-            messages: params.messages,
-            modelTools: params.modelTools,
-            apiUrl: params.apiUrl,
-            temperature: params.temperature,
-            maxTokens: params.maxTokens,
-            signal: params.signal,
-            onDelta: params.onDelta,
-          })
-        : await callOllamaToolsRound({
-            model: params.model,
-            messages: params.messages,
-            modelTools: params.modelTools,
-            apiUrl: params.apiUrl,
-            temperature: params.temperature,
-            maxTokens: params.maxTokens,
-            signal: params.signal,
-          });
-      return { content: round.content, toolCalls: round.toolCalls, usage: round.usage };
+      // Ollama can accept a `tools` body and then never answer it at all: no
+      // response, no error, no stream close. The round is bounded, and a stall
+      // means this runtime cannot run Henry's tools — the same situation the
+      // OpenCode bridge reports as `ToolsUnsupportedError`. That is a reason to
+      // drop agent capability for this turn, NOT to fail the turn: the user asked
+      // a question and must still get an answer. Re-run plain and say why.
+      try {
+        const round = params.onDelta
+          ? // A caller that can surface deltas gets a genuinely streamed tool
+            // round: `stream: true` AND `tools` in one request. Without a delta
+            // channel the buffered round is used, so nothing changes for a
+            // caller that cannot display progress.
+            await streamOllamaToolsRound({
+              model: params.model,
+              messages: params.messages,
+              modelTools: params.modelTools,
+              apiUrl: params.apiUrl,
+              temperature: params.temperature,
+              maxTokens: params.maxTokens,
+              signal: params.signal,
+              onDelta: params.onDelta,
+            })
+          : await callOllamaToolsRound({
+              model: params.model,
+              messages: params.messages,
+              modelTools: params.modelTools,
+              apiUrl: params.apiUrl,
+              temperature: params.temperature,
+              maxTokens: params.maxTokens,
+              signal: params.signal,
+            });
+        return { content: round.content, toolCalls: round.toolCalls, usage: round.usage };
+      } catch (err: unknown) {
+        if (!isOllamaToolsTimeout(err)) throw err;
+        params.onToolsUnavailable?.(err instanceof Error ? err.message : String(err));
+        const plain = await callAI({
+          provider: params.provider,
+          model: params.model,
+          apiKey: params.apiKey,
+          apiUrl: params.apiUrl,
+          messages: params.messages as AiMessage[],
+          temperature: params.temperature,
+          maxTokens: params.maxTokens,
+          signal: params.signal,
+        });
+        return { content: plain.content, toolCalls: [], usage: plain.usage };
+      }
     }
     default: {
       // No tool protocol for this provider: one plain text round, no tool calls.

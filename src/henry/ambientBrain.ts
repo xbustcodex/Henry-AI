@@ -94,6 +94,19 @@ export function announceDone(thing?: string, count?: number): string {
  * Detects the tier of a task from the content and quality preference.
  * Returns 'fast' | 'balanced' | 'quality' for use in presence decisions.
  */
+
+/**
+ * A human-readable name for a presence tier, or '' for the default.
+ *
+ * This must name the TIER and never a model size. The label used to be a
+ * hardcoded `'70B'` / `'8B'` — retired Groq model names — so a user running
+ * Ollama `llama3.2:3b` was told their 3.2B model was an 8B one purely because of
+ * the tier it had been assigned. A tier describes how much work a prompt
+ * implies, so it has no parameter count to report.
+ */
+export function presenceTierLabel(tier: 'fast' | 'balanced' | 'quality'): string {
+  return tier === 'quality' ? 'deep' : tier === 'fast' ? 'quick' : '';
+}
 export function detectPresenceTier(
   content: string,
   settings: Record<string, string>,

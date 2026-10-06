@@ -66,7 +66,7 @@ import { extractFactsFromConversation, addFacts, persistFactsToDb, buildMemoryCo
 import { getSmartSuggestions, type SmartSuggestion } from '@/henry/smartSuggestions';
 import { trackUsage } from '@/henry/henryAnalytics';
 import { shouldSummarize, buildSummaryPrompt, saveSessionSummary, getSessionSummary } from '@/henry/contextSummary';
-import { getPresencePhrase, speakPresence, detectPresenceTier } from '@/henry/ambientBrain';
+import { getPresencePhrase, speakPresence, detectPresenceTier, presenceTierLabel } from '@/henry/ambientBrain';
 import {
   buildHenryMemoryContextBlock,
   capMessageContent,
@@ -1536,9 +1536,9 @@ What do you want to tackle first?`);
     }
     const route = preflight.route;
 
-    // Detect tier before resolving model (for presence phrase and status label)
+    // Detect tier before resolving model (for presence phrase and status label).
     const presenceTier = detectPresenceTier(content, settings);
-    const tierLabel = presenceTier === 'quality' ? '70B' : presenceTier === 'fast' ? '8B' : '';
+    const tierLabel = presenceTierLabel(presenceTier);
     setCompanionStatus({
       status: 'thinking',
       taskDescription: tierLabel ? `Thinking… (${tierLabel})` : 'Thinking…',

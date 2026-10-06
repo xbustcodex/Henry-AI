@@ -216,6 +216,111 @@ export interface OllamaToolParams {
   maxTokens?: number;
   signal?: AbortSignal;
   fetchImpl?: OllamaFetch;
+  /**
+   * How long this round may stay outstanding before it is abandoned. Overridable
+   * so tests can use a short deterministic budget instead of the real one.
+   */
+  timeoutMs?: number;
+}
+
+/**
+ * How long a tools round may stay outstanding before it is abandoned.
+ *
+ * Ollama accepts a `tools` body and then simply never answers: no response, no
+ * error, no stream close. Nothing in the fetch path notices, so the agent turn
+ * settles on nothing at all - no chunk, no done, no error - and the renderer
+ * stays on "Thinking..." indefinitely. A bound is the only thing that makes the
+ * turn terminal, so it lives here at the layer that owns the outstanding request
+ * rather than in the caller.
+ *
+ * Sized to the same 60s the app already gives Ollama model operations
+ * (`MODEL_LIST_TIMEOUT_MS`), not invented: measured live, a cold `llama3.2:3b`
+ * spent 57s in `load_duration` alone before answering at all, so a shorter bound
+ * would abandon rounds that were about to succeed. The stall this guards against
+ * is infinite, so erring long costs a slow turn rather than a wrong one.
+ */
+export const OLLAMA_TOOLS_TIMEOUT_MS = 60_000;
+
+/**
+ * A tools round abandoned for producing nothing inside its budget.
+ *
+ * `timedOut` is what callers branch on, so the identity check survives module
+ * duplication and any future widening of the class hierarchy.
+ */
+export class OllamaToolsTimeoutError extends Error {
+  readonly timedOut = true;
+  constructor(
+    readonly model: string,
+    readonly timeoutMs: number,
+  ) {
+    super(
+      `Ollama did not answer the "${model}" tool request within ${Math.round(timeoutMs / 1000)}s.`,
+    );
+    this.name = 'OllamaToolsTimeoutError';
+  }
+}
+
+/** True for a tools round abandoned because the provider stopped responding. */
+export function isOllamaToolsTimeout(err: unknown): boolean {
+  return (
+    err instanceof OllamaToolsTimeoutError ||
+    (typeof err === 'object' &&
+      err !== null &&
+      (err as { timedOut?: unknown }).timedOut === true)
+  );
+}
+
+/**
+ * Run a tools round under a deadline.
+ *
+ * The deadline ABORTS the request rather than merely giving up on it: an
+ * abandoned provider call left running is exactly the background work the rule
+ * forbids. Caller cancellation stays a cancellation, and once the deadline has
+ * settled the race the losing promise can only resolve into nothing, so a late
+ * completion cannot mutate anything. Timer and listener are released on every
+ * exit.
+ */
+async function withToolRoundDeadline<T>(
+  model: string,
+  callerSignal: AbortSignal | undefined,
+  timeoutMs: number,
+  run: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  // A round cancelled before it starts must not sit out the whole budget
+  // waiting for a deadline that would then report it as a provider stall.
+  // Cancellation and timeout are different facts about a turn.
+  if (callerSignal?.aborted) {
+    throw callerSignal.reason ?? new Error('Ollama tool request cancelled');
+  }
+
+  const controller = new AbortController();
+  const onCallerAbort = () => controller.abort(callerSignal?.reason);
+  if (callerSignal) callerSignal.addEventListener('abort', onCallerAbort, { once: true });
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let expired = false;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      expired = true;
+      controller.abort();
+      reject(new OllamaToolsTimeoutError(model, timeoutMs));
+    }, timeoutMs);
+  });
+
+  const round = run(controller.signal);
+  // If the deadline wins, the round keeps rejecting on its own; swallow that so
+  // an abandoned request is not an unhandled rejection.
+  round.catch(() => {});
+
+  try {
+    return await Promise.race([round, deadline]);
+  } catch (err) {
+    if (expired) throw new OllamaToolsTimeoutError(model, timeoutMs);
+    throw err;
+  } finally {
+    clearTimeout(timer);
+    if (callerSignal) callerSignal.removeEventListener('abort', onCallerAbort);
+  }
 }
 
 /**
@@ -280,6 +385,15 @@ function flattenText(content: MessagePart[] | undefined): string {
  * is mined for a tool call rather than reported as "no tool calls".
  */
 export async function callOllamaToolsRound(params: OllamaToolParams): Promise<OllamaToolRound> {
+  return withToolRoundDeadline(
+    params.model,
+    params.signal,
+    params.timeoutMs ?? OLLAMA_TOOLS_TIMEOUT_MS,
+    (signal) => runCallOllamaToolsRound({ ...params, signal }),
+  );
+}
+
+async function runCallOllamaToolsRound(params: OllamaToolParams): Promise<OllamaToolRound> {
   const base = resolveOllamaBaseUrl(params.apiUrl);
   const doFetch = params.fetchImpl ?? (globalThis.fetch as unknown as OllamaFetch);
 
@@ -378,6 +492,15 @@ function mergeToolCalls(into: ParsedToolCall[], incoming: ParsedToolCall[]): voi
  * and it would look like it worked.
  */
 export async function streamOllamaToolsRound(params: OllamaToolStreamParams): Promise<OllamaToolRound> {
+  return withToolRoundDeadline(
+    params.model,
+    params.signal,
+    params.timeoutMs ?? OLLAMA_TOOLS_TIMEOUT_MS,
+    (signal) => runStreamOllamaToolsRound({ ...params, signal }),
+  );
+}
+
+async function runStreamOllamaToolsRound(params: OllamaToolStreamParams): Promise<OllamaToolRound> {
   const base = resolveOllamaBaseUrl(params.apiUrl);
   const doFetch = params.fetchImpl ?? (globalThis.fetch as unknown as OllamaFetch);
 

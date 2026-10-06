@@ -11,7 +11,7 @@
  * Hermetic: `fetch` is stubbed, so no Ollama and no credentials. The live wire
  * is proven separately against a real local Ollama.
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 vi.mock('electron', () => ({ ipcMain: { handle() {} }, BrowserWindow: class {} }));
 vi.mock('./database', () => ({ getDb: () => ({ prepare: () => ({ get: () => undefined }) }) }));
@@ -20,6 +20,7 @@ import { ToolRegistry } from '../agent/toolRegistry';
 import type { ToolDefinition } from '../agent/types';
 import { runToolConversation, type CompleteHandlers, type RunnerMessage } from '../agent/toolRunner';
 import { callAIWithTools } from './ai';
+import { OLLAMA_TOOLS_TIMEOUT_MS } from '../providers/ollama';
 
 const enc = (s: string) => new TextEncoder().encode(s);
 
@@ -259,5 +260,137 @@ describe('runner → callAIWithTools → streaming Ollama tool round', () => {
     expect(result.content).toBe('Clear and 18C.');
     const bodies = recorded.map((r) => JSON.parse(r.body) as { stream?: boolean; tools?: unknown[] });
     expect(bodies.every((b) => b.stream === false)).toBe(true);
+  });
+});
+
+/**
+ * A tools round that never answers must not take the whole turn with it.
+ *
+ * Measured live: with `llama3.2:3b` (which reports tool capability, so ordinary
+ * ChatView turns carry tools) Ollama accepted the `/api/chat` body and then
+ * produced no response, no error and no stream close. The turn settled on
+ * nothing — no chunk, no done, no error — and the renderer stayed on "Thinking…".
+ *
+ * The bound lives in the adapter; what is pinned here is the consequence at the
+ * turn level: the round still terminates, and the user still gets an answer.
+ */
+// The stall budget is real production behaviour, so the tests advance to it
+// rather than sitting through it.
+const STALL_BUDGET_MS = OLLAMA_TOOLS_TIMEOUT_MS + 1_000;
+const STALL_TOOLS: Parameters<typeof callAIWithTools>[0]['modelTools'] = [
+  {
+    type: 'function',
+    function: {
+      name: 'get_weather',
+      description: 'Weather for a city',
+      parameters: { type: 'object', properties: { city: { type: 'string' } } },
+    },
+  },
+];
+
+describe('a stalled tools round still ends the turn', () => {
+  beforeEach(() => {
+    recorded = [];
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('D: degrades to a plain answer so the turn completes instead of hanging', async () => {
+    // First request carries `tools` and never answers. The retry does not.
+    let call = 0;
+    globalThis.fetch = (async (url: string, init?: { body?: string }) => {
+      recorded.push({ url: String(url), body: String(init?.body ?? '') });
+      call += 1;
+      if (call === 1) return new Promise<Response>(() => {}); // the stall
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ message: { role: 'assistant', content: 'Blue.' }, prompt_eval_count: 1, eval_count: 1 }),
+      } as Response;
+    }) as unknown as typeof globalThis.fetch;
+
+    const notices: string[] = [];
+    const pending = callAIWithTools({
+      provider: 'ollama',
+      model: 'llama3.2:3b',
+      apiKey: '',
+      apiUrl: 'http://127.0.0.1:11434',
+      messages: [{ role: 'user', content: 'Name one colour.' }],
+      modelTools: STALL_TOOLS,
+      onToolsUnavailable: (n) => notices.push(n),
+    });
+    await vi.advanceTimersByTimeAsync(STALL_BUDGET_MS);
+    const result = await pending;
+
+    // The turn produced an answer — so the renderer clears "Thinking…" and the
+    // user is not left staring at an indefinite wait.
+    expect(result.content).toContain('Blue.');
+    expect(result.toolCalls).toEqual([]);
+
+    // And it said why the agent did nothing, instead of doing it silently.
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatch(/did not answer/i);
+  });
+
+  it('H: the plain retry goes out WITHOUT tools, and keeps the configured apiUrl', async () => {
+    let call = 0;
+    globalThis.fetch = (async (url: string, init?: { body?: string }) => {
+      recorded.push({ url: String(url), body: String(init?.body ?? '') });
+      call += 1;
+      if (call === 1) return new Promise<Response>(() => {});
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ message: { role: 'assistant', content: 'Blue.' }, prompt_eval_count: 1, eval_count: 1 }),
+      } as Response;
+    }) as unknown as typeof globalThis.fetch;
+
+    const pending = callAIWithTools({
+      provider: 'ollama',
+      model: 'llama3.2:3b',
+      apiKey: '',
+      apiUrl: 'http://127.0.0.1:11434',
+      messages: [{ role: 'user', content: 'Name one colour.' }],
+      modelTools: STALL_TOOLS,
+      onToolsUnavailable: () => {},
+    });
+    await vi.advanceTimersByTimeAsync(STALL_BUDGET_MS);
+    await pending;
+
+    expect(recorded.length).toBeGreaterThanOrEqual(2);
+    const retry = JSON.parse(recorded[recorded.length - 1].body) as { tools?: unknown[] };
+    expect(retry.tools).toBeUndefined();
+
+    // The configured endpoint must survive the fallback: dropping it is what sent
+    // users to "update the URL in Settings" for a URL that was already right.
+    for (const rec of recorded) expect(rec.url).toContain('127.0.0.1:11434');
+  });
+
+  it('a round that answers is NOT degraded', async () => {
+    globalThis.fetch = (async (url: string, init?: { body?: string }) => {
+      recorded.push({ url: String(url), body: String(init?.body ?? '') });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ message: { role: 'assistant', content: 'Blue.' }, prompt_eval_count: 1, eval_count: 1 }),
+      } as Response;
+    }) as unknown as typeof globalThis.fetch;
+
+    const notices: string[] = [];
+    const result = await callAIWithTools({
+      provider: 'ollama',
+      model: 'llama3.2:3b',
+      apiKey: '',
+      messages: [{ role: 'user', content: 'Name one colour.' }],
+      modelTools: STALL_TOOLS,
+      onToolsUnavailable: (n) => notices.push(n),
+    });
+
+    expect(result.content).toBe('Blue.');
+    expect(notices).toEqual([]);
+    expect(recorded).toHaveLength(1);
   });
 });
