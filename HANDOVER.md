@@ -917,6 +917,51 @@ the packaged copy share the same ARM64 hash after a full build.
   the machine was touched: Ollama, OMP, PrimePi, PrimeRoute, projects and other
   applications' credentials were not modified.
 
+## 12f. RELEASE RECOVERED — 3.0.8 Owner boots and runs on the real Windows machine
+
+```
+final commit : 001c7de
+OWNER installer  cee9541a98446ec7e78f07e57bda4bce5510dfad983825fed9b8818d79223625
+OWNER asar       c940ebeb4214e643a73c40aa7feab49119d5da734f0e04a7b767df0460af4c06
+OWNER native     cd436f5af1781f2c234a1259ed4ae30a9e7022a51eb29b74c8093a29a06e0ae3
+installed asar   c940ebeb4214e643a73c40aa7feab49119d5da734f0e04a7b767df0460af4c06  (byte-identical)
+installed native  PE32+ MS Windows 6.00 (DLL), x86-64  (verified by reading the binary)
+```
+
+### BOOT GATE — PASS
+```
+startup-failure.json : ABSENT      (the original symptom is gone)
+Henry processes      : 4
+henry.db created     : YES         better-sqlite3 loaded and DB initialised
+CDP window           : "Henry AI"
+```
+
+### Clean first-run acceptance — PASS (first stage)
+```
+welcomeShown        : true        onboarding entered on a genuinely empty profile
+primary action      : "Set up AI →"
+providerRows        : []          no provider configured yet
+anyCredentialBundled: []          ZERO credentials shipped
+groqReturned        : false       retired provider did not return
+settingsKeys        : 5           defaults only
+```
+(`onboardingShown`/`systemMapConsent` read false only because the probe matched later-stage
+wording; the Welcome stage itself is present.)
+
+### Packaging invariant established permanently (§11 of the recovery brief)
+A native module is NOT accepted because it exists, because electron-builder succeeded,
+because the installer was created, or because ASAR packaging succeeded. For target-specific
+native dependencies: **presence + target architecture + target runtime ABI + installed
+load/boot** are all required. `verify-package.mjs` now enforces architecture, and
+`scripts/prepare-native.mjs` makes the prepare step explicit and fail-loud instead of
+hiding failures behind `|| true`.
+
+### Not yet completed in this recovery
+- Standard 3.0.8 x64 rebuild under the corrected native contract, and its artifact re-inspection
+- The remainder of the first-run walk (System Map consent → discovery → Brain → memory → Ready)
+- Restart acceptance
+- Finance ledger transaction test and CSV-import truthfulness through the installed app
+
 ## 12. Next recommended task, in priority order
 
 1. **Rebuild, package, install** from `9eb73af`; re-run the fresh-profile acceptance end
