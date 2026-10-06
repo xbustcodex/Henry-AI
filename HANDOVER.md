@@ -1048,6 +1048,57 @@ does not explain a 236 s UI stall.
 logging and inference layers are all verified working in the installed app; the ChatView
 turn-completion/render path is not. No change has been made pending direction.
 
+## 12i. LOCALISED — ordinary Chat fails ONLY on the streaming Ollama path
+
+No fix applied yet; evidence gathered without changing code.
+
+### Eliminated by direct test, in the installed app
+| Hypothesis | Result |
+|---|---|
+| request shape | `sendMessage` no-tools → 1639 ms, "Blue." ✓ |
+| tools payload | `sendMessage` + `tools:[{name:'henry-agent'}]` + sessionId → 488 ms, "Blue." ✓ |
+| provider/classification/cost | working (unchanged this session) |
+| native packaging | healthy — installed binding verified PE32+ x86-64 |
+| Ollama availability | `/api/chat` direct → 3 s; `llama3.2:3b` loaded |
+
+### The actual failing layer
+The surfaced message is **Henry's own** `ollamaNotRunningError()` string from
+`electron/providers/ollama.ts:66`:
+```
+Ollama isn't running. Start it in Terminal:  ollama serve
+If Ollama is on a different machine, update the URL in Settings → Engines.
+```
+It is thrown when the streaming fetch to Ollama never opens. Ollama is demonstrably
+running and reachable, and the **non-streaming** call to the same host succeeds in
+~1.6 s. So the failure is specific to the streaming request, not to Ollama, the host,
+the model, or the provider.
+
+### Secondary defect found alongside it
+`extractErrorDetail` picked the **last line** of the wrapped error, which here is Henry's
+own guidance text. The user is therefore told "If Ollama is on a different machine…"
+when the actual problem is upstream of that advice. The real cause is still masked. That
+extractor must choose the most specific line, not the last one, and must not surface
+Henry's own remediation copy as the reason.
+
+### The "Thinking… (8B)" label — unexplained
+It does not match the configured `llama3.2:3b`. Not established as causal and not
+guessed at. Its source is still untraced.
+
+### Next step
+1. Compare the streaming request in `electron/providers/ollama.ts` (and the
+   `openAIShapedUrl`/stream dispatch used by `ai:stream`) against the working
+   non-streaming call: URL construction, `localhost` vs `127.0.0.1` resolution, body
+   streaming, and abort-signal handling. A likely candidate is IPv6 `localhost`
+   resolution for the streaming call only — but that is a hypothesis to test, not a
+   conclusion.
+2. Fix `extractErrorDetail` to select the most specific line and never surface Henry's own
+   guidance as the reason.
+3. Trace the `8B` label to authoritative runtime metadata.
+4. Then rebuild Owner + Standard, reinstall, and re-run ordinary chat, second turn, and
+   restart acceptance.
+
+Ordinary installed Chat remains **NOT CLOSED**.
+
 ## 12. Next recommended task, in priority order
 
 1. **Rebuild, package, install** from `9eb73af`; re-run the fresh-profile acceptance end
