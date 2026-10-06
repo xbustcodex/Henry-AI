@@ -33,6 +33,8 @@
  */
 
 import { readFileSync, existsSync } from 'node:fs';
+import path from 'node:path';
+import { readBinaryArch, REQUIRED as NATIVE_REQUIRED } from './prepare-native.mjs';
 
 /** [label, literal that must appear in the packaged output] */
 const PROBES = [
@@ -99,6 +101,37 @@ for (const target of targets) {
   // avoids needing an asar reader as a dependency.
   const buf = readFileSync(target);
   const text = buf.toString('latin1');
+
+  // Native module architecture is a release invariant, not a presence check.
+  //
+  // This guard once verified that boot-critical .node files EXISTED and shipped an ARM64
+  // better_sqlite3.node into a Windows x64 package, which could not be loaded at all -
+  // "not a valid Win32 application" - while every step reported success. Presence plus a
+  // green exit is not evidence that the binary can run on the target.
+  //
+  // Only the unpacked tree is inspected: that is what Electron dlopen()s at runtime.
+  const unpacked = path.join(path.dirname(target), 'app.asar.unpacked');
+  const nativeRoots = [
+    'node_modules/better-sqlite3/build/Release/better_sqlite3.node',
+  ];
+  for (const rel of nativeRoots) {
+    const f = path.join(unpacked, ...rel.split('/'));
+    if (!existsSync(f)) {
+      console.error(`FAIL  native module missing: ${rel}`);
+      failed = true;
+      continue;
+    }
+    const got = readBinaryArch(f);
+    if (got.format !== NATIVE_REQUIRED.format || got.arch !== NATIVE_REQUIRED.arch) {
+      console.error(
+        `FAIL  native module ${rel} is ${got.format}/${got.arch}; ` +
+          `a Windows x64 package requires ${NATIVE_REQUIRED.format}/${NATIVE_REQUIRED.arch}.`,
+      );
+      failed = true;
+      continue;
+    }
+    console.log(`  ok    ${rel} is ${got.format}/${got.arch}`);
+  }
 
   const missing = PROBES.filter(([, needle]) => !text.includes(needle));
   const present = FORBIDDEN.filter(([, needle]) => text.includes(needle));

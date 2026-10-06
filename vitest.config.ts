@@ -24,7 +24,9 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['electron/**/*.test.ts', 'src/**/*.test.ts', 'targets/**/*.test.ts'],
+    // scripts/**/*.test.ts covers the packaging/native-architecture contract, which is
+    // deliberately not under electron/ or src/.
+    include: ['electron/**/*.test.ts', 'src/**/*.test.ts', 'targets/**/*.test.ts', 'scripts/**/*.test.ts'],
     watch: false,
 
     // The default 10s hook timeout is marginal for this suite. 144 files run in

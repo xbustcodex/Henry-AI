@@ -96,6 +96,28 @@ if (passthrough.includes('--no-package')) {
   process.exit(0);
 }
 
+// Native dependency preparation for the TARGET, before packaging.
+//
+// Cross-packaging from Linux for Windows means better-sqlite3 must carry a Windows x64
+// Electron-ABI binding. A blanket postinstall electron-rebuild used to clobber that with a
+// foreign architecture, producing an installer that could not boot while every step
+// reported success. Preparation is therefore explicit here and verified by the package
+// guard afterwards.
+const TARGET_NATIVE = { '--win': { platform: 'win32', arch: 'x64' }, '--linux': { platform: 'linux', arch: 'x64' }, '--mac': { platform: 'darwin', arch: 'x64' } };
+const hostFlag = passthrough.find((a) => a.startsWith('--'));
+const nativeTarget = TARGET_NATIVE[hostFlag];
+if (nativeTarget) {
+  console.log(`[henry-build] preparing native deps for ${nativeTarget.platform}/${nativeTarget.arch}`);
+  const r = spawnSync(process.execPath, [
+    path.join(ROOT, 'scripts', 'prepare-native.mjs'),
+    `--platform=${nativeTarget.platform}`, `--arch=${nativeTarget.arch}`,
+  ], { stdio: 'inherit' });
+  if (r.status !== 0) {
+    console.error(`[henry-build] native preparation failed for ${nativeTarget.platform}/${nativeTarget.arch}; refusing to package.`);
+    process.exit(r.status ?? 1);
+  }
+}
+
 const builderArgs = ['electron-builder'];
 for (let i = 0; i < passthrough.length; i++) {
   const a = passthrough[i];
