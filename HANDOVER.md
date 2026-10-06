@@ -1266,15 +1266,24 @@ that has been prompted for tools writes that syntax into the bubble when the too
 is abandoned. Fixing it means stripping inline tool syntax from a degraded plain round.
 NOT DONE — recorded, not hidden.
 
-### Honest gap in this acceptance
-The post-restart ordinary Chat turn is **NOT confirmed**. The app restarted cleanly and
-`onboardingReturned: false`, companion persisted as
-`ollama / llama3.2:3b / http://127.0.0.1:11434`, `groqReturned: false`,
-`groqVocabulary: false` — but the final probe landed on the Computer surface rather than
-Chat, so the conversation could not be read back. Ordinary Chat after restart still needs
-one confirming turn.
+### Restart acceptance — PASSED
+Full exit (0 processes), relaunch. `onboardingReturned: false`. Companion persisted as
+`ollama / llama3.2:3b / http://127.0.0.1:11434`. `groqReturned: false`,
+`groqVocabulary: false`. Chat surface header reads **`Ollama · llama3.2:3b`** — truthful
+provider/model attribution, no fabricated size. Post-restart ordinary turn
+`Name a fruit.` → **"Apple"**, 165 s, Thinking cleared, no 8B/70B, no tool syntax.
+Native module and database healthy.
 
-Ordinary installed Chat: **CLOSED for the pre-restart installed package.**
+### Final state
+- commit: `110b272` (evidence) on top of `e3855b9` (the fix)
+- tests: 2634 passed / 2635 total, 1 pre-existing failure
+- installed: corrected Henry 3.0.8 Owner, asar byte-identical to the accepted package
+
+**Ordinary installed Chat: CLOSED / INSTALLED-PACKAGE VERIFIED.**
+
+Residual, tracked and NOT fixed: a degraded plain round does not strip inline tool
+syntax (see the agent/tool turn above). It did not exist before the watchdog, which is
+what makes it visible now.
 
 ## 12. Next recommended task, in priority order
 
