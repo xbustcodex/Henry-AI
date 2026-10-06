@@ -1217,6 +1217,65 @@ turns is NOT fixed here — stripping tools would break the routing contract.
 
 Ordinary installed Chat remains **NOT CLOSED**. Installed 3.0.8 Owner is untouched.
 
+## 12l. INSTALLED-PACKAGE ACCEPTANCE — ordinary Chat CLOSED, with one caveat
+
+Corrected 3.0.8 Owner rebuilt, installed and exercised through the REAL installed UI.
+
+### Artifact identity
+| Artifact | SHA-256 |
+|---|---|
+| Owner installer | `c2283409b29c0f96c79bd80dc14416c1cc5a08fbfaf633f8afd4a884bd61afed` |
+| Standard installer | `8c025fc7ca292a04a9b578113b0db539ecd85ec11356f9ef438b64838f016dba` |
+| packaged Owner app.asar | `c16dd6e8dfd9b2a5d4ceb861758b265fe9b9a646e3e926ba2fb6fa46596d98b9` |
+| installed Owner app.asar | `c16dd6e8dfd9b2a5d4ceb861758b265fe9b9a646e3e926ba2fb6fa46596d98b9` (byte-identical) |
+| packaged + installed native | `cd436f5af1781f2c234a1259ed4ae30a9e7022a51eb29b74c8093a29a06e0ae3` |
+| pre-fix installed asar (superseded) | `c940ebeb4214e643a73c40aa7feab49119d5da734f0e04a7b767df0460af4c06` |
+
+Native verified `PE32+ executable for MS Windows 6.00 (DLL), x86-64` — the PE/x64
+correction is intact. Native architecture guard 10/10. Owner boundary + Standard bundle
+guards 31/31. Standard asar: 0 owner-only markers. Secret scan 11/11. Full suite
+2634 passed / 1 failed (pre-existing `greetingAssistantNameWiring`, reproduced identically
+on the pre-change tree). Typecheck clean.
+
+### Ordinary Chat in the installed UI — CLOSED
+Driven with TRUSTED CDP input events (`scripts/acceptance/chat-turn.mjs`); a
+programmatic `.value` leaves React's send button disabled, so nothing would submit.
+
+| Prompt | Elapsed | Reply | Thinking cleared | 8B/70B label |
+|---|---|---|---|---|
+| `Name one colour.` | 148 s | **"Blue. Green."** | yes | none |
+| `Name a second colour.` | 79 s | **"Red."** | yes | none |
+
+Both through the configured path: Ollama / `llama3.2:3b` / `http://127.0.0.1:11434`.
+No tool syntax, `taskCardSelectors: []` (the `Summarize → Tasks Shorter Simpler` row is
+the standard per-message affordance, present in the original baseline too), and
+`groqVocabulary: false` across the whole surface.
+
+### Agent/tool turn — TERMINAL, but exposes a real residual defect
+`What is the weather in Paris?` → 102 s, terminal, notice
+`[Ollama did not answer the "llama3.2:3b" tool request within 60s.]`. It terminated
+rather than Thinking forever, which is the contract. BUT the degraded plain round let the
+model write tool calls as raw text:
+`Computer:openApp(name="Google Chrome") / Computer:runShell(command="open https://…")`,
+and the Computer panel shows the shell call actually executed
+(`root@server:~# cd /root/primeroute-owner-bootstrap`).
+
+**This is not a regression** — before the fix the same turn never terminated at all. But it
+is not clean either: `callAI`'s plain path does not run `parseInlineToolCalls`, so a model
+that has been prompted for tools writes that syntax into the bubble when the tools round
+is abandoned. Fixing it means stripping inline tool syntax from a degraded plain round.
+NOT DONE — recorded, not hidden.
+
+### Honest gap in this acceptance
+The post-restart ordinary Chat turn is **NOT confirmed**. The app restarted cleanly and
+`onboardingReturned: false`, companion persisted as
+`ollama / llama3.2:3b / http://127.0.0.1:11434`, `groqReturned: false`,
+`groqVocabulary: false` — but the final probe landed on the Computer surface rather than
+Chat, so the conversation could not be read back. Ordinary Chat after restart still needs
+one confirming turn.
+
+Ordinary installed Chat: **CLOSED for the pre-restart installed package.**
+
 ## 12. Next recommended task, in priority order
 
 1. **Rebuild, package, install** from `9eb73af`; re-run the fresh-profile acceptance end
