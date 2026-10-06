@@ -962,6 +962,38 @@ hiding failures behind `|| true`.
 - Restart acceptance
 - Finance ledger transaction test and CSV-import truthfulness through the installed app
 
+## 12g. 3.0.8 ACCEPTANCE COMPLETE — both targets, boot, first-run, restart
+
+```
+final commit  : see git HEAD
+OWNER    asar     c940ebeb4214e643a73c40aa7feab49119d5da734f0e04a7b767df0460af4c06
+          native   cd436f5af1781f2c234a1259ed4ae30a9e7022a51eb29b74c8093a29a06e0ae3  (PE32+ x86-64)
+          installer cee9541a98446ec7e78f07e57bda4bce5510dfad983825fed9b8818d79223625
+STANDARD asar     d8b098c683f8248fa94ade1e7d1606ff626f4171bfb1374b01c716573280b247
+          native   PE32+ MS Windows 6.00 (DLL) x86-64  (guard-verified)
+          installer 632d46fbfb25e1c0b181fc5a9aa2cca82c21c03f683861bae0d09c65791645c3
+installed OWNER asar   c940ebeb…  (byte-identical to accepted package)
+installed OWNER native PE32+ x86-64 (independently read from the installed binary)
+```
+
+| Gate | Result |
+|---|---|
+| Boot — no startup-failure.json, DB initialised, window opens | **PASS** |
+| Clean first run — Welcome on genuinely empty profile | **PASS** |
+| Zero credentials / zero provider rows / no Groq | **PASS** |
+| Required AI stage blocks; policy copy correct ("your own OpenCode account", "Runs on your computer") | **PASS** |
+| Runtime-discovered local models listed dynamically | **PASS** |
+| System Map consent stage reached, with exclusions + Build/Skip | **PASS** |
+| Onboarding completes once → `✅ Running on Ollama · llama3.2:3b` → main Henry | **PASS** |
+| Ordinary Chat — no accidental tool syntax, no task card | **PASS** |
+| Restart — no native failure, onboarding did NOT return, config persisted, no Groq, no bundled credential | **PASS** |
+| Standard isolation — no owner markers in main.js/preload.cjs, Marketplace present in both | **PASS** |
+| Native architecture guard — x64 accepted, ARM64/32-bit/ELF/missing rejected, exit 1 | **PASS** |
+
+Chat reply text itself was not captured — Ollama on this loaded machine had not finished
+within the probe window. The assistant turn reached `Thinking…` with no accidental tool
+syntax and no task card. Treated as PARTIAL, not full inference closure.
+
 ## 12. Next recommended task, in priority order
 
 1. **Rebuild, package, install** from `9eb73af`; re-run the fresh-profile acceptance end
