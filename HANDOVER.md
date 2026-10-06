@@ -994,6 +994,60 @@ Chat reply text itself was not captured — Ollama on this loaded machine had no
 within the probe window. The assistant turn reached `Thinking…` with no accidental tool
 syntax and no task card. Treated as PARTIAL, not full inference closure.
 
+## 12h. REMAINING BLOCKER — ordinary Chat stalls in the UI; inference and transport are PROVEN working
+
+No code was changed for this finding, per instruction. Commit `ce06cab` and the installed
+Owner 3.0.8 build are untouched.
+
+### What is proven working in the INSTALLED application
+Real inference, through Henry's own governed path, in the live installed app:
+
+```
+sendMessage (bridge)   1312 ms   -> "The capital of France is Paris."
+streamMessage          2 chunks, onDone -> "Hi!"
+```
+And directly against the runtime, bypassing Henry entirely:
+```
+Ollama /api/chat        3 s      -> "The capital of France is Paris."
+```
+`llama3.2:3b` is present among 8 models and is loaded in memory.
+
+### What is NOT working
+The **ChatView UI send path** stalls. Two attempts, in the installed app, with the
+configured `ollama / llama3.2:3b`:
+
+| Attempt | Elapsed | stillThinking | tool syntax | task card |
+|---|---|---|---|---|
+| 1 | 260 s | true | none | none |
+| 2 | 236 s | true | none | none |
+
+The prompt is visible in the conversation, the assistant bubble shows
+`🧠 Advisor | Thinking… | Thinking… (8B)` and never resolves to text.
+
+### Localisation
+The break is strictly **between the working bridge and the rendered message**. The same
+model answers in 3 s directly and in 1.3 s through Henry's bridge; only the UI turn never
+completes. `uiThinking` read `false` when probed outside a turn, so the stall is per-turn,
+not a stuck global flag.
+
+### Observed detail worth carrying forward
+The stalled turn displays `Thinking… (8B)` while the configured model is `llama3.2:3b`
+(3.2B). That label mismatch is unexplained and may be related to which model the UI turn
+actually addresses. Recorded, not guessed at.
+
+### Environment at the time
+```
+load average 20.55 / 17.73 / 14.16
+Mem: 15 GB total, 5 free, 10 available
+```
+The machine is heavily loaded, but the runtime answers in 3 s under that same load, so load
+does not explain a 236 s UI stall.
+
+### Status
+**Ordinary installed Chat = NOT CLOSED.** The transport, provider classification, cost
+logging and inference layers are all verified working in the installed app; the ChatView
+turn-completion/render path is not. No change has been made pending direction.
+
 ## 12. Next recommended task, in priority order
 
 1. **Rebuild, package, install** from `9eb73af`; re-run the fresh-profile acceptance end
