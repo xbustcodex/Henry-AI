@@ -1099,6 +1099,54 @@ guessed at. Its source is still untraced.
 
 Ordinary installed Chat remains **NOT CLOSED**.
 
+## 12j. ROOT CAUSE — agent/tool turns have no watchdog and hang forever
+
+Reproduced in the installed app, same session, same profile, same model — a clean A/B:
+
+| Call | Result |
+|---|---|
+| `streamMessage` plain | **805 ms**, 1 chunk, `done "Blue"` |
+| `streamMessage` + `tools:[{name:'henry-agent'}]` | **70440 ms**, **0 chunks**, `done null`, `err null` |
+| `streamMessage` + tools + sessionId | **70454 ms**, **0 chunks**, `done null`, `err null` |
+| `sendMessage` + tools | 488 ms, "Blue." (the non-streaming agent path is fine) |
+
+`llama3.2:3b` reports tool capability, so `agentRouting` attaches tools and **every**
+ordinary ChatView turn takes the hanging path. That is why Chat never completes.
+
+Mechanism: `ai.ts:1503` routes a tool-bearing request to `runToolConversation`, which
+calls `callAIWithTools` → `streamOllamaToolsRound` (`electron/providers/ollama.ts:380`).
+Nothing in that path bounds the wait: if the provider never yields a chunk or a final,
+the turn produces **no chunk, no done and no error**, and the UI stays on `Thinking…`
+indefinitely. That directly violates the release rule that an errored turn must not
+remain Thinking forever.
+
+### The narrow correct fix
+Bound the agent/tool turn. On the streaming tool path a provider that stops responding
+must surface an explicit, named error (service unreachable / no response) through
+`onError` rather than never settling. Ordinary tool-less Chat must keep its existing
+path untouched, and intentional Agent functionality must keep working when the provider
+does respond.
+
+### Caveat on the raw-runtime test
+A direct `curl` to Ollama `/api/chat` with `stream:true` returned **0 bytes for both the
+tools payload AND the no-tools control** at the time of testing. The machine was at load
+average ~20 and Ollama's streaming endpoint was not answering either way, so that raw test
+is **not** a clean discriminator of the tools payload. The in-app A/B above is the
+trustworthy evidence, because both arms ran in the same session against the same profile.
+
+### "Thinking… (8B)" — resolved, and it is a defect of its own
+`ChatView.tsx:1541`:
+```js
+const tierLabel = presenceTier === 'quality' ? '70B' : presenceTier === 'fast' ? '8B' : '';
+```
+It is a **hardcoded presence-tier label**, not model metadata — so it never indicated the
+dispatched model. `'8B'` and `'70B'` are literally retired Groq model names, so this is
+leftover Groq vocabulary in the UI and should be replaced with a tier word derived from
+runtime metadata. `presenceTier` otherwise only affects `maxOutputTokens`
+(fast=1500, balanced=3000, quality=6000) and a TTS presence phrase.
+
+Ordinary installed Chat remains **NOT CLOSED**.
+
 ## 12. Next recommended task, in priority order
 
 1. **Rebuild, package, install** from `9eb73af`; re-run the fresh-profile acceptance end
